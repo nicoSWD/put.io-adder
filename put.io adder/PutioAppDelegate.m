@@ -27,25 +27,25 @@
     [[NSApplication sharedApplication] mainWindow];
     
     [self.progress setHidden:YES];
-    
-    NSError *error;
-    NSString *t = [SSKeychain passwordForService:@"put.io adder" account:@"711" error:&error];
-    
-    if ([error code] == SSKeychainErrorNotFound)
-    {
-        [self authenticateUser];
-        return;
-    }
-    
-    self.oauthToken = t;
+    [self authenticateUser];
 }
 
 
 - (void)authenticateUser
 {
-    self.message.stringValue = @"Authentication required!";
-    self.authWindow = [[PutioBrowser alloc] initWithWindowNibName:@"Browser"];
-    [[self.authWindow window] makeKeyWindow];
+    NSError *error;
+    NSString *t = [SSKeychain passwordForService:@"put.io adder" account:@"711" error:&error];
+    
+    if ([error code] == SSKeychainErrorNotFound)
+    {
+        self.message.stringValue = @"Authentication required!";
+        self.authWindow = [[PutioBrowser alloc] initWithWindowNibName:@"Browser"];
+        [[self.authWindow window] makeKeyWindow];
+    }
+    else
+    {
+        self.oauthToken = t;
+    }
 }
 
 
