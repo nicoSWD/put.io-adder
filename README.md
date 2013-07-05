@@ -6,6 +6,6 @@ on a "magnet:" link, the app opens, and adds the link to your put.io queue.
 
 NOTES:
 - The app requires you to have a put.io account. They're probably not free anymore.
-- The app requires KeyChain Access to store put.io's OAuth Token.
+- The app requires KeyChain Access to store put.io's OAuth Token. Denying access might prevent the app from working.
 
 ![alt tag](http://f.cl.ly/items/3O0e3m1S36203j2k2f3P/Screen%20Shot%202013-07-05%20at%202.43.32%20AM.png)
