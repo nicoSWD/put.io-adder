@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="4457.9" systemVersion="12C60" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES">
+    <dependencies>
+        <deployment defaultVersion="1080" identifier="macosx"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="4457.9"/>
+        <plugIn identifier="com.apple.WebKitIBPlugin" version="3330"/>
+    </dependencies>
+    <objects>
+        <customObject id="-2" userLabel="File's Owner"/>
+        <customObject id="-1" userLabel="First Responder" customClass="FirstResponder"/>
+        <customObject id="-3" userLabel="Application"/>
+        <window title="Window" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" oneShot="NO" releasedWhenClosed="NO" wantsToBeColor="NO" animationBehavior="default" id="1">
+            <windowStyleMask key="styleMask" titled="YES" closable="YES" miniaturizable="YES" resizable="YES"/>
+            <windowPositionMask key="initialPositionMask" leftStrut="YES" rightStrut="YES" topStrut="YES" bottomStrut="YES"/>
+            <rect key="contentRect" x="196" y="240" width="480" height="551"/>
+            <rect key="screenRect" x="0.0" y="0.0" width="1280" height="1002"/>
+            <view key="contentView" id="2">
+                <rect key="frame" x="0.0" y="0.0" width="480" height="551"/>
+                <autoresizingMask key="autoresizingMask"/>
+                <subviews>
+                    <webView fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="cUw-Mw-qUe">
+                        <rect key="frame" x="0.0" y="0.0" width="480" height="551"/>
+                        <autoresizingMask key="autoresizingMask"/>
+                        <webPreferences key="preferences" defaultFontSize="12" defaultFixedFontSize="12">
+                            <nil key="identifier"/>
+                        </webPreferences>
+                        <connections>
+                            <outlet property="UIDelegate" destination="HnS-yl-kMM" id="5i5-Yd-Su6"/>
+                            <outlet property="downloadDelegate" destination="HnS-yl-kMM" id="u2V-CX-OQm"/>
+                            <outlet property="frameLoadDelegate" destination="HnS-yl-kMM" id="YOG-g9-snK"/>
+                            <outlet property="resourceLoadDelegate" destination="HnS-yl-kMM" id="MY3-ql-PWI"/>
+                        </connections>
+                    </webView>
+                </subviews>
+            </view>
+        </window>
+        <viewController id="HnS-yl-kMM" customClass="PutioBrowser">
+            <connections>
+                <outlet property="webView" destination="cUw-Mw-qUe" id="1T7-g1-5H5"/>
+                <outlet property="window" destination="1" id="ZsT-ur-4Hv"/>
+            </connections>
+        </viewController>
+    </objects>
+    <classes>
+        <class className="PutioBrowser" superclassName="NSWindowController">
+            <source key="sourceIdentifier" type="project" relativePath="./Classes/PutioBrowser.h"/>
+            <relationships>
+                <relationship kind="outlet" name="webView" candidateClass="WebView"/>
+            </relationships>
+        </class>
+        <class className="WebView">
+            <source key="sourceIdentifier" type="project" relativePath="./Classes/WebView.h"/>
+            <relationships>
+                <relationship kind="action" name="reloadFromOrigin:"/>
+            </relationships>
+        </class>
+    </classes>
+</document>

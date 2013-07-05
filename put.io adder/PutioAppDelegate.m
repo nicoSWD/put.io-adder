@@ -7,17 +7,105 @@
 //
 
 #import "PutioAppDelegate.h"
+#import "AFNetworking.h"
+#import "AFJSONRequestOperation.h"
+#import "PutioBrowser.h"
+#import "SSKeychain.h"
 
 @implementation PutioAppDelegate
 
 @synthesize persistentStoreCoordinator = _persistentStoreCoordinator;
 @synthesize managedObjectModel = _managedObjectModel;
 @synthesize managedObjectContext = _managedObjectContext;
+@synthesize message, progress, authWindow, oauthToken;
+
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification
 {
-    // Insert code here to initialize your application
+    [[NSAppleEventManager sharedAppleEventManager] setEventHandler:self andSelector:@selector(handleEvent:withReplyEvent:) forEventClass:kInternetEventClass andEventID:kAEGetURL];
+    
+    [[NSApplication sharedApplication] mainWindow];
+    
+    [self.progress setHidden:YES];
+    
+    NSError *error;
+    NSString *t = [SSKeychain passwordForService:@"put.io adder" account:@"711" error:&error];
+    
+    if ([error code] == SSKeychainErrorNotFound)
+    {
+        [self authenticateUser];
+        return;
+    }
+    
+    self.oauthToken = t;
 }
+
+
+- (void)authenticateUser
+{
+    self.message.stringValue = @"Authentication required!";
+    self.authWindow = [[PutioBrowser alloc] initWithWindowNibName:@"Browser"];
+    [[self.authWindow window] makeKeyWindow];
+}
+
+
+- (void)handleEvent:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)replyEvent
+{
+    [self.progress setHidden:NO];
+    [self.progress startAnimation:nil];
+    
+    if ([self.oauthToken isEqualToString:@""])
+    {
+        return;
+    }
+    
+    NSString *magnetURL = [[event paramDescriptorForKeyword:keyDirectObject] stringValue];
+    self.message.stringValue = [NSString stringWithFormat:@"Adding %@...", [magnetURL substringWithRange:NSMakeRange(0, 40)]];
+    
+    NSURL *url = [NSURL URLWithString:@"https://api.put.io/"];
+    NSDictionary *params = [NSDictionary dictionaryWithObjectsAndKeys:
+        magnetURL, @"url",
+        self.oauthToken, @"oauth_token",
+    nil];
+    
+    AFHTTPClient *httpClient = [[AFHTTPClient alloc] initWithBaseURL:url];
+    NSMutableURLRequest *request = [httpClient requestWithMethod:@"POST" path:@"/v2/transfers/add" parameters:params];
+    AFJSONRequestOperation *operation = [AFJSONRequestOperation JSONRequestOperationWithRequest:request
+    success:^(NSURLRequest *request, NSHTTPURLResponse *response, id JSON)
+    {
+        if ([[JSON valueForKeyPath:@"status"] isEqualToString:@"OK"])
+        {
+            self.message.stringValue = @"URL successfully added!";
+        }
+        else
+        {
+            self.message.stringValue = @"Something went wrong!";
+        }
+        
+        [self.progress setHidden:YES];
+        [self.progress stopAnimation:nil];
+    }
+    failure:^(NSURLRequest *request, NSHTTPURLResponse *response, NSError *error, id JSON)
+    {
+        long statusCode = (long)response.statusCode;
+        
+        if (statusCode == 400)
+        {
+            self.message.stringValue = @"Failed! URL already in queue?";
+        }
+        else
+        {
+            self.message.stringValue = [NSString stringWithFormat:@"Something went wrong! HTTP error %li!", statusCode];
+        }
+        
+        [self.progress setHidden:YES];
+        [self.progress stopAnimation:nil];
+       
+    }];
+
+    [operation start];
+}
+
 
 // Returns the directory the application uses to store the Core Data store file. This code uses a directory named "com.nicoswd.put_io_adder" in the user's Application Support directory.
 - (NSURL *)applicationFilesDirectory
@@ -113,6 +201,13 @@
 
     return _managedObjectContext;
 }
+
+
+- (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender
+{
+    return YES;
+}
+
 
 // Returns the NSUndoManager for the application. In this case, the manager returned is that of the managed object context for the application.
 - (NSUndoManager *)windowWillReturnUndoManager:(NSWindow *)window
