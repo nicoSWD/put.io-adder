@@ -27,10 +27,10 @@
 		030F7D80178649240024178D /* icon_128x128@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7A178649240024178D /* icon_128x128@2x.png */; };
 		030F7D81178649250024178D /* icon_256x256.png in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7B178649240024178D /* icon_256x256.png */; };
 		030F7D82178649250024178D /* icon_256x256@2x in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7C178649240024178D /* icon_256x256@2x */; };
-		030F7D83178649250024178D /* icon_512x512 in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7D178649240024178D /* icon_512x512 */; };
-		030F7D84178649250024178D /* icon_512x512@2x in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7E178649240024178D /* icon_512x512@2x */; };
+		030F7D83178649250024178D /* icon_512x512.png in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7D178649240024178D /* icon_512x512.png */; };
+		030F7D84178649250024178D /* icon_512x512@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7E178649240024178D /* icon_512x512@2x.png */; };
 		031D406017861679006C4EEF /* PutioBrowser.m in Sources */ = {isa = PBXBuildFile; fileRef = 031D405F17861679006C4EEF /* PutioBrowser.m */; };
-		031D406217861A65006C4EEF /* Browser.xib in Resources */ = {isa = PBXBuildFile; fileRef = 031D406117861A65006C4EEF /* Browser.xib */; };
+		039969961787047500B595C6 /* Browser.xib in Resources */ = {isa = PBXBuildFile; fileRef = 039969951787047500B595C6 /* Browser.xib */; };
 		03AE9CBE17861CBA00A6E3EF /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03AE9CBD17861CBA00A6E3EF /* WebKit.framework */; };
 		03AE9CC01786398200A6E3EF /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03AE9CBF1786398200A6E3EF /* Security.framework */; };
 		03F630C816D6B5D400D33848 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03F630C716D6B5D400D33848 /* Cocoa.framework */; };
@@ -73,11 +73,11 @@
 		030F7D7A178649240024178D /* icon_128x128@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "icon_128x128@2x.png"; path = "Resources/icon_128x128@2x.png"; sourceTree = "<group>"; };
 		030F7D7B178649240024178D /* icon_256x256.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = icon_256x256.png; path = Resources/icon_256x256.png; sourceTree = "<group>"; };
 		030F7D7C178649240024178D /* icon_256x256@2x */ = {isa = PBXFileReference; lastKnownFileType = file; name = "icon_256x256@2x"; path = "Resources/icon_256x256@2x"; sourceTree = "<group>"; };
-		030F7D7D178649240024178D /* icon_512x512 */ = {isa = PBXFileReference; lastKnownFileType = file; name = icon_512x512; path = Resources/icon_512x512; sourceTree = "<group>"; };
-		030F7D7E178649240024178D /* icon_512x512@2x */ = {isa = PBXFileReference; lastKnownFileType = file; name = "icon_512x512@2x"; path = "Resources/icon_512x512@2x"; sourceTree = "<group>"; };
+		030F7D7D178649240024178D /* icon_512x512.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = icon_512x512.png; path = Resources/icon_512x512.png; sourceTree = "<group>"; };
+		030F7D7E178649240024178D /* icon_512x512@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "icon_512x512@2x.png"; path = "Resources/icon_512x512@2x.png"; sourceTree = "<group>"; };
 		031D405E17861678006C4EEF /* PutioBrowser.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PutioBrowser.h; sourceTree = "<group>"; };
 		031D405F17861679006C4EEF /* PutioBrowser.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PutioBrowser.m; sourceTree = "<group>"; };
-		031D406117861A65006C4EEF /* Browser.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = Browser.xib; sourceTree = "<group>"; };
+		039969951787047500B595C6 /* Browser.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = Browser.xib; sourceTree = "<group>"; };
 		03AE9CBD17861CBA00A6E3EF /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 		03AE9CBF1786398200A6E3EF /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		03F630C416D6B5D400D33848 /* put.io adder.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "put.io adder.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -199,8 +199,8 @@
 				031D405F17861679006C4EEF /* PutioBrowser.m */,
 				030F7D0C178646910024178D /* SSKeychain.h */,
 				030F7D0D178646910024178D /* SSKeychain.m */,
-				031D406117861A65006C4EEF /* Browser.xib */,
 				03F630DC16D6B5D400D33848 /* MainMenu.xib */,
+				039969951787047500B595C6 /* Browser.xib */,
 				03F630CE16D6B5D400D33848 /* Supporting Files */,
 			);
 			path = "put.io adder";
@@ -213,8 +213,8 @@
 				030F7D7A178649240024178D /* icon_128x128@2x.png */,
 				030F7D7B178649240024178D /* icon_256x256.png */,
 				030F7D7C178649240024178D /* icon_256x256@2x */,
-				030F7D7D178649240024178D /* icon_512x512 */,
-				030F7D7E178649240024178D /* icon_512x512@2x */,
+				030F7D7D178649240024178D /* icon_512x512.png */,
+				030F7D7E178649240024178D /* icon_512x512@2x.png */,
 				03F630CF16D6B5D400D33848 /* put.io adder-Info.plist */,
 				03F630D016D6B5D400D33848 /* InfoPlist.strings */,
 				03F630D316D6B5D400D33848 /* main.m */,
@@ -279,8 +279,7 @@
 				030F7D80178649240024178D /* icon_128x128@2x.png in Resources */,
 				030F7D7F178649240024178D /* amblem.icns in Resources */,
 				030F7D51178646CF0024178D /* .gitignore in Resources */,
-				030F7D84178649250024178D /* icon_512x512@2x in Resources */,
-				031D406217861A65006C4EEF /* Browser.xib in Resources */,
+				030F7D84178649250024178D /* icon_512x512@2x.png in Resources */,
 				030F7D71178646CF0024178D /* LICENSE in Resources */,
 				03F630D216D6B5D400D33848 /* InfoPlist.strings in Resources */,
 				03F630DE16D6B5D400D33848 /* MainMenu.xib in Resources */,
@@ -288,8 +287,9 @@
 				030F7D5B178646CF0024178D /* AFNetworking.podspec in Resources */,
 				030F7D81178649250024178D /* icon_256x256.png in Resources */,
 				030F7D5D178646CF0024178D /* CHANGES in Resources */,
-				030F7D83178649250024178D /* icon_512x512 in Resources */,
+				030F7D83178649250024178D /* icon_512x512.png in Resources */,
 				030F7D5C178646CF0024178D /* AFNetworking.xcworkspace in Resources */,
+				039969961787047500B595C6 /* Browser.xib in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -364,7 +364,7 @@
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNINITIALIZED_AUTOS = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 10.8;
+				MACOSX_DEPLOYMENT_TARGET = 10.6;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
 			};
@@ -390,7 +390,7 @@
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNINITIALIZED_AUTOS = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 10.8;
+				MACOSX_DEPLOYMENT_TARGET = 10.6;
 				SDKROOT = macosx;
 			};
 			name = Release;
@@ -398,11 +398,16 @@
 		03F630E516D6B5D400D33848 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
+				CLANG_ENABLE_OBJC_ARC = YES;
 				COMBINE_HIDPI_IMAGES = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "put.io adder/put.io adder-Prefix.pch";
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				INFOPLIST_FILE = "put.io adder/put.io adder-Info.plist";
+				MACOSX_DEPLOYMENT_TARGET = 10.7;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx10.8;
 				WRAPPER_EXTENSION = app;
 			};
 			name = Debug;
@@ -410,11 +415,16 @@
 		03F630E616D6B5D400D33848 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
+				CLANG_ENABLE_OBJC_ARC = YES;
 				COMBINE_HIDPI_IMAGES = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "put.io adder/put.io adder-Prefix.pch";
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				INFOPLIST_FILE = "put.io adder/put.io adder-Info.plist";
+				MACOSX_DEPLOYMENT_TARGET = 10.7;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx10.8;
 				WRAPPER_EXTENSION = app;
 			};
 			name = Release;

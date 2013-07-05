@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>IDESourceControlProjectIdentifier</key>
+	<string>46BBDE4B-CB9D-49FF-8F95-81BFCE35400F</string>
+	<key>IDESourceControlProjectName</key>
+	<string>put.io adder</string>
+	<key>IDESourceControlProjectOriginsDictionary</key>
+	<dict>
+		<key>431317A3-269D-408C-88A9-F15061C61302</key>
+		<string>ssh://github.com/nicoSWD/put.io-adder.git</string>
+		<key>70275435-878C-4A2A-A401-BC1C3A23B8A0</key>
+		<string>https://github.com/AFNetworking/AFNetworking.git</string>
+		<key>B3A172DC-6C07-41E6-AE51-CE54198CC9F5</key>
+		<string>https://github.com/samsoffes/sskeychain.git</string>
+	</dict>
+	<key>IDESourceControlProjectPath</key>
+	<string>put.io adder.xcodeproj/project.xcworkspace</string>
+	<key>IDESourceControlProjectRelativeInstallPathDictionary</key>
+	<dict>
+		<key>431317A3-269D-408C-88A9-F15061C61302</key>
+		<string>../..</string>
+		<key>70275435-878C-4A2A-A401-BC1C3A23B8A0</key>
+		<string>../../AFNetworking</string>
+		<key>B3A172DC-6C07-41E6-AE51-CE54198CC9F5</key>
+		<string>../../sskeychain</string>
+	</dict>
+	<key>IDESourceControlProjectURL</key>
+	<string>ssh://github.com/nicoSWD/put.io-adder.git</string>
+	<key>IDESourceControlProjectVersion</key>
+	<integer>110</integer>
+	<key>IDESourceControlProjectWCCIdentifier</key>
+	<string>431317A3-269D-408C-88A9-F15061C61302</string>
+	<key>IDESourceControlProjectWCConfigurations</key>
+	<array>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>70275435-878C-4A2A-A401-BC1C3A23B8A0</string>
+			<key>IDESourceControlWCCName</key>
+			<string>AFNetworking</string>
+		</dict>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>431317A3-269D-408C-88A9-F15061C61302</string>
+			<key>IDESourceControlWCCName</key>
+			<string>put</string>
+		</dict>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>B3A172DC-6C07-41E6-AE51-CE54198CC9F5</string>
+			<key>IDESourceControlWCCName</key>
+			<string>sskeychain</string>
+		</dict>
+	</array>
+</dict>
+</plist>

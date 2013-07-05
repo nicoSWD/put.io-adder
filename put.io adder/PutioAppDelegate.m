@@ -17,7 +17,7 @@
 @synthesize persistentStoreCoordinator = _persistentStoreCoordinator;
 @synthesize managedObjectModel = _managedObjectModel;
 @synthesize managedObjectContext = _managedObjectContext;
-@synthesize message, progress, authWindow, oauthToken;
+@synthesize message, progress, waiting, authWindow, oauthToken, waitingLabel;
 
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification
@@ -26,7 +26,8 @@
     
     [[NSApplication sharedApplication] mainWindow];
     
-    [self.progress setHidden:YES];
+    [self.waiting startAnimation:nil];
+    [self.progress stopAnimation:nil];
     [self authenticateUser];
 }
 
@@ -57,18 +58,19 @@
         return;
     }
     
-    [self.progress setHidden:NO];
+    [self.waiting stopAnimation:nil];
     [self.progress startAnimation:nil];
-    
+    [self.waitingLabel setHidden:YES];
+
     NSString *magnetURL = [[event paramDescriptorForKeyword:keyDirectObject] stringValue];
-    self.message.stringValue = [NSString stringWithFormat:@"Adding %@...", [magnetURL substringWithRange:NSMakeRange(0, 40)]];
-    
+    self.message.stringValue = [NSString stringWithFormat:@"Adding %@", magnetURL];
+
     NSURL *url = [NSURL URLWithString:@"https://api.put.io/"];
     NSDictionary *params = [NSDictionary dictionaryWithObjectsAndKeys:
         magnetURL, @"url",
         self.oauthToken, @"oauth_token",
     nil];
-    
+
     AFHTTPClient *httpClient = [[AFHTTPClient alloc] initWithBaseURL:url];
     NSMutableURLRequest *request = [httpClient requestWithMethod:@"POST" path:@"/v2/transfers/add" parameters:params];
     AFJSONRequestOperation *operation = [AFJSONRequestOperation JSONRequestOperationWithRequest:request
@@ -83,8 +85,9 @@
             self.message.stringValue = @"Something went wrong!";
         }
         
-        [self.progress setHidden:YES];
+        [self.waiting startAnimation:nil];
         [self.progress stopAnimation:nil];
+        [self.waitingLabel setHidden:NO];
     }
     failure:^(NSURLRequest *request, NSHTTPURLResponse *response, NSError *error, id JSON)
     {
@@ -99,9 +102,9 @@
             self.message.stringValue = [NSString stringWithFormat:@"Something went wrong! HTTP error %li!", statusCode];
         }
         
-        [self.progress setHidden:YES];
+        [self.waiting startAnimation:nil];
         [self.progress stopAnimation:nil];
-       
+        [self.waitingLabel setHidden:NO];
     }];
 
     [operation start];
@@ -129,6 +132,7 @@
 }
 
 // Returns the persistent store coordinator for the application. This implementation creates and return a coordinator, having added the store for the application to it. (The directory for the store is created, if necessary.)
+/*
 - (NSPersistentStoreCoordinator *)persistentStoreCoordinator
 {
     if (_persistentStoreCoordinator) {
@@ -180,7 +184,7 @@
     
     return _persistentStoreCoordinator;
 }
-
+*/
 // Returns the managed object context for the application (which is already bound to the persistent store coordinator for the application.) 
 - (NSManagedObjectContext *)managedObjectContext
 {
