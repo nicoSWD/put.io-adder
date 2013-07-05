@@ -13,16 +13,21 @@ Follow me on Twitter: [@nicoSWD](https://twitter.com/nicoSWD)!
 - The app requires KeyChain Access to store put.io's OAuth Token. Denying access might prevent the app from working.
 
 **BINARIES**
+- [put.io adder v1.2](http://cl.ly/Q5Vx) (MD5 checksum: c82b0c5007c7dd2cd56ad64eb911112f)
 - [put.io adder v1.1](http://cl.ly/Q4uX) (MD5 checksum: f0dad56b625b78d2ef503f3113ff4e55)
 - [put.io adder v1.0](http://cl.ly/Q4r2) (MD5 checksum: 826fb0c5280783bc2b9d08e921255b82)
 
 **SCREENSHOTS**
 
 ![alt tag](http://f.cl.ly/items/0e1U0y0Y0h062w1X3p41/Screen%20Shot%202013-07-05%20at%203.03.58%20PM.png)
-![alt tag](http://f.cl.ly/items/0T450c201d1d182B1l2Z/Screen%20Shot%202013-07-05%20at%203.05.54%20PM.png)
+![alt tag](https://dl.dropboxusercontent.com/u/1229939/Screen%20Shot%202013-07-06%20at%2012.34.12%20AM.png)
 ![alt tag](http://f.cl.ly/items/3o3E1f3D0j1G0U2F403U/Screen%20Shot%202013-07-05%20at%203.06.18%20PM.png)
 
 **CHANGELOG**
+- v1.2
+  - Now displays the "display name" instead of the magnet URL.
+  - Moved code a bit around.
+  - Better error control.
 - v1.1
   - Now compiles with Xcode 4
   - Compatible with OS X < 10.8
