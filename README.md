@@ -11,6 +11,7 @@ Follow me on Twitter: [@nicoSWD](https://twitter.com/nicoSWD)!
 - The app requires KeyChain Access to store put.io's OAuth Token. Denying access might prevent the app from working.
 
 **BINARIES**
+- [put.io adder v1.1](http://cl.ly/Q4uX) (MD5 checksum: f0dad56b625b78d2ef503f3113ff4e55)
 - [put.io adder v1.0](http://cl.ly/Q4r2) (MD5 checksum: 826fb0c5280783bc2b9d08e921255b82)
 
 **SCREENSHOTS**
