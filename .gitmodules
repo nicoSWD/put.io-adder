@@ -1,0 +1,3 @@
+[submodule "sskeychain"]
+	path = sskeychain
+	url = https://github.com/samsoffes/sskeychain.git
