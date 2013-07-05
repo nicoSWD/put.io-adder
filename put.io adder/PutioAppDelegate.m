@@ -51,13 +51,14 @@
 
 - (void)handleEvent:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)replyEvent
 {
-    [self.progress setHidden:NO];
-    [self.progress startAnimation:nil];
-    
     if ([self.oauthToken isEqualToString:@""])
     {
+        [self authenticateUser];
         return;
     }
+    
+    [self.progress setHidden:NO];
+    [self.progress startAnimation:nil];
     
     NSString *magnetURL = [[event paramDescriptorForKeyword:keyDirectObject] stringValue];
     self.message.stringValue = [NSString stringWithFormat:@"Adding %@...", [magnetURL substringWithRange:NSMakeRange(0, 40)]];
