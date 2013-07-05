@@ -1,3 +1,6 @@
 [submodule "sskeychain"]
 	path = sskeychain
 	url = https://github.com/samsoffes/sskeychain.git
+[submodule "AFNetworking"]
+	path = AFNetworking
+	url = https://github.com/AFNetworking/AFNetworking.git
