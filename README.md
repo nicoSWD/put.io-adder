@@ -4,11 +4,11 @@ put.io-adder
 "Put.io adder" is a small OS X app, that adds a new handler for "magnet:" URL schemes, so that every time you click
 on a "magnet:" link, the app opens, and adds the link to your [put.io](http://put.io/) queue.
 
-**NOTES:**
+**NOTES**
 - The app requires you to have a [put.io](http://put.io/) account. They're probably not free anymore.
 - The app requires KeyChain Access to store put.io's OAuth Token. Denying access might prevent the app from working.
 
-**BINARIES:**
+**BINARIES**
 - [put.io adder v1.0](http://cl.ly/Q4MV) (MD5 sum: 6354d4f35d9b737a9ef89e755a3051e2)
 
 **SCREENSHOTS**
