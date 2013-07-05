@@ -25,6 +25,8 @@ Follow me on Twitter: [@nicoSWD](https://twitter.com/nicoSWD)!
   - Now compiles with Xcode 4
   - Compatible with OS X < 10.8
   - New Design
+- v1.0
+  - Initial release
 
 **MIT/X11 LICENSE**
 
