@@ -9,7 +9,7 @@ on a "magnet:" link, the app opens, and adds the clicked link to your [put.io](h
 - The app requires KeyChain Access to store put.io's OAuth Token. Denying access might prevent the app from working.
 
 **BINARIES**
-- [put.io adder v1.0](http://cl.ly/Q4MV) (MD5 sum: 6354d4f35d9b737a9ef89e755a3051e2)
+- [put.io adder v1.0](http://cl.ly/Q4r2) (MD5 checksum: 826fb0c5280783bc2b9d08e921255b82)
 
 **SCREENSHOTS**
 
