@@ -32,7 +32,6 @@
 		03F630D416D6B5D400D33848 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 03F630D316D6B5D400D33848 /* main.m */; };
 		03F630DB16D6B5D400D33848 /* PutioAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 03F630DA16D6B5D400D33848 /* PutioAppDelegate.m */; };
 		03F630DE16D6B5D400D33848 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 03F630DC16D6B5D400D33848 /* MainMenu.xib */; };
-		03F630E116D6B5D400D33848 /* put_io_adder.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = 03F630DF16D6B5D400D33848 /* put_io_adder.xcdatamodeld */; };
 		03F6315316D6C61200D33848 /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03F6315216D6C61200D33848 /* SystemConfiguration.framework */; };
 		03F6316416D6CCC800D33848 /* icon_256x256@2x in Resources */ = {isa = PBXBuildFile; fileRef = 03F6316216D6CCC800D33848 /* icon_256x256@2x */; };
 		03F6316816D6CD2700D33848 /* icon_128x128@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 03F6316616D6CD2700D33848 /* icon_128x128@2x.png */; };
@@ -87,7 +86,6 @@
 		03F630D916D6B5D400D33848 /* PutioAppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PutioAppDelegate.h; sourceTree = "<group>"; };
 		03F630DA16D6B5D400D33848 /* PutioAppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PutioAppDelegate.m; sourceTree = "<group>"; };
 		03F630DD16D6B5D400D33848 /* en */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = en; path = en.lproj/MainMenu.xib; sourceTree = "<group>"; };
-		03F630E016D6B5D400D33848 /* put_io_adder.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = put_io_adder.xcdatamodel; sourceTree = "<group>"; };
 		03F6315216D6C61200D33848 /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
 		03F6316216D6CCC800D33848 /* icon_256x256@2x */ = {isa = PBXFileReference; lastKnownFileType = file; name = "icon_256x256@2x"; path = "../icon_256x256@2x"; sourceTree = "<group>"; };
 		03F6316316D6CCC800D33848 /* icon_512x512 */ = {isa = PBXFileReference; lastKnownFileType = file; name = icon_512x512; path = ../icon_512x512; sourceTree = "<group>"; };
@@ -197,7 +195,6 @@
 				030F7D0F178646CF0024178D /* AFNetworking */,
 				03F630D916D6B5D400D33848 /* PutioAppDelegate.h */,
 				03F630DA16D6B5D400D33848 /* PutioAppDelegate.m */,
-				03F630DF16D6B5D400D33848 /* put_io_adder.xcdatamodeld */,
 				031D405E17861678006C4EEF /* PutioBrowser.h */,
 				031D405F17861679006C4EEF /* PutioBrowser.m */,
 				030F7D0C178646910024178D /* SSKeychain.h */,
@@ -307,7 +304,6 @@
 				03F630D416D6B5D400D33848 /* main.m in Sources */,
 				03F630DB16D6B5D400D33848 /* PutioAppDelegate.m in Sources */,
 				030F7D59178646CF0024178D /* AFXMLRequestOperation.m in Sources */,
-				03F630E116D6B5D400D33848 /* put_io_adder.xcdatamodeld in Sources */,
 				030F7D5A178646CF0024178D /* UIImageView+AFNetworking.m in Sources */,
 				030F7D58178646CF0024178D /* AFURLConnectionOperation.m in Sources */,
 				030F7D56178646CF0024178D /* AFNetworkActivityIndicatorManager.m in Sources */,
@@ -445,19 +441,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCVersionGroup section */
-		03F630DF16D6B5D400D33848 /* put_io_adder.xcdatamodeld */ = {
-			isa = XCVersionGroup;
-			children = (
-				03F630E016D6B5D400D33848 /* put_io_adder.xcdatamodel */,
-			);
-			currentVersion = 03F630E016D6B5D400D33848 /* put_io_adder.xcdatamodel */;
-			path = put_io_adder.xcdatamodeld;
-			sourceTree = "<group>";
-			versionGroupType = wrapper.xcdatamodel;
-		};
-/* End XCVersionGroup section */
 	};
 	rootObject = 03F630BC16D6B5D300D33848 /* Project object */;
 }
