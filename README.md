@@ -11,6 +11,7 @@ on a "magnet:" link, the app opens, and adds the link to your [put.io](http://pu
 **BINARIES:**
 - [put.io adder v1.0](http://cl.ly/Q4MV) (MD5 sum: 6354d4f35d9b737a9ef89e755a3051e2)
 
+**SCREENSHOTS**
 ![alt tag](http://f.cl.ly/items/1E2h3I243x2W0P0y301p/Screen%20Shot%202013-07-05%20at%202.53.23%20AM.png)
 ![alt tag](http://f.cl.ly/items/3O0e3m1S36203j2k2f3P/Screen%20Shot%202013-07-05%20at%202.43.32%20AM.png)
 
