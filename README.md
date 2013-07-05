@@ -15,9 +15,15 @@ Follow me on Twitter: [@nicoSWD](https://twitter.com/nicoSWD)!
 
 **SCREENSHOTS**
 
-![alt tag](http://f.cl.ly/items/1E2h3I243x2W0P0y301p/Screen%20Shot%202013-07-05%20at%202.53.23%20AM.png)
-![alt tag](http://f.cl.ly/items/3E1U16051D0V471J0m39/Screen%20Shot%202013-07-05%20at%203.59.55%20AM.png)
-![alt tag](http://f.cl.ly/items/3O0e3m1S36203j2k2f3P/Screen%20Shot%202013-07-05%20at%202.43.32%20AM.png)
+![alt tag](http://f.cl.ly/items/0e1U0y0Y0h062w1X3p41/Screen%20Shot%202013-07-05%20at%203.03.58%20PM.png)
+![alt tag](http://f.cl.ly/items/0T450c201d1d182B1l2Z/Screen%20Shot%202013-07-05%20at%203.05.54%20PM.png)
+![alt tag](http://f.cl.ly/items/3o3E1f3D0j1G0U2F403U/Screen%20Shot%202013-07-05%20at%203.06.18%20PM.png)
+
+**CHANGELOG**
+- v1.1
+  - Now compiles with Xcode 4
+  - Compatible with OS X < 10.8
+  - New Design
 
 **MIT/X11 LICENSE**
 
