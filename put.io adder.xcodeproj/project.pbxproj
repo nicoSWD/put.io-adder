@@ -23,6 +23,12 @@
 		030F7D5D178646CF0024178D /* CHANGES in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D27178646CF0024178D /* CHANGES */; };
 		030F7D71178646CF0024178D /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D4F178646CF0024178D /* LICENSE */; };
 		030F7D72178646CF0024178D /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D50178646CF0024178D /* README.md */; };
+		030F7D7F178649240024178D /* amblem.icns in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D79178649240024178D /* amblem.icns */; };
+		030F7D80178649240024178D /* icon_128x128@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7A178649240024178D /* icon_128x128@2x.png */; };
+		030F7D81178649250024178D /* icon_256x256.png in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7B178649240024178D /* icon_256x256.png */; };
+		030F7D82178649250024178D /* icon_256x256@2x in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7C178649240024178D /* icon_256x256@2x */; };
+		030F7D83178649250024178D /* icon_512x512 in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7D178649240024178D /* icon_512x512 */; };
+		030F7D84178649250024178D /* icon_512x512@2x in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7E178649240024178D /* icon_512x512@2x */; };
 		031D406017861679006C4EEF /* PutioBrowser.m in Sources */ = {isa = PBXBuildFile; fileRef = 031D405F17861679006C4EEF /* PutioBrowser.m */; };
 		031D406217861A65006C4EEF /* Browser.xib in Resources */ = {isa = PBXBuildFile; fileRef = 031D406117861A65006C4EEF /* Browser.xib */; };
 		03AE9CBE17861CBA00A6E3EF /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03AE9CBD17861CBA00A6E3EF /* WebKit.framework */; };
@@ -33,12 +39,6 @@
 		03F630DB16D6B5D400D33848 /* PutioAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 03F630DA16D6B5D400D33848 /* PutioAppDelegate.m */; };
 		03F630DE16D6B5D400D33848 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 03F630DC16D6B5D400D33848 /* MainMenu.xib */; };
 		03F6315316D6C61200D33848 /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03F6315216D6C61200D33848 /* SystemConfiguration.framework */; };
-		03F6316416D6CCC800D33848 /* icon_256x256@2x in Resources */ = {isa = PBXBuildFile; fileRef = 03F6316216D6CCC800D33848 /* icon_256x256@2x */; };
-		03F6316816D6CD2700D33848 /* icon_128x128@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 03F6316616D6CD2700D33848 /* icon_128x128@2x.png */; };
-		03F6316916D6CD2700D33848 /* icon_256x256.png in Resources */ = {isa = PBXBuildFile; fileRef = 03F6316716D6CD2700D33848 /* icon_256x256.png */; };
-		03F6316B16D6CD8D00D33848 /* icon_512x512@2x in Resources */ = {isa = PBXBuildFile; fileRef = 03F6316A16D6CD8D00D33848 /* icon_512x512@2x */; };
-		03F6316D16D6CFAC00D33848 /* icon_512x512 in Resources */ = {isa = PBXBuildFile; fileRef = 03F6316316D6CCC800D33848 /* icon_512x512 */; };
-		03F6316F16D6D35900D33848 /* amblem.icns in Resources */ = {isa = PBXBuildFile; fileRef = 03F6316E16D6D35900D33848 /* amblem.icns */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -69,6 +69,12 @@
 		030F7D27178646CF0024178D /* CHANGES */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = CHANGES; sourceTree = "<group>"; };
 		030F7D4F178646CF0024178D /* LICENSE */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		030F7D50178646CF0024178D /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = README.md; sourceTree = "<group>"; };
+		030F7D79178649240024178D /* amblem.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; name = amblem.icns; path = Resources/amblem.icns; sourceTree = "<group>"; };
+		030F7D7A178649240024178D /* icon_128x128@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "icon_128x128@2x.png"; path = "Resources/icon_128x128@2x.png"; sourceTree = "<group>"; };
+		030F7D7B178649240024178D /* icon_256x256.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = icon_256x256.png; path = Resources/icon_256x256.png; sourceTree = "<group>"; };
+		030F7D7C178649240024178D /* icon_256x256@2x */ = {isa = PBXFileReference; lastKnownFileType = file; name = "icon_256x256@2x"; path = "Resources/icon_256x256@2x"; sourceTree = "<group>"; };
+		030F7D7D178649240024178D /* icon_512x512 */ = {isa = PBXFileReference; lastKnownFileType = file; name = icon_512x512; path = Resources/icon_512x512; sourceTree = "<group>"; };
+		030F7D7E178649240024178D /* icon_512x512@2x */ = {isa = PBXFileReference; lastKnownFileType = file; name = "icon_512x512@2x"; path = "Resources/icon_512x512@2x"; sourceTree = "<group>"; };
 		031D405E17861678006C4EEF /* PutioBrowser.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PutioBrowser.h; sourceTree = "<group>"; };
 		031D405F17861679006C4EEF /* PutioBrowser.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PutioBrowser.m; sourceTree = "<group>"; };
 		031D406117861A65006C4EEF /* Browser.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = Browser.xib; sourceTree = "<group>"; };
@@ -87,12 +93,6 @@
 		03F630DA16D6B5D400D33848 /* PutioAppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PutioAppDelegate.m; sourceTree = "<group>"; };
 		03F630DD16D6B5D400D33848 /* en */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = en; path = en.lproj/MainMenu.xib; sourceTree = "<group>"; };
 		03F6315216D6C61200D33848 /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
-		03F6316216D6CCC800D33848 /* icon_256x256@2x */ = {isa = PBXFileReference; lastKnownFileType = file; name = "icon_256x256@2x"; path = "../icon_256x256@2x"; sourceTree = "<group>"; };
-		03F6316316D6CCC800D33848 /* icon_512x512 */ = {isa = PBXFileReference; lastKnownFileType = file; name = icon_512x512; path = ../icon_512x512; sourceTree = "<group>"; };
-		03F6316616D6CD2700D33848 /* icon_128x128@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "icon_128x128@2x.png"; path = "../icon_128x128@2x.png"; sourceTree = "<group>"; };
-		03F6316716D6CD2700D33848 /* icon_256x256.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = icon_256x256.png; path = ../icon_256x256.png; sourceTree = "<group>"; };
-		03F6316A16D6CD8D00D33848 /* icon_512x512@2x */ = {isa = PBXFileReference; lastKnownFileType = file; name = "icon_512x512@2x"; path = "../icon_512x512@2x"; sourceTree = "<group>"; };
-		03F6316E16D6D35900D33848 /* amblem.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; name = amblem.icns; path = ../amblem.icns; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -209,13 +209,13 @@
 		03F630CE16D6B5D400D33848 /* Supporting Files */ = {
 			isa = PBXGroup;
 			children = (
+				030F7D79178649240024178D /* amblem.icns */,
+				030F7D7A178649240024178D /* icon_128x128@2x.png */,
+				030F7D7B178649240024178D /* icon_256x256.png */,
+				030F7D7C178649240024178D /* icon_256x256@2x */,
+				030F7D7D178649240024178D /* icon_512x512 */,
+				030F7D7E178649240024178D /* icon_512x512@2x */,
 				03F630CF16D6B5D400D33848 /* put.io adder-Info.plist */,
-				03F6316216D6CCC800D33848 /* icon_256x256@2x */,
-				03F6316316D6CCC800D33848 /* icon_512x512 */,
-				03F6316E16D6D35900D33848 /* amblem.icns */,
-				03F6316616D6CD2700D33848 /* icon_128x128@2x.png */,
-				03F6316A16D6CD8D00D33848 /* icon_512x512@2x */,
-				03F6316716D6CD2700D33848 /* icon_256x256.png */,
 				03F630D016D6B5D400D33848 /* InfoPlist.strings */,
 				03F630D316D6B5D400D33848 /* main.m */,
 				03F630D516D6B5D400D33848 /* put.io adder-Prefix.pch */,
@@ -275,20 +275,20 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				030F7D82178649250024178D /* icon_256x256@2x in Resources */,
+				030F7D80178649240024178D /* icon_128x128@2x.png in Resources */,
+				030F7D7F178649240024178D /* amblem.icns in Resources */,
 				030F7D51178646CF0024178D /* .gitignore in Resources */,
+				030F7D84178649250024178D /* icon_512x512@2x in Resources */,
 				031D406217861A65006C4EEF /* Browser.xib in Resources */,
 				030F7D71178646CF0024178D /* LICENSE in Resources */,
 				03F630D216D6B5D400D33848 /* InfoPlist.strings in Resources */,
 				03F630DE16D6B5D400D33848 /* MainMenu.xib in Resources */,
-				03F6316416D6CCC800D33848 /* icon_256x256@2x in Resources */,
-				03F6316816D6CD2700D33848 /* icon_128x128@2x.png in Resources */,
-				03F6316916D6CD2700D33848 /* icon_256x256.png in Resources */,
-				03F6316B16D6CD8D00D33848 /* icon_512x512@2x in Resources */,
 				030F7D72178646CF0024178D /* README.md in Resources */,
-				03F6316D16D6CFAC00D33848 /* icon_512x512 in Resources */,
 				030F7D5B178646CF0024178D /* AFNetworking.podspec in Resources */,
-				03F6316F16D6D35900D33848 /* amblem.icns in Resources */,
+				030F7D81178649250024178D /* icon_256x256.png in Resources */,
 				030F7D5D178646CF0024178D /* CHANGES in Resources */,
+				030F7D83178649250024178D /* icon_512x512 in Resources */,
 				030F7D5C178646CF0024178D /* AFNetworking.xcworkspace in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
