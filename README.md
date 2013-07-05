@@ -14,6 +14,7 @@ on a "magnet:" link, the app opens, and adds the clicked link to your [put.io](h
 **SCREENSHOTS**
 
 ![alt tag](http://f.cl.ly/items/1E2h3I243x2W0P0y301p/Screen%20Shot%202013-07-05%20at%202.53.23%20AM.png)
+![alt tag](http://f.cl.ly/items/3E1U16051D0V471J0m39/Screen%20Shot%202013-07-05%20at%203.59.55%20AM.png)
 ![alt tag](http://f.cl.ly/items/3O0e3m1S36203j2k2f3P/Screen%20Shot%202013-07-05%20at%202.43.32%20AM.png)
 
 **MIT/X11 LICENSE**
