@@ -31,6 +31,7 @@
 		030F7D84178649250024178D /* icon_512x512@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7E178649240024178D /* icon_512x512@2x.png */; };
 		031D406017861679006C4EEF /* PutioBrowser.m in Sources */ = {isa = PBXBuildFile; fileRef = 031D405F17861679006C4EEF /* PutioBrowser.m */; };
 		039969961787047500B595C6 /* Browser.xib in Resources */ = {isa = PBXBuildFile; fileRef = 039969951787047500B595C6 /* Browser.xib */; };
+		03A77B3417875E4700AA44FB /* PutioMainController.m in Sources */ = {isa = PBXBuildFile; fileRef = 03A77B3317875E4700AA44FB /* PutioMainController.m */; };
 		03AE9CBE17861CBA00A6E3EF /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03AE9CBD17861CBA00A6E3EF /* WebKit.framework */; };
 		03AE9CC01786398200A6E3EF /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03AE9CBF1786398200A6E3EF /* Security.framework */; };
 		03F630C816D6B5D400D33848 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03F630C716D6B5D400D33848 /* Cocoa.framework */; };
@@ -78,6 +79,8 @@
 		031D405E17861678006C4EEF /* PutioBrowser.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PutioBrowser.h; sourceTree = "<group>"; };
 		031D405F17861679006C4EEF /* PutioBrowser.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PutioBrowser.m; sourceTree = "<group>"; };
 		039969951787047500B595C6 /* Browser.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = Browser.xib; sourceTree = "<group>"; };
+		03A77B3217875E4700AA44FB /* PutioMainController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PutioMainController.h; sourceTree = "<group>"; };
+		03A77B3317875E4700AA44FB /* PutioMainController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PutioMainController.m; sourceTree = "<group>"; };
 		03AE9CBD17861CBA00A6E3EF /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 		03AE9CBF1786398200A6E3EF /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		03F630C416D6B5D400D33848 /* put.io adder.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "put.io adder.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -192,15 +195,17 @@
 		03F630CD16D6B5D400D33848 /* put.io adder */ = {
 			isa = PBXGroup;
 			children = (
-				030F7D0F178646CF0024178D /* AFNetworking */,
 				03F630D916D6B5D400D33848 /* PutioAppDelegate.h */,
 				03F630DA16D6B5D400D33848 /* PutioAppDelegate.m */,
+				03A77B3217875E4700AA44FB /* PutioMainController.h */,
+				03A77B3317875E4700AA44FB /* PutioMainController.m */,
 				031D405E17861678006C4EEF /* PutioBrowser.h */,
 				031D405F17861679006C4EEF /* PutioBrowser.m */,
 				030F7D0C178646910024178D /* SSKeychain.h */,
 				030F7D0D178646910024178D /* SSKeychain.m */,
 				03F630DC16D6B5D400D33848 /* MainMenu.xib */,
 				039969951787047500B595C6 /* Browser.xib */,
+				030F7D0F178646CF0024178D /* AFNetworking */,
 				03F630CE16D6B5D400D33848 /* Supporting Files */,
 			);
 			path = "put.io adder";
@@ -313,6 +318,7 @@
 				030F7D57178646CF0024178D /* AFPropertyListRequestOperation.m in Sources */,
 				030F7D52178646CF0024178D /* AFHTTPClient.m in Sources */,
 				030F7D53178646CF0024178D /* AFHTTPRequestOperation.m in Sources */,
+				03A77B3417875E4700AA44FB /* PutioMainController.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -366,7 +372,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 10.6;
 				ONLY_ACTIVE_ARCH = YES;
-				SDKROOT = macosx;
+				SDKROOT = macosx10.7;
 			};
 			name = Debug;
 		};
@@ -391,7 +397,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 10.6;
-				SDKROOT = macosx;
+				SDKROOT = macosx10.7;
 			};
 			name = Release;
 		};
@@ -400,6 +406,7 @@
 			buildSettings = {
 				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_IDENTITY = "";
 				COMBINE_HIDPI_IMAGES = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "put.io adder/put.io adder-Prefix.pch";
@@ -407,7 +414,7 @@
 				INFOPLIST_FILE = "put.io adder/put.io adder-Info.plist";
 				MACOSX_DEPLOYMENT_TARGET = 10.7;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx10.8;
+				SDKROOT = macosx10.7;
 				WRAPPER_EXTENSION = app;
 			};
 			name = Debug;
@@ -417,6 +424,7 @@
 			buildSettings = {
 				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_IDENTITY = "";
 				COMBINE_HIDPI_IMAGES = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "put.io adder/put.io adder-Prefix.pch";
@@ -424,7 +432,7 @@
 				INFOPLIST_FILE = "put.io adder/put.io adder-Info.plist";
 				MACOSX_DEPLOYMENT_TARGET = 10.7;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx10.8;
+				SDKROOT = macosx10.7;
 				WRAPPER_EXTENSION = app;
 			};
 			name = Release;
