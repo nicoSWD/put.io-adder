@@ -14,15 +14,13 @@
 
 @implementation PutioMainController
 
-@synthesize message, progress, waiting, authWindow, oauthToken, waitingLabel;
+@synthesize message, progress, waiting, authWindow, oauthToken, waitingLabel, userInfo;
 
 
 -(void)awakeFromNib
 {
     [[NSAppleEventManager sharedAppleEventManager] setEventHandler:self andSelector:@selector(handleEvent:withReplyEvent:) forEventClass:kInternetEventClass andEventID:kAEGetURL];
-    
-    [[NSApplication sharedApplication] mainWindow];
-    
+        
     [self.waiting startAnimation:nil];
     [self.progress stopAnimation:nil];
     [self authenticateUser];
@@ -42,6 +40,7 @@
         
         self.authWindow = [[PutioBrowser alloc] initWithWindowNibName:@"Browser"];
         [self.authWindow.window makeKeyWindow];
+        [self.authWindow.window makeMainWindow];
         
         /////////////////////
         // TODO: move auth window in front of *ALL* other windows.
@@ -53,7 +52,66 @@
     else
     {
         self.oauthToken = t;
+        [self updateUserInfo];
+        
+        userInfoTimer = [NSTimer scheduledTimerWithTimeInterval:60.0  target:self selector:@selector(updateUserInfo) userInfo:nil repeats:YES];
     }
+}
+
+
+- (void)updateUserInfo
+{
+    if (self.oauthToken == nil)
+    {
+        return;
+    }
+
+    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"https://api.put.io/v2/account/info?oauth_token=%@", self.oauthToken]];
+    NSURLRequest *request = [NSURLRequest requestWithURL:url];
+    AFJSONRequestOperation *operation = [AFJSONRequestOperation JSONRequestOperationWithRequest:request
+    success:^(NSURLRequest *request, NSHTTPURLResponse *response, id JSON)
+    {
+        if (![JSON count])
+        {
+            return;
+        }
+
+        NSMutableArray *_userInfo = [JSON objectForKey:@"info"];
+        NSMutableArray *disk = [_userInfo valueForKey:@"disk"];
+        
+        self.userInfo.stringValue = [NSString stringWithFormat:@"%@, %@ used of %@",
+            [_userInfo valueForKey:@"username"],
+            [self transformedValue:[disk valueForKey:@"used"]],
+            [self transformedValue:[disk valueForKey:@"size"]]
+        ];
+    }
+    failure:^(NSURLRequest *request, NSURLResponse *response, NSError *error, id JSON)
+    {
+        self.userInfo.stringValue = @"Failed to fetch account info!";
+    }];
+    
+    [operation start];
+}
+
+
+/**
+ * transformedValue method by "Parag Bafna", from: http://stackoverflow.com/questions/7846495/
+ *
+**/
+- (id)transformedValue:(id)value
+{
+    double convertedValue = [value doubleValue];
+    int multiplyFactor = 0;
+    
+    NSArray *tokens = [NSArray arrayWithObjects:@"bytes",@"KiB",@"MiB",@"GiB",@"TiB",nil];
+    
+    while (convertedValue > 1024)
+    {
+        convertedValue /= 1024;
+        multiplyFactor++;
+    }
+    
+    return [NSString stringWithFormat:@"%4.2f %@", convertedValue, [tokens objectAtIndex:multiplyFactor]];
 }
 
 
@@ -132,6 +190,12 @@
     }];
     
     [operation start];
+}
+
+
+- (IBAction)loadWebsite:(id)sender
+{
+	[[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/nicoSWD/put.io-adder"]];
 }
 
 @end

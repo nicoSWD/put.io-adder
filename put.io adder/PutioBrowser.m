@@ -44,8 +44,10 @@
         if ([SSKeychain setPassword:token forService:@"put.io adder" account:@"711"])
         {
             controller.message.stringValue = @"Authenticated and ready to go!";
+            controller.oauthToken = token;
             [controller.waiting startAnimation:nil];
             [controller.waitingLabel setHidden:NO];
+            [controller updateUserInfo];
             
             [self.window close];
         }

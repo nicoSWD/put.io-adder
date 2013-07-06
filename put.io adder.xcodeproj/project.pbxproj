@@ -34,6 +34,10 @@
 		03A77B3417875E4700AA44FB /* PutioMainController.m in Sources */ = {isa = PBXBuildFile; fileRef = 03A77B3317875E4700AA44FB /* PutioMainController.m */; };
 		03AE9CBE17861CBA00A6E3EF /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03AE9CBD17861CBA00A6E3EF /* WebKit.framework */; };
 		03AE9CC01786398200A6E3EF /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03AE9CBF1786398200A6E3EF /* Security.framework */; };
+		03DF597D17884AAB00AC96AA /* github.png in Resources */ = {isa = PBXBuildFile; fileRef = 03DF597B17884AAB00AC96AA /* github.png */; };
+		03DF597E17884AAB00AC96AA /* github@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 03DF597C17884AAB00AC96AA /* github@2x.png */; };
+		03DF598117884B1F00AC96AA /* putio-menu.png in Resources */ = {isa = PBXBuildFile; fileRef = 03DF597F17884B1F00AC96AA /* putio-menu.png */; };
+		03DF598217884B1F00AC96AA /* putio-menu@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 03DF598017884B1F00AC96AA /* putio-menu@2x.png */; };
 		03F630C816D6B5D400D33848 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03F630C716D6B5D400D33848 /* Cocoa.framework */; };
 		03F630D216D6B5D400D33848 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 03F630D016D6B5D400D33848 /* InfoPlist.strings */; };
 		03F630D416D6B5D400D33848 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 03F630D316D6B5D400D33848 /* main.m */; };
@@ -83,6 +87,10 @@
 		03A77B3317875E4700AA44FB /* PutioMainController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PutioMainController.m; sourceTree = "<group>"; };
 		03AE9CBD17861CBA00A6E3EF /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 		03AE9CBF1786398200A6E3EF /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		03DF597B17884AAB00AC96AA /* github.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = github.png; path = Resources/github.png; sourceTree = "<group>"; };
+		03DF597C17884AAB00AC96AA /* github@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "github@2x.png"; path = "Resources/github@2x.png"; sourceTree = "<group>"; };
+		03DF597F17884B1F00AC96AA /* putio-menu.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "putio-menu.png"; path = "Resources/putio-menu.png"; sourceTree = "<group>"; };
+		03DF598017884B1F00AC96AA /* putio-menu@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "putio-menu@2x.png"; path = "Resources/putio-menu@2x.png"; sourceTree = "<group>"; };
 		03F630C416D6B5D400D33848 /* put.io adder.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "put.io adder.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		03F630C716D6B5D400D33848 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = System/Library/Frameworks/Cocoa.framework; sourceTree = SDKROOT; };
 		03F630CA16D6B5D400D33848 /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = System/Library/Frameworks/AppKit.framework; sourceTree = SDKROOT; };
@@ -153,6 +161,15 @@
 			path = AFNetworking;
 			sourceTree = "<group>";
 		};
+		03DF597A178849B400AC96AA /* SSKeyChain */ = {
+			isa = PBXGroup;
+			children = (
+				030F7D0C178646910024178D /* SSKeychain.h */,
+				030F7D0D178646910024178D /* SSKeychain.m */,
+			);
+			name = SSKeyChain;
+			sourceTree = "<group>";
+		};
 		03F630BB16D6B5D300D33848 = {
 			isa = PBXGroup;
 			children = (
@@ -201,10 +218,9 @@
 				03A77B3317875E4700AA44FB /* PutioMainController.m */,
 				031D405E17861678006C4EEF /* PutioBrowser.h */,
 				031D405F17861679006C4EEF /* PutioBrowser.m */,
-				030F7D0C178646910024178D /* SSKeychain.h */,
-				030F7D0D178646910024178D /* SSKeychain.m */,
 				03F630DC16D6B5D400D33848 /* MainMenu.xib */,
 				039969951787047500B595C6 /* Browser.xib */,
+				03DF597A178849B400AC96AA /* SSKeyChain */,
 				030F7D0F178646CF0024178D /* AFNetworking */,
 				03F630CE16D6B5D400D33848 /* Supporting Files */,
 			);
@@ -216,6 +232,10 @@
 			children = (
 				030F7D79178649240024178D /* amblem.icns */,
 				030F7D7A178649240024178D /* icon_128x128@2x.png */,
+				03DF597B17884AAB00AC96AA /* github.png */,
+				03DF597F17884B1F00AC96AA /* putio-menu.png */,
+				03DF598017884B1F00AC96AA /* putio-menu@2x.png */,
+				03DF597C17884AAB00AC96AA /* github@2x.png */,
 				030F7D7B178649240024178D /* icon_256x256.png */,
 				030F7D7C178649240024178D /* icon_256x256@2x */,
 				030F7D7D178649240024178D /* icon_512x512.png */,
@@ -295,6 +315,10 @@
 				030F7D83178649250024178D /* icon_512x512.png in Resources */,
 				030F7D5C178646CF0024178D /* AFNetworking.xcworkspace in Resources */,
 				039969961787047500B595C6 /* Browser.xib in Resources */,
+				03DF597D17884AAB00AC96AA /* github.png in Resources */,
+				03DF597E17884AAB00AC96AA /* github@2x.png in Resources */,
+				03DF598117884B1F00AC96AA /* putio-menu.png in Resources */,
+				03DF598217884B1F00AC96AA /* putio-menu@2x.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
