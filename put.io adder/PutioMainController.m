@@ -79,9 +79,10 @@
     [self.putioAPI getTransfers:^(NSArray *transfers)
     {
         int pendingDownloads = 0;
+        int totalTransfers = (int)transfers.count;
         NSString *status;
         
-        for (int i = 0; i < transfers.count; i++)
+        for (int i = 0; i < totalTransfers; i++)
         {
             status = [[transfers objectAtIndex:i] valueForKey:@"status"];
 
@@ -117,8 +118,7 @@
     
     if ([matches count] > 0)
     {
-        displayName = [magnetURL substringWithRange:[[matches objectAtIndex:0] rangeAtIndex:1]];
-        displayName = [displayName displayNameString];
+        displayName = [[magnetURL substringWithRange:[[matches objectAtIndex:0] rangeAtIndex:1]] displayNameString];
     }
     else
     {
@@ -150,51 +150,27 @@
 
 - (void)uploadTorrent:(NSString*)filePath
 {
-    NSURL *baseURL = [NSURL URLWithString:@"https://api.put.io/"];
-    NSData *imageData = [NSData dataWithContentsOfFile:filePath];
     NSString *fileName = [filePath lastPathComponent];
-    NSDictionary *params = [NSDictionary dictionaryWithObjectsAndKeys: self.oauthToken, @"oauth_token", nil];
-    
-    self.message.stringValue = [NSString stringWithFormat:@"Uploading .torrent: %@", fileName];
+    self.message.stringValue = [NSString stringWithFormat:@"Uploading torrent: %@", fileName];
     [self.activityIndicator startAnimation:nil];
-
-    AFHTTPClient *httpClient = [[AFHTTPClient alloc] initWithBaseURL:baseURL];
-    NSURLRequest *request = [httpClient multipartFormRequestWithMethod:@"POST" path:@"/v2/files/upload" parameters:params constructingBodyWithBlock: ^(id <AFMultipartFormData> formData)
+    
+    [self.putioAPI uploadFile:filePath :^(id userInfoObject)
     {
-        [formData appendPartWithFileData:imageData name:@"file" fileName:fileName mimeType:@"application/x-bittorrent"];
-    }];
-
-    AFJSONRequestOperation *operation = [AFJSONRequestOperation JSONRequestOperationWithRequest:request
-    success:^(NSURLRequest *request, NSHTTPURLResponse *response, id JSON)
-    {
-        if ([[JSON valueForKeyPath:@"status"] isEqualToString:@"OK"])
-        {
-            self.message.stringValue = @"Torrent successfully added!";
-        }
-        else
-        {
-            self.message.stringValue = @"Something went wrong!";
-        }
-
+        self.message.stringValue = @"Torrent successfully added!";
         [self.activityIndicator stopAnimation:nil];
     }
-    failure:^(NSURLRequest *request, NSHTTPURLResponse *response, NSError *error, id JSON)
+    addFailure:^
     {
-        long statusCode = (long)response.statusCode;
-
-        if (statusCode == 400)
-        {
-            self.message.stringValue = @"Failed! Torrent already in queue?";
-        }
-        else
-        {
-            self.message.stringValue = [NSString stringWithFormat:@"Something went wrong! HTTP error %li!", statusCode];
-        }
-
+        self.message.stringValue = @"Something went wrong!?";
+        [self.activityIndicator stopAnimation:nil];
+    }
+    networkFailure:^(NSError *error)
+    {
+        // Put.io returns HTTP 400 if you're adding an URL that's already in the queue...
+        // ... and thereby causing AFNetworking to throw a network error.
+        self.message.stringValue = @"Failed! Torrent already in queue?";
         [self.activityIndicator stopAnimation:nil];
     }];
-    
-    [operation start];
 }
 
 

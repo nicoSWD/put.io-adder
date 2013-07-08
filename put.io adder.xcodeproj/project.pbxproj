@@ -306,7 +306,6 @@
 		03F630CD16D6B5D400D33848 /* put.io adder */ = {
 			isa = PBXGroup;
 			children = (
-				031F892A178A3426006EAB13 /* PutioKit */,
 				03F630D916D6B5D400D33848 /* PutioAppDelegate.h */,
 				03F630DA16D6B5D400D33848 /* PutioAppDelegate.m */,
 				03A77B3217875E4700AA44FB /* PutioMainController.h */,
@@ -315,6 +314,7 @@
 				031D405F17861679006C4EEF /* PutioBrowser.m */,
 				03F630DC16D6B5D400D33848 /* MainMenu.xib */,
 				039969951787047500B595C6 /* Browser.xib */,
+				031F892A178A3426006EAB13 /* PutioKit */,
 				03DF597A178849B400AC96AA /* SSKeyChain */,
 				030F7D0F178646CF0024178D /* AFNetworking */,
 				03F630CE16D6B5D400D33848 /* Supporting Files */,
