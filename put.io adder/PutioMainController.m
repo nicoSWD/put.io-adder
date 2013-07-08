@@ -7,8 +7,6 @@
 //
 
 #import "PutioMainController.h"
-#import "AFNetworking.h"
-#import "AFJSONRequestOperation.h"
 #import "PutioBrowser.h"
 #import "SSKeychain.h"
 #import "V2PutIOAPIClient.h"

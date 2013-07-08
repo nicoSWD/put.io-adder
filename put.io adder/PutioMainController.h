@@ -33,7 +33,6 @@
 
 @property (nonatomic, retain) NSTextField *message;
 @property (nonatomic, retain) NSProgressIndicator *activityIndicator;
-
 @property (nonatomic, retain) NSTextField *userInfo;
 @property (nonatomic, retain) NSTextField *transferInfo;
 @property (nonatomic, retain) NSTextField *versionInfo;
