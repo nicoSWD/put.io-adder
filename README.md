@@ -1,4 +1,4 @@
-Put.io Magnet Handler for OS X
+Put.io magnet: & .torrent Handler for OS X
 ==============================
 
 *Put.io adder* is a small OS X app, that adds a new handler for "magnet:" URL schemes, so that every time you click
