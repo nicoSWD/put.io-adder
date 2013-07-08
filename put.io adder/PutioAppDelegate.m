@@ -7,6 +7,8 @@
 //
 
 #import "PutioAppDelegate.h"
+#import "PutioMainController.h"
+
 
 @implementation PutioAppDelegate
 
@@ -14,6 +16,20 @@
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender
 {
     return YES;
+}
+
+
+- (BOOL)application:(NSApplication *)sender openFile:(NSString *)pathname
+{
+    if ([[pathname pathExtension] isEqualToString:@"torrent"])
+    {
+        PutioMainController *putio = [[[[NSApplication sharedApplication] windows] objectAtIndex:0] windowController];
+        
+        [putio uploadTorrent:pathname];
+        return YES;
+    }
+    
+    return NO;
 }
 
 @end

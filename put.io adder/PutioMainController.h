@@ -8,33 +8,35 @@
 
 #import <Foundation/Foundation.h>
 #import "PutioBrowser.h"
+#import "V2PutIOAPIClient.h"
 
 @interface PutioMainController : NSWindowController
 {
     IBOutlet NSTextField *message;
-    IBOutlet NSProgressIndicator *progress;
-    IBOutlet NSProgressIndicator *waiting;
-    IBOutlet NSTextField *waitingLabel;
+    IBOutlet NSProgressIndicator *activityIndicator;
     IBOutlet NSTextField *userInfo;
+    IBOutlet NSTextField *transferInfo;
     
     NSString *oauthToken;
-    PutioBrowser *authWindow;
     NSTimer *userInfoTimer;
+    PutioBrowser *authWindow;
+    V2PutIOAPIClient *putioAPI;
 }
 
 - (void)authenticateUser;
 - (void)updateUserInfo;
+- (void)addMagnet:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)replyEvent;
+- (void)uploadTorrent:(NSString*)filePath;
 - (id)transformedValue:(id)value;
-- (void)handleEvent:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)replyEvent;
 - (IBAction)loadWebsite:(id)sender;
 
 @property (nonatomic, retain) NSTextField *message;
-@property (nonatomic, retain) NSProgressIndicator *progress;
-@property (nonatomic, retain) NSProgressIndicator *waiting;
-@property (nonatomic, retain) NSTextField *waitingLabel;
+@property (nonatomic, retain) NSProgressIndicator *activityIndicator;
 
 @property (nonatomic, retain) NSTextField *userInfo;
+@property (nonatomic, retain) NSTextField *transferInfo;
 @property (nonatomic, retain) NSString *oauthToken;
 @property (strong) PutioBrowser *authWindow;
+@property (strong) V2PutIOAPIClient *putioAPI;
 
 @end

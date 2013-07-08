@@ -30,6 +30,18 @@
 		030F7D83178649250024178D /* icon_512x512.png in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7D178649240024178D /* icon_512x512.png */; };
 		030F7D84178649250024178D /* icon_512x512@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7E178649240024178D /* icon_512x512@2x.png */; };
 		031D406017861679006C4EEF /* PutioBrowser.m in Sources */ = {isa = PBXBuildFile; fileRef = 031D405F17861679006C4EEF /* PutioBrowser.m */; };
+		031F894A178A3426006EAB13 /* NSString+DisplayName.m in Sources */ = {isa = PBXBuildFile; fileRef = 031F892D178A3426006EAB13 /* NSString+DisplayName.m */; };
+		031F894B178A3426006EAB13 /* PKAccount.m in Sources */ = {isa = PBXBuildFile; fileRef = 031F8930178A3426006EAB13 /* PKAccount.m */; };
+		031F894C178A3426006EAB13 /* PKAccountSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 031F8932178A3426006EAB13 /* PKAccountSettings.m */; };
+		031F894D178A3426006EAB13 /* PKFile.m in Sources */ = {isa = PBXBuildFile; fileRef = 031F8934178A3426006EAB13 /* PKFile.m */; };
+		031F894E178A3426006EAB13 /* PKFolder.m in Sources */ = {isa = PBXBuildFile; fileRef = 031F8936178A3426006EAB13 /* PKFolder.m */; };
+		031F894F178A3426006EAB13 /* PKFriend.m in Sources */ = {isa = PBXBuildFile; fileRef = 031F8939178A3426006EAB13 /* PKFriend.m */; };
+		031F8950178A3426006EAB13 /* PKMP4Status.m in Sources */ = {isa = PBXBuildFile; fileRef = 031F893B178A3426006EAB13 /* PKMP4Status.m */; };
+		031F8951178A3426006EAB13 /* PKObject.m in Sources */ = {isa = PBXBuildFile; fileRef = 031F893D178A3426006EAB13 /* PKObject.m */; };
+		031F8952178A3426006EAB13 /* PKTransfer.m in Sources */ = {isa = PBXBuildFile; fileRef = 031F893F178A3426006EAB13 /* PKTransfer.m */; };
+		031F8953178A3426006EAB13 /* PutIOClient.m in Sources */ = {isa = PBXBuildFile; fileRef = 031F8941178A3426006EAB13 /* PutIOClient.m */; };
+		031F8954178A3426006EAB13 /* PutIONetworkConstants.m in Sources */ = {isa = PBXBuildFile; fileRef = 031F8945178A3426006EAB13 /* PutIONetworkConstants.m */; };
+		031F8956178A3426006EAB13 /* V2PutIOAPIClient.m in Sources */ = {isa = PBXBuildFile; fileRef = 031F8949178A3426006EAB13 /* V2PutIOAPIClient.m */; };
 		039969961787047500B595C6 /* Browser.xib in Resources */ = {isa = PBXBuildFile; fileRef = 039969951787047500B595C6 /* Browser.xib */; };
 		03A77B3417875E4700AA44FB /* PutioMainController.m in Sources */ = {isa = PBXBuildFile; fileRef = 03A77B3317875E4700AA44FB /* PutioMainController.m */; };
 		03AE9CBE17861CBA00A6E3EF /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03AE9CBD17861CBA00A6E3EF /* WebKit.framework */; };
@@ -82,6 +94,33 @@
 		030F7D7E178649240024178D /* icon_512x512@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "icon_512x512@2x.png"; path = "Resources/icon_512x512@2x.png"; sourceTree = "<group>"; };
 		031D405E17861678006C4EEF /* PutioBrowser.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PutioBrowser.h; sourceTree = "<group>"; };
 		031D405F17861679006C4EEF /* PutioBrowser.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PutioBrowser.m; sourceTree = "<group>"; };
+		031F892C178A3426006EAB13 /* NSString+DisplayName.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "NSString+DisplayName.h"; sourceTree = "<group>"; };
+		031F892D178A3426006EAB13 /* NSString+DisplayName.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "NSString+DisplayName.m"; sourceTree = "<group>"; };
+		031F892F178A3426006EAB13 /* PKAccount.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PKAccount.h; sourceTree = "<group>"; };
+		031F8930178A3426006EAB13 /* PKAccount.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PKAccount.m; sourceTree = "<group>"; };
+		031F8931178A3426006EAB13 /* PKAccountSettings.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PKAccountSettings.h; sourceTree = "<group>"; };
+		031F8932178A3426006EAB13 /* PKAccountSettings.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PKAccountSettings.m; sourceTree = "<group>"; };
+		031F8933178A3426006EAB13 /* PKFile.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PKFile.h; sourceTree = "<group>"; };
+		031F8934178A3426006EAB13 /* PKFile.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PKFile.m; sourceTree = "<group>"; };
+		031F8935178A3426006EAB13 /* PKFolder.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PKFolder.h; sourceTree = "<group>"; };
+		031F8936178A3426006EAB13 /* PKFolder.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PKFolder.m; sourceTree = "<group>"; };
+		031F8937178A3426006EAB13 /* PKFolderItem.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PKFolderItem.h; sourceTree = "<group>"; };
+		031F8938178A3426006EAB13 /* PKFriend.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PKFriend.h; sourceTree = "<group>"; };
+		031F8939178A3426006EAB13 /* PKFriend.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PKFriend.m; sourceTree = "<group>"; };
+		031F893A178A3426006EAB13 /* PKMP4Status.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PKMP4Status.h; sourceTree = "<group>"; };
+		031F893B178A3426006EAB13 /* PKMP4Status.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PKMP4Status.m; sourceTree = "<group>"; };
+		031F893C178A3426006EAB13 /* PKObject.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PKObject.h; sourceTree = "<group>"; };
+		031F893D178A3426006EAB13 /* PKObject.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PKObject.m; sourceTree = "<group>"; };
+		031F893E178A3426006EAB13 /* PKTransfer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PKTransfer.h; sourceTree = "<group>"; };
+		031F893F178A3426006EAB13 /* PKTransfer.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PKTransfer.m; sourceTree = "<group>"; };
+		031F8940178A3426006EAB13 /* PutIOClient.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PutIOClient.h; sourceTree = "<group>"; };
+		031F8941178A3426006EAB13 /* PutIOClient.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PutIOClient.m; sourceTree = "<group>"; };
+		031F8942178A3426006EAB13 /* PutioKit-Prefix.pch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "PutioKit-Prefix.pch"; sourceTree = "<group>"; };
+		031F8943178A3426006EAB13 /* PutioKit.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PutioKit.h; sourceTree = "<group>"; };
+		031F8944178A3426006EAB13 /* PutIONetworkConstants.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PutIONetworkConstants.h; sourceTree = "<group>"; };
+		031F8945178A3426006EAB13 /* PutIONetworkConstants.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PutIONetworkConstants.m; sourceTree = "<group>"; };
+		031F8948178A3426006EAB13 /* V2PutIOAPIClient.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = V2PutIOAPIClient.h; sourceTree = "<group>"; };
+		031F8949178A3426006EAB13 /* V2PutIOAPIClient.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = V2PutIOAPIClient.m; sourceTree = "<group>"; };
 		039969951787047500B595C6 /* Browser.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = Browser.xib; sourceTree = "<group>"; };
 		03A77B3217875E4700AA44FB /* PutioMainController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PutioMainController.h; sourceTree = "<group>"; };
 		03A77B3317875E4700AA44FB /* PutioMainController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PutioMainController.m; sourceTree = "<group>"; };
@@ -161,6 +200,57 @@
 			path = AFNetworking;
 			sourceTree = "<group>";
 		};
+		031F892A178A3426006EAB13 /* PutioKit */ = {
+			isa = PBXGroup;
+			children = (
+				031F892B178A3426006EAB13 /* Categories */,
+				031F892E178A3426006EAB13 /* Models */,
+				031F8940178A3426006EAB13 /* PutIOClient.h */,
+				031F8941178A3426006EAB13 /* PutIOClient.m */,
+				031F8942178A3426006EAB13 /* PutioKit-Prefix.pch */,
+				031F8943178A3426006EAB13 /* PutioKit.h */,
+				031F8944178A3426006EAB13 /* PutIONetworkConstants.h */,
+				031F8945178A3426006EAB13 /* PutIONetworkConstants.m */,
+				031F8948178A3426006EAB13 /* V2PutIOAPIClient.h */,
+				031F8949178A3426006EAB13 /* V2PutIOAPIClient.m */,
+			);
+			name = PutioKit;
+			path = PutioKit/PutioKit;
+			sourceTree = SOURCE_ROOT;
+		};
+		031F892B178A3426006EAB13 /* Categories */ = {
+			isa = PBXGroup;
+			children = (
+				031F892C178A3426006EAB13 /* NSString+DisplayName.h */,
+				031F892D178A3426006EAB13 /* NSString+DisplayName.m */,
+			);
+			path = Categories;
+			sourceTree = "<group>";
+		};
+		031F892E178A3426006EAB13 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				031F892F178A3426006EAB13 /* PKAccount.h */,
+				031F8930178A3426006EAB13 /* PKAccount.m */,
+				031F8931178A3426006EAB13 /* PKAccountSettings.h */,
+				031F8932178A3426006EAB13 /* PKAccountSettings.m */,
+				031F8933178A3426006EAB13 /* PKFile.h */,
+				031F8934178A3426006EAB13 /* PKFile.m */,
+				031F8935178A3426006EAB13 /* PKFolder.h */,
+				031F8936178A3426006EAB13 /* PKFolder.m */,
+				031F8937178A3426006EAB13 /* PKFolderItem.h */,
+				031F8938178A3426006EAB13 /* PKFriend.h */,
+				031F8939178A3426006EAB13 /* PKFriend.m */,
+				031F893A178A3426006EAB13 /* PKMP4Status.h */,
+				031F893B178A3426006EAB13 /* PKMP4Status.m */,
+				031F893C178A3426006EAB13 /* PKObject.h */,
+				031F893D178A3426006EAB13 /* PKObject.m */,
+				031F893E178A3426006EAB13 /* PKTransfer.h */,
+				031F893F178A3426006EAB13 /* PKTransfer.m */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
 		03DF597A178849B400AC96AA /* SSKeyChain */ = {
 			isa = PBXGroup;
 			children = (
@@ -212,6 +302,7 @@
 		03F630CD16D6B5D400D33848 /* put.io adder */ = {
 			isa = PBXGroup;
 			children = (
+				031F892A178A3426006EAB13 /* PutioKit */,
 				03F630D916D6B5D400D33848 /* PutioAppDelegate.h */,
 				03F630DA16D6B5D400D33848 /* PutioAppDelegate.m */,
 				03A77B3217875E4700AA44FB /* PutioMainController.h */,
@@ -343,6 +434,18 @@
 				030F7D52178646CF0024178D /* AFHTTPClient.m in Sources */,
 				030F7D53178646CF0024178D /* AFHTTPRequestOperation.m in Sources */,
 				03A77B3417875E4700AA44FB /* PutioMainController.m in Sources */,
+				031F894A178A3426006EAB13 /* NSString+DisplayName.m in Sources */,
+				031F894B178A3426006EAB13 /* PKAccount.m in Sources */,
+				031F894C178A3426006EAB13 /* PKAccountSettings.m in Sources */,
+				031F894D178A3426006EAB13 /* PKFile.m in Sources */,
+				031F894E178A3426006EAB13 /* PKFolder.m in Sources */,
+				031F894F178A3426006EAB13 /* PKFriend.m in Sources */,
+				031F8950178A3426006EAB13 /* PKMP4Status.m in Sources */,
+				031F8951178A3426006EAB13 /* PKObject.m in Sources */,
+				031F8952178A3426006EAB13 /* PKTransfer.m in Sources */,
+				031F8953178A3426006EAB13 /* PutIOClient.m in Sources */,
+				031F8954178A3426006EAB13 /* PutIONetworkConstants.m in Sources */,
+				031F8956178A3426006EAB13 /* V2PutIOAPIClient.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -428,6 +531,7 @@
 		03F630E516D6B5D400D33848 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
 				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CODE_SIGN_IDENTITY = "";
@@ -436,9 +540,11 @@
 				GCC_PREFIX_HEADER = "put.io adder/put.io adder-Prefix.pch";
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				INFOPLIST_FILE = "put.io adder/put.io adder-Info.plist";
-				MACOSX_DEPLOYMENT_TARGET = 10.7;
+				MACOSX_DEPLOYMENT_TARGET = 10.8;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx10.7;
+				SDKROOT = macosx;
+				USER_HEADER_SEARCH_PATHS = "";
+				VALID_ARCHS = "x86_64 i386";
 				WRAPPER_EXTENSION = app;
 			};
 			name = Debug;
@@ -446,6 +552,7 @@
 		03F630E616D6B5D400D33848 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
 				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CODE_SIGN_IDENTITY = "";
@@ -454,9 +561,12 @@
 				GCC_PREFIX_HEADER = "put.io adder/put.io adder-Prefix.pch";
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				INFOPLIST_FILE = "put.io adder/put.io adder-Info.plist";
-				MACOSX_DEPLOYMENT_TARGET = 10.7;
+				MACOSX_DEPLOYMENT_TARGET = 10.8;
+				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx10.7;
+				SDKROOT = macosx;
+				USER_HEADER_SEARCH_PATHS = "";
+				VALID_ARCHS = "x86_64 i386";
 				WRAPPER_EXTENSION = app;
 			};
 			name = Release;
