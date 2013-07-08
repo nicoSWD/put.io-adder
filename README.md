@@ -4,6 +4,11 @@ Put.io Magnet Handler for OS X
 "Put.io adder" is a small OS X app, that adds a new handler for "magnet:" URL schemes, so that every time you click
 on a "magnet:" link, the app opens, and adds the clicked link to your [put.io](http://put.io/) download queue.
 
+**IMPORTANT:**
+I added [AFNetworking](https://github.com/AFNetworking/AFNetworking) and [SSKeyChain](https://github.com/samsoffes/sskeychain) as submodules. So if you want to clone the repo, please use
+
+`$ git clone --recursive git@github.com:nicoSWD/put.io-adder.git`
+
 Please [report issues](https://github.com/nicoSWD/put.io-adder/issues) you may encounter. Pull requests are also very welcome!
 
 Follow me on Twitter: [@nicoSWD](https://twitter.com/nicoSWD)!
