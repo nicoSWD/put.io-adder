@@ -27,8 +27,9 @@ Follow me on Twitter: [@nicoSWD](https://twitter.com/nicoSWD)!
 
 **BINARIES**
 - Newest
- - [put.io adder v1.4](http://cl.ly/Q5sv) (MD5 checksum: 608372b538a55a2d48826c77eef95cea)
+  - [put.io adder v1.5](http://cl.ly/Q7KN) (MD5 checksum: cdf44f9f3dc956fa9e538b168aa1ddec)
 - Older releases
+  - [put.io adder v1.4](http://cl.ly/Q5sv) (MD5 checksum: 608372b538a55a2d48826c77eef95cea)
   - [put.io adder v1.3](http://cl.ly/Q6ak) (MD5 checksum: 477afa6d458347c6d24b9af0a53a2ab8)
   - [put.io adder v1.2](http://cl.ly/Q5Vx) (MD5 checksum: c82b0c5007c7dd2cd56ad64eb911112f)
   - [put.io adder v1.1](http://cl.ly/Q4uX) (MD5 checksum: f0dad56b625b78d2ef503f3113ff4e55)
@@ -36,11 +37,15 @@ Follow me on Twitter: [@nicoSWD](https://twitter.com/nicoSWD)!
 
 **SCREENSHOTS**
 
-![alt tag](http://f.cl.ly/items/32451i2s2115113E123S/Screen%20Shot%202013-07-08%20at%202.47.36%20AM.png)
-![alt tag](http://f.cl.ly/items/3Z113j2c2r2n4405183D/Screen%20Shot%202013-07-08%20at%202.49.24%20AM.png)
-![alt tag](http://f.cl.ly/items/1h2s3d0c17232q1X3N2D/Screen%20Shot%202013-07-08%20at%202.49.53%20AM.png)
+![alt tag](http://f.cl.ly/items/46070N2Q1E1b2G2T3222/Screen%20Shot%202013-07-08%20at%203.54.00%20PM.png)
+![alt tag](http://f.cl.ly/items/2L0l3c0S2s3K0l342Q02/Screen%20Shot%202013-07-08%20at%203.54.42%20PM.png)
+![alt tag](http://f.cl.ly/items/2r3v1Q2p1Q3l0f3K0G1L/Screen%20Shot%202013-07-08%20at%203.55.25%20PM.png)
 
 **CHANGELOG**
+- v1.5
+  - Added UTTypeIconFile
+  - Version # in UI
+  - Changed text a bit
 - v1.4
   - Added support for .torrent files
   - Changed UI
