@@ -1,11 +1,19 @@
-Put.io Magnet Handler for OS X
+Put.io magnet: and .torrent Handler for OS X
 ==============================
 
-"Put.io adder" is a small OS X app, that adds a new handler for "magnet:" URL schemes, so that every time you click
+*Put.io adder* is a small OS X app, that adds a new handler for **magnet:** URL schemes, so that every time you click
 on a "magnet:" link, the app opens, and adds the clicked link to your [put.io](http://put.io/) download queue.
 
+Version 1.4 now automatically uploads .torrent files you open with the app, and adds them to the download queue as well.
+There are three ways to do that:
+
+- Drag the .torrent file onto the App icon
+- Make *put.io adder* your default handler for .torrent files
+- Or right click the torrent and pick "Open with" > put.io adder
+
 **IMPORTANT:**
-I added [AFNetworking](https://github.com/AFNetworking/AFNetworking) and [SSKeyChain](https://github.com/samsoffes/sskeychain) as submodules. So if you want to clone the repo, please use
+I added [AFNetworking](https://github.com/AFNetworking/AFNetworking), [PutioKit](https://github.com/PutioKit/PutioKit), and [SSKeyChain](https://github.com/samsoffes/sskeychain) as submodules. 
+So if you want to clone the entire repo, please use:
 
 `$ git clone --recursive git@github.com:nicoSWD/put.io-adder.git`
 
@@ -19,19 +27,24 @@ Follow me on Twitter: [@nicoSWD](https://twitter.com/nicoSWD)!
 
 **BINARIES**
 - Newest
-  - [put.io adder v1.3](http://cl.ly/Q6ak) (MD5 checksum: 477afa6d458347c6d24b9af0a53a2ab8)
+ - [put.io adder v1.4](http://cl.ly/Q5sv) (MD5 checksum: 608372b538a55a2d48826c77eef95cea)
 - Older releases
+  - [put.io adder v1.3](http://cl.ly/Q6ak) (MD5 checksum: 477afa6d458347c6d24b9af0a53a2ab8)
   - [put.io adder v1.2](http://cl.ly/Q5Vx) (MD5 checksum: c82b0c5007c7dd2cd56ad64eb911112f)
   - [put.io adder v1.1](http://cl.ly/Q4uX) (MD5 checksum: f0dad56b625b78d2ef503f3113ff4e55)
   - [put.io adder v1.0](http://cl.ly/Q4r2) (MD5 checksum: 826fb0c5280783bc2b9d08e921255b82)
 
 **SCREENSHOTS**
 
-![alt tag](http://f.cl.ly/items/2l1Q082D0N470C2a0V22/Screen%20Shot%202013-07-06%20at%203.58.53%20PM.png)
-![alt tag](http://f.cl.ly/items/461e2y412A3h1F3E1a0A/Screen%20Shot%202013-07-06%20at%203.59.57%20PM.png)
-![alt tag](http://f.cl.ly/items/1x243e432W0R1d2n2G0n/Screen%20Shot%202013-07-06%20at%203.59.15%20PM.png)
+![alt tag](http://f.cl.ly/items/32451i2s2115113E123S/Screen%20Shot%202013-07-08%20at%202.47.36%20AM.png)
+![alt tag](http://f.cl.ly/items/3Z113j2c2r2n4405183D/Screen%20Shot%202013-07-08%20at%202.49.24%20AM.png)
+![alt tag](http://f.cl.ly/items/1h2s3d0c17232q1X3N2D/Screen%20Shot%202013-07-08%20at%202.49.53%20AM.png)
 
 **CHANGELOG**
+- v1.4
+  - Added support for .torrent files
+  - Changed UI
+  - Added PutIO Kit
 - v1.3
   - Displays account info
   - Added link to GitHub repo in menu bar
