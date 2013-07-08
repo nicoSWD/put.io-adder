@@ -12,7 +12,8 @@ There are three ways to do that:
 - Or right click the torrent and pick "Open with" > put.io adder
 
 **IMPORTANT:**
-I added [AFNetworking](https://github.com/AFNetworking/AFNetworking), [PutIO Kit](https://github.com/PutioKit/PutioKit), and [SSKeyChain](https://github.com/samsoffes/sskeychain) as submodules. So if you want to clone the repo, please use:
+I added [AFNetworking](https://github.com/AFNetworking/AFNetworking), [PutioKit](https://github.com/PutioKit/PutioKit), and [SSKeyChain](https://github.com/samsoffes/sskeychain) as submodules. 
+So if you want to clone the entire repo, please use:
 
 `$ git clone --recursive git@github.com:nicoSWD/put.io-adder.git`
 
