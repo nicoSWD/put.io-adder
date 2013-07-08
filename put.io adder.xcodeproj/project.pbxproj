@@ -26,7 +26,7 @@
 		030F7D7F178649240024178D /* amblem.icns in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D79178649240024178D /* amblem.icns */; };
 		030F7D80178649240024178D /* icon_128x128@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7A178649240024178D /* icon_128x128@2x.png */; };
 		030F7D81178649250024178D /* icon_256x256.png in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7B178649240024178D /* icon_256x256.png */; };
-		030F7D82178649250024178D /* icon_256x256@2x in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7C178649240024178D /* icon_256x256@2x */; };
+		030F7D82178649250024178D /* icon_256x256@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7C178649240024178D /* icon_256x256@2x.png */; };
 		030F7D83178649250024178D /* icon_512x512.png in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7D178649240024178D /* icon_512x512.png */; };
 		030F7D84178649250024178D /* icon_512x512@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7E178649240024178D /* icon_512x512@2x.png */; };
 		031D406017861679006C4EEF /* PutioBrowser.m in Sources */ = {isa = PBXBuildFile; fileRef = 031D405F17861679006C4EEF /* PutioBrowser.m */; };
@@ -42,6 +42,8 @@
 		031F8953178A3426006EAB13 /* PutIOClient.m in Sources */ = {isa = PBXBuildFile; fileRef = 031F8941178A3426006EAB13 /* PutIOClient.m */; };
 		031F8954178A3426006EAB13 /* PutIONetworkConstants.m in Sources */ = {isa = PBXBuildFile; fileRef = 031F8945178A3426006EAB13 /* PutIONetworkConstants.m */; };
 		031F8956178A3426006EAB13 /* V2PutIOAPIClient.m in Sources */ = {isa = PBXBuildFile; fileRef = 031F8949178A3426006EAB13 /* V2PutIOAPIClient.m */; };
+		034967A9178AF68800E8BADD /* TorrentPartFile.icns in Resources */ = {isa = PBXBuildFile; fileRef = 034967A8178AF68800E8BADD /* TorrentPartFile.icns */; };
+		034967AB178AF94B00E8BADD /* BittorrentDocument.icns in Resources */ = {isa = PBXBuildFile; fileRef = 034967AA178AF94B00E8BADD /* BittorrentDocument.icns */; };
 		039969961787047500B595C6 /* Browser.xib in Resources */ = {isa = PBXBuildFile; fileRef = 039969951787047500B595C6 /* Browser.xib */; };
 		03A77B3417875E4700AA44FB /* PutioMainController.m in Sources */ = {isa = PBXBuildFile; fileRef = 03A77B3317875E4700AA44FB /* PutioMainController.m */; };
 		03AE9CBE17861CBA00A6E3EF /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03AE9CBD17861CBA00A6E3EF /* WebKit.framework */; };
@@ -89,7 +91,7 @@
 		030F7D79178649240024178D /* amblem.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; name = amblem.icns; path = Resources/amblem.icns; sourceTree = "<group>"; };
 		030F7D7A178649240024178D /* icon_128x128@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "icon_128x128@2x.png"; path = "Resources/icon_128x128@2x.png"; sourceTree = "<group>"; };
 		030F7D7B178649240024178D /* icon_256x256.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = icon_256x256.png; path = Resources/icon_256x256.png; sourceTree = "<group>"; };
-		030F7D7C178649240024178D /* icon_256x256@2x */ = {isa = PBXFileReference; lastKnownFileType = file; name = "icon_256x256@2x"; path = "Resources/icon_256x256@2x"; sourceTree = "<group>"; };
+		030F7D7C178649240024178D /* icon_256x256@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "icon_256x256@2x.png"; path = "Resources/icon_256x256@2x.png"; sourceTree = "<group>"; };
 		030F7D7D178649240024178D /* icon_512x512.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = icon_512x512.png; path = Resources/icon_512x512.png; sourceTree = "<group>"; };
 		030F7D7E178649240024178D /* icon_512x512@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "icon_512x512@2x.png"; path = "Resources/icon_512x512@2x.png"; sourceTree = "<group>"; };
 		031D405E17861678006C4EEF /* PutioBrowser.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PutioBrowser.h; sourceTree = "<group>"; };
@@ -121,6 +123,8 @@
 		031F8945178A3426006EAB13 /* PutIONetworkConstants.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PutIONetworkConstants.m; sourceTree = "<group>"; };
 		031F8948178A3426006EAB13 /* V2PutIOAPIClient.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = V2PutIOAPIClient.h; sourceTree = "<group>"; };
 		031F8949178A3426006EAB13 /* V2PutIOAPIClient.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = V2PutIOAPIClient.m; sourceTree = "<group>"; };
+		034967A8178AF68800E8BADD /* TorrentPartFile.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; name = TorrentPartFile.icns; path = Resources/TorrentPartFile.icns; sourceTree = "<group>"; };
+		034967AA178AF94B00E8BADD /* BittorrentDocument.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; name = BittorrentDocument.icns; path = Resources/BittorrentDocument.icns; sourceTree = "<group>"; };
 		039969951787047500B595C6 /* Browser.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = Browser.xib; sourceTree = "<group>"; };
 		03A77B3217875E4700AA44FB /* PutioMainController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PutioMainController.h; sourceTree = "<group>"; };
 		03A77B3317875E4700AA44FB /* PutioMainController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PutioMainController.m; sourceTree = "<group>"; };
@@ -322,13 +326,15 @@
 			isa = PBXGroup;
 			children = (
 				030F7D79178649240024178D /* amblem.icns */,
+				034967AA178AF94B00E8BADD /* BittorrentDocument.icns */,
+				034967A8178AF68800E8BADD /* TorrentPartFile.icns */,
 				030F7D7A178649240024178D /* icon_128x128@2x.png */,
 				03DF597B17884AAB00AC96AA /* github.png */,
 				03DF597F17884B1F00AC96AA /* putio-menu.png */,
 				03DF598017884B1F00AC96AA /* putio-menu@2x.png */,
 				03DF597C17884AAB00AC96AA /* github@2x.png */,
 				030F7D7B178649240024178D /* icon_256x256.png */,
-				030F7D7C178649240024178D /* icon_256x256@2x */,
+				030F7D7C178649240024178D /* icon_256x256@2x.png */,
 				030F7D7D178649240024178D /* icon_512x512.png */,
 				030F7D7E178649240024178D /* icon_512x512@2x.png */,
 				03F630CF16D6B5D400D33848 /* put.io adder-Info.plist */,
@@ -391,7 +397,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				030F7D82178649250024178D /* icon_256x256@2x in Resources */,
+				030F7D82178649250024178D /* icon_256x256@2x.png in Resources */,
 				030F7D80178649240024178D /* icon_128x128@2x.png in Resources */,
 				030F7D7F178649240024178D /* amblem.icns in Resources */,
 				030F7D51178646CF0024178D /* .gitignore in Resources */,
@@ -410,6 +416,8 @@
 				03DF597E17884AAB00AC96AA /* github@2x.png in Resources */,
 				03DF598117884B1F00AC96AA /* putio-menu.png in Resources */,
 				03DF598217884B1F00AC96AA /* putio-menu@2x.png in Resources */,
+				034967A9178AF68800E8BADD /* TorrentPartFile.icns in Resources */,
+				034967AB178AF94B00E8BADD /* BittorrentDocument.icns in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

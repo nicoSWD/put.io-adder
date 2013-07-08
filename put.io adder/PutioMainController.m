@@ -16,13 +16,14 @@
 
 @implementation PutioMainController
 
-@synthesize message, activityIndicator, authWindow, oauthToken, userInfo, transferInfo, putioAPI;
+@synthesize message, activityIndicator, authWindow, oauthToken, userInfo, versionInfo, transferInfo, putioAPI;
 
 
 -(void)awakeFromNib
 {
     [[NSAppleEventManager sharedAppleEventManager] setEventHandler:self andSelector:@selector(addMagnet:withReplyEvent:) forEventClass:kInternetEventClass andEventID:kAEGetURL];
     
+    self.versionInfo.stringValue = [NSString stringWithFormat:@"v%@", [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleShortVersionString"]];
     self.putioAPI = [V2PutIOAPIClient setup];
     [self authenticateUser];
 }
@@ -124,9 +125,9 @@
         displayName = magnetURL;
     }
     
-    self.message.stringValue = [NSString stringWithFormat:@"Adding: %@", displayName];
+    self.message.stringValue = [NSString stringWithFormat:@"Adding magnet: %@", displayName];
     [self.activityIndicator startAnimation:nil];
-    
+
     [self.putioAPI requestTorrentOrMagnetURLAtPath:magnetURL :^(id userInfoObject)
     {
         self.message.stringValue = @"URL successfully added!";
@@ -154,9 +155,9 @@
     NSString *fileName = [filePath lastPathComponent];
     NSDictionary *params = [NSDictionary dictionaryWithObjectsAndKeys: self.oauthToken, @"oauth_token", nil];
     
-    self.message.stringValue = [NSString stringWithFormat:@"Uploading %@", fileName];
+    self.message.stringValue = [NSString stringWithFormat:@"Uploading .torrent: %@", fileName];
     [self.activityIndicator startAnimation:nil];
-    
+
     AFHTTPClient *httpClient = [[AFHTTPClient alloc] initWithBaseURL:baseURL];
     NSURLRequest *request = [httpClient multipartFormRequestWithMethod:@"POST" path:@"/v2/files/upload" parameters:params constructingBodyWithBlock: ^(id <AFMultipartFormData> formData)
     {

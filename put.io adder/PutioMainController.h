@@ -16,6 +16,7 @@
     IBOutlet NSProgressIndicator *activityIndicator;
     IBOutlet NSTextField *userInfo;
     IBOutlet NSTextField *transferInfo;
+    IBOutlet NSTextField *versionInfo;
     
     NSString *oauthToken;
     NSTimer *userInfoTimer;
@@ -35,6 +36,7 @@
 
 @property (nonatomic, retain) NSTextField *userInfo;
 @property (nonatomic, retain) NSTextField *transferInfo;
+@property (nonatomic, retain) NSTextField *versionInfo;
 @property (nonatomic, retain) NSString *oauthToken;
 @property (strong) PutioBrowser *authWindow;
 @property (strong) V2PutIOAPIClient *putioAPI;
