@@ -1,13 +1,13 @@
-Put.io magnet: and .torrent Handler for OS X
+Put.io magnet: & .torrent Handler for OS X
 ==============================
 
-*Put.io adder* is a small OS X app, that adds a new handler for **magnet:** URL schemes, so that every time you click
-on a "magnet:" link, the app opens, and adds the clicked link to your [put.io](http://put.io/) download queue.
+*put.io adder* is a small, open source app for OS X, that registers as new handler for **magnet** URI schemes, so that every
+time you click on a manget link, it will automatically add it to your [put.io](http://put.io/) download queue.
 
-Version 1.4 now automatically uploads .torrent files you open with the app, and adds them to the download queue as well.
-There are three ways to do that:
+Version 1.4 now automatically uploads .torrent files you choose to open with the app, and adds them to the download
+queue as well. There are three ways to do that:
 
-- Drag the .torrent file onto the App icon
+- Drag the .torrent file onto the app icon
 - Make *put.io adder* your default handler for .torrent files
 - Or right click the torrent and pick "Open with" > put.io adder
 
