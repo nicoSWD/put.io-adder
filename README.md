@@ -3,7 +3,7 @@
 *put.io adder* is a small, open source app for OS X, that registers as new handler for **magnet** URI schemes, so that every
 time you click on a manget link, it will automatically add it to your [put.io](http://put.io/) download queue.
 
-Version 1.4 and above now automatically upload .torrent files you choose to open with the app, and add them to the download
+Versions 1.4 and above now automatically upload .torrent files you choose to open with the app, and add them to the download
 queue as well. There are three ways to do that:
 
 - Drag the .torrent file onto the app icon
