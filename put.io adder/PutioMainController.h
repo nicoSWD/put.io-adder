@@ -18,17 +18,9 @@
     IBOutlet NSTextField *transferInfo;
     IBOutlet NSTextField *versionInfo;
     
-    NSString *oauthToken;
-    NSTimer *userInfoTimer;
     PutioBrowser *authWindow;
-    V2PutIOAPIClient *putioAPI;
 }
 
-- (void)authenticateUser;
-- (void)updateUserInfo;
-- (void)addMagnet:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)replyEvent;
-- (void)uploadTorrent:(NSString*)filePath;
-- (id)transformedValue:(id)value;
 - (IBAction)loadWebsite:(id)sender;
 
 @property (nonatomic, retain) NSTextField *message;
@@ -36,8 +28,6 @@
 @property (nonatomic, retain) NSTextField *userInfo;
 @property (nonatomic, retain) NSTextField *transferInfo;
 @property (nonatomic, retain) NSTextField *versionInfo;
-@property (nonatomic, retain) NSString *oauthToken;
 @property (strong) PutioBrowser *authWindow;
-@property (strong) V2PutIOAPIClient *putioAPI;
 
 @end

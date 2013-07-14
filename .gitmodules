@@ -4,6 +4,3 @@
 [submodule "AFNetworking"]
 	path = AFNetworking
 	url = https://github.com/AFNetworking/AFNetworking.git
-[submodule "PutioKit"]
-	path = PutioKit
-	url = git@github.com:nicoSWD/PutioKit.git

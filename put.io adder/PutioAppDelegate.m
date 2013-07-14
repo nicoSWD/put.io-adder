@@ -8,7 +8,7 @@
 
 #import "PutioAppDelegate.h"
 #import "PutioMainController.h"
-
+#import "PutioHelper.h"
 
 @implementation PutioAppDelegate
 
@@ -21,11 +21,9 @@
 
 - (BOOL)application:(NSApplication *)sender openFile:(NSString *)pathname
 {
-    if ([[pathname pathExtension] isEqualToString:@"torrent"])
-    {
-        PutioMainController *putio = [[[[NSApplication sharedApplication] windows] objectAtIndex:0] windowController];
-        
-        [putio uploadTorrent:pathname];
+    if ([[[pathname pathExtension] lowercaseString] isEqualToString:@"torrent"])
+    {        
+        [[PutioHelper sharedHelper] uploadTorrent:pathname];
         return YES;
     }
     

@@ -27,6 +27,7 @@
 		031F8953178A3426006EAB13 /* PutIOClient.m in Sources */ = {isa = PBXBuildFile; fileRef = 031F8941178A3426006EAB13 /* PutIOClient.m */; };
 		031F8954178A3426006EAB13 /* PutIONetworkConstants.m in Sources */ = {isa = PBXBuildFile; fileRef = 031F8945178A3426006EAB13 /* PutIONetworkConstants.m */; };
 		031F8956178A3426006EAB13 /* V2PutIOAPIClient.m in Sources */ = {isa = PBXBuildFile; fileRef = 031F8949178A3426006EAB13 /* V2PutIOAPIClient.m */; };
+		033FBB14179177A20007AC9E /* PutioHelper.m in Sources */ = {isa = PBXBuildFile; fileRef = 033FBB13179177A20007AC9E /* PutioHelper.m */; };
 		034967A9178AF68800E8BADD /* TorrentPartFile.icns in Resources */ = {isa = PBXBuildFile; fileRef = 034967A8178AF68800E8BADD /* TorrentPartFile.icns */; };
 		034967AB178AF94B00E8BADD /* BittorrentDocument.icns in Resources */ = {isa = PBXBuildFile; fileRef = 034967AA178AF94B00E8BADD /* BittorrentDocument.icns */; };
 		0349685F178B13F900E8BADD /* AFHTTPClient.m in Sources */ = {isa = PBXBuildFile; fileRef = 0349684D178B13F900E8BADD /* AFHTTPClient.m */; };
@@ -92,6 +93,8 @@
 		031F8945178A3426006EAB13 /* PutIONetworkConstants.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PutIONetworkConstants.m; sourceTree = "<group>"; };
 		031F8948178A3426006EAB13 /* V2PutIOAPIClient.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = V2PutIOAPIClient.h; sourceTree = "<group>"; };
 		031F8949178A3426006EAB13 /* V2PutIOAPIClient.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = V2PutIOAPIClient.m; sourceTree = "<group>"; };
+		033FBB12179177A20007AC9E /* PutioHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PutioHelper.h; sourceTree = "<group>"; };
+		033FBB13179177A20007AC9E /* PutioHelper.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PutioHelper.m; sourceTree = "<group>"; };
 		034967A8178AF68800E8BADD /* TorrentPartFile.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; name = TorrentPartFile.icns; path = Resources/TorrentPartFile.icns; sourceTree = "<group>"; };
 		034967AA178AF94B00E8BADD /* BittorrentDocument.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; name = BittorrentDocument.icns; path = Resources/BittorrentDocument.icns; sourceTree = "<group>"; };
 		0349684C178B13F900E8BADD /* AFHTTPClient.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AFHTTPClient.h; sourceTree = "<group>"; };
@@ -113,6 +116,35 @@
 		0349685C178B13F900E8BADD /* AFXMLRequestOperation.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = AFXMLRequestOperation.m; sourceTree = "<group>"; };
 		0349685D178B13F900E8BADD /* UIImageView+AFNetworking.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "UIImageView+AFNetworking.h"; sourceTree = "<group>"; };
 		0349685E178B13F900E8BADD /* UIImageView+AFNetworking.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "UIImageView+AFNetworking.m"; sourceTree = "<group>"; };
+		034AC67717907CFC00303CC9 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = Library/Frameworks/UIKit.framework; sourceTree = DEVELOPER_DIR; };
+		034AC67917907CFC00303CC9 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		034AC67B17907CFC00303CC9 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = Library/Frameworks/CoreGraphics.framework; sourceTree = DEVELOPER_DIR; };
+		034AC67F17907CFD00303CC9 /* put.io-adder-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "put.io-adder-Info.plist"; sourceTree = "<group>"; };
+		034AC68117907CFD00303CC9 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		034AC68317907CFD00303CC9 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		034AC68517907CFD00303CC9 /* put.io-adder-Prefix.pch */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "put.io-adder-Prefix.pch"; sourceTree = "<group>"; };
+		034AC68617907CFD00303CC9 /* PutioAppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PutioAppDelegate.h; sourceTree = "<group>"; };
+		034AC68717907CFD00303CC9 /* PutioAppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PutioAppDelegate.m; sourceTree = "<group>"; };
+		034AC68917907CFD00303CC9 /* Default.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Default.png; sourceTree = "<group>"; };
+		034AC68B17907CFD00303CC9 /* Default@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Default@2x.png"; sourceTree = "<group>"; };
+		034AC68D17907CFD00303CC9 /* Default-568h@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Default-568h@2x.png"; sourceTree = "<group>"; };
+		034AC69017907CFD00303CC9 /* en */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = en; path = en.lproj/MainStoryboard_iPhone.storyboard; sourceTree = "<group>"; };
+		034AC69317907CFD00303CC9 /* en */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = en; path = en.lproj/MainStoryboard_iPad.storyboard; sourceTree = "<group>"; };
+		034AC69517907CFD00303CC9 /* PutioViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PutioViewController.h; sourceTree = "<group>"; };
+		034AC69617907CFD00303CC9 /* PutioViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PutioViewController.m; sourceTree = "<group>"; };
+		034AC6A517907D6D00303CC9 /* put.io-adder-ios-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "put.io-adder-ios-Info.plist"; sourceTree = "<group>"; };
+		034AC6A717907D6D00303CC9 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		034AC6A917907D6D00303CC9 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		034AC6AB17907D6D00303CC9 /* put.io-adder-ios-Prefix.pch */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "put.io-adder-ios-Prefix.pch"; sourceTree = "<group>"; };
+		034AC6AC17907D6D00303CC9 /* PutioAppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PutioAppDelegate.h; sourceTree = "<group>"; };
+		034AC6AD17907D6D00303CC9 /* PutioAppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PutioAppDelegate.m; sourceTree = "<group>"; };
+		034AC6AF17907D6D00303CC9 /* Default.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Default.png; sourceTree = "<group>"; };
+		034AC6B117907D6D00303CC9 /* Default@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Default@2x.png"; sourceTree = "<group>"; };
+		034AC6B317907D6D00303CC9 /* Default-568h@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Default-568h@2x.png"; sourceTree = "<group>"; };
+		034AC6B617907D6D00303CC9 /* en */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = en; path = en.lproj/MainStoryboard_iPhone.storyboard; sourceTree = "<group>"; };
+		034AC6B917907D6D00303CC9 /* en */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = en; path = en.lproj/MainStoryboard_iPad.storyboard; sourceTree = "<group>"; };
+		034AC6BB17907D6D00303CC9 /* PutioViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PutioViewController.h; sourceTree = "<group>"; };
+		034AC6BC17907D6D00303CC9 /* PutioViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PutioViewController.m; sourceTree = "<group>"; };
 		039969951787047500B595C6 /* Browser.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = Browser.xib; sourceTree = "<group>"; };
 		03A77B3217875E4700AA44FB /* PutioMainController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PutioMainController.h; sourceTree = "<group>"; };
 		03A77B3317875E4700AA44FB /* PutioMainController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PutioMainController.m; sourceTree = "<group>"; };
@@ -230,6 +262,62 @@
 			path = AFNetworking/AFNetworking;
 			sourceTree = SOURCE_ROOT;
 		};
+		034AC67D17907CFC00303CC9 /* put.io-adder */ = {
+			isa = PBXGroup;
+			children = (
+				034AC68617907CFD00303CC9 /* PutioAppDelegate.h */,
+				034AC68717907CFD00303CC9 /* PutioAppDelegate.m */,
+				034AC68F17907CFD00303CC9 /* MainStoryboard_iPhone.storyboard */,
+				034AC69217907CFD00303CC9 /* MainStoryboard_iPad.storyboard */,
+				034AC69517907CFD00303CC9 /* PutioViewController.h */,
+				034AC69617907CFD00303CC9 /* PutioViewController.m */,
+				034AC67E17907CFD00303CC9 /* Supporting Files */,
+			);
+			path = "put.io-adder";
+			sourceTree = "<group>";
+		};
+		034AC67E17907CFD00303CC9 /* Supporting Files */ = {
+			isa = PBXGroup;
+			children = (
+				034AC67F17907CFD00303CC9 /* put.io-adder-Info.plist */,
+				034AC68017907CFD00303CC9 /* InfoPlist.strings */,
+				034AC68317907CFD00303CC9 /* main.m */,
+				034AC68517907CFD00303CC9 /* put.io-adder-Prefix.pch */,
+				034AC68917907CFD00303CC9 /* Default.png */,
+				034AC68B17907CFD00303CC9 /* Default@2x.png */,
+				034AC68D17907CFD00303CC9 /* Default-568h@2x.png */,
+			);
+			name = "Supporting Files";
+			sourceTree = "<group>";
+		};
+		034AC6A317907D6D00303CC9 /* put.io-adder-ios */ = {
+			isa = PBXGroup;
+			children = (
+				034AC6AC17907D6D00303CC9 /* PutioAppDelegate.h */,
+				034AC6AD17907D6D00303CC9 /* PutioAppDelegate.m */,
+				034AC6B517907D6D00303CC9 /* MainStoryboard_iPhone.storyboard */,
+				034AC6B817907D6D00303CC9 /* MainStoryboard_iPad.storyboard */,
+				034AC6BB17907D6D00303CC9 /* PutioViewController.h */,
+				034AC6BC17907D6D00303CC9 /* PutioViewController.m */,
+				034AC6A417907D6D00303CC9 /* Supporting Files */,
+			);
+			path = "put.io-adder-ios";
+			sourceTree = "<group>";
+		};
+		034AC6A417907D6D00303CC9 /* Supporting Files */ = {
+			isa = PBXGroup;
+			children = (
+				034AC6A517907D6D00303CC9 /* put.io-adder-ios-Info.plist */,
+				034AC6A617907D6D00303CC9 /* InfoPlist.strings */,
+				034AC6A917907D6D00303CC9 /* main.m */,
+				034AC6AB17907D6D00303CC9 /* put.io-adder-ios-Prefix.pch */,
+				034AC6AF17907D6D00303CC9 /* Default.png */,
+				034AC6B117907D6D00303CC9 /* Default@2x.png */,
+				034AC6B317907D6D00303CC9 /* Default-568h@2x.png */,
+			);
+			name = "Supporting Files";
+			sourceTree = "<group>";
+		};
 		03DF597A178849B400AC96AA /* SSKeyChain */ = {
 			isa = PBXGroup;
 			children = (
@@ -243,6 +331,8 @@
 			isa = PBXGroup;
 			children = (
 				03F630CD16D6B5D400D33848 /* put.io adder */,
+				034AC67D17907CFC00303CC9 /* put.io-adder */,
+				034AC6A317907D6D00303CC9 /* put.io-adder-ios */,
 				03F630C616D6B5D400D33848 /* Frameworks */,
 				03F630C516D6B5D400D33848 /* Products */,
 			);
@@ -263,6 +353,9 @@
 				03AE9CBD17861CBA00A6E3EF /* WebKit.framework */,
 				03F6315216D6C61200D33848 /* SystemConfiguration.framework */,
 				03F630C716D6B5D400D33848 /* Cocoa.framework */,
+				034AC67717907CFC00303CC9 /* UIKit.framework */,
+				034AC67917907CFC00303CC9 /* Foundation.framework */,
+				034AC67B17907CFC00303CC9 /* CoreGraphics.framework */,
 				03F630C916D6B5D400D33848 /* Other Frameworks */,
 			);
 			name = Frameworks;
@@ -285,6 +378,8 @@
 				03F630DA16D6B5D400D33848 /* PutioAppDelegate.m */,
 				03A77B3217875E4700AA44FB /* PutioMainController.h */,
 				03A77B3317875E4700AA44FB /* PutioMainController.m */,
+				033FBB12179177A20007AC9E /* PutioHelper.h */,
+				033FBB13179177A20007AC9E /* PutioHelper.m */,
 				031D405E17861678006C4EEF /* PutioBrowser.h */,
 				031D405F17861679006C4EEF /* PutioBrowser.m */,
 				03F630DC16D6B5D400D33848 /* MainMenu.xib */,
@@ -423,12 +518,61 @@
 				03496865178B13F900E8BADD /* AFURLConnectionOperation.m in Sources */,
 				03496866178B13F900E8BADD /* AFXMLRequestOperation.m in Sources */,
 				03496867178B13F900E8BADD /* UIImageView+AFNetworking.m in Sources */,
+				033FBB14179177A20007AC9E /* PutioHelper.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXVariantGroup section */
+		034AC68017907CFD00303CC9 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				034AC68117907CFD00303CC9 /* en */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+		034AC68F17907CFD00303CC9 /* MainStoryboard_iPhone.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				034AC69017907CFD00303CC9 /* en */,
+			);
+			name = MainStoryboard_iPhone.storyboard;
+			sourceTree = "<group>";
+		};
+		034AC69217907CFD00303CC9 /* MainStoryboard_iPad.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				034AC69317907CFD00303CC9 /* en */,
+			);
+			name = MainStoryboard_iPad.storyboard;
+			sourceTree = "<group>";
+		};
+		034AC6A617907D6D00303CC9 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				034AC6A717907D6D00303CC9 /* en */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+		034AC6B517907D6D00303CC9 /* MainStoryboard_iPhone.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				034AC6B617907D6D00303CC9 /* en */,
+			);
+			name = MainStoryboard_iPhone.storyboard;
+			sourceTree = "<group>";
+		};
+		034AC6B817907D6D00303CC9 /* MainStoryboard_iPad.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				034AC6B917907D6D00303CC9 /* en */,
+			);
+			name = MainStoryboard_iPad.storyboard;
+			sourceTree = "<group>";
+		};
 		03F630D016D6B5D400D33848 /* InfoPlist.strings */ = {
 			isa = PBXVariantGroup;
 			children = (

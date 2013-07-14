@@ -6,8 +6,9 @@
 //  Copyright (c) 2013 Nicolas Oelgart. All rights reserved.
 //
 
-#import "PutioMainController.h"
 #import "PutioBrowser.h"
+#import "PutioMainController.h"
+#import "PutioHelper.h"
 #import "SSKeychain.h"
 
 @implementation PutioBrowser
@@ -37,16 +38,15 @@
     
     if ([matches count] > 0)
     {
-        PutioMainController *controller = [[[[NSApplication sharedApplication] windows] objectAtIndex:0] windowController];
-        
+        PutioHelper *helper = [PutioHelper sharedHelper];
+        PutioMainController *controller = helper.putioController;
         NSString *token = [searchedString substringWithRange:[[matches objectAtIndex:0] rangeAtIndex:1]];
     
         if ([SSKeychain setPassword:token forService:@"put.io adder" account:@"711"])
         {
             controller.message.stringValue = @"Authenticated and ready to go!";
-            controller.oauthToken = token;
-            controller.putioAPI.apiToken = token;
-            [controller updateUserInfo];
+            helper.putioAPI.apiToken = token;
+            [helper updateUserInfo];
             
             [self.window close];
         }
