@@ -50,16 +50,10 @@ static PutioHelper *sharedHelper = nil;
         putioController.message.stringValue = @"Authentication required!";
         
         putioController.authWindow = [[PutioBrowser alloc] initWithWindowNibName:@"Browser"];
+        putioController.authWindow.window.level = kCGPopUpMenuWindowLevel;
         [putioController.authWindow showWindow:nil];
         [putioController.authWindow.window makeKeyWindow];
         [putioController.authWindow.window makeMainWindow];
-        
-        /////////////////////
-        // TODO: move auth window in front of *ALL* other windows.
-        // Seems simple enough, but I can't get it to work.
-        //
-        // Pull request, anyone?
-        /////////////////////
     }
     else
     {
@@ -166,8 +160,17 @@ static PutioHelper *sharedHelper = nil;
     
     [self.putioAPI uploadFile:filePath :^(id userInfoObject)
     {
-        putioController.message.stringValue = @"Torrent successfully added!";
-        [putioController.activityIndicator stopAnimation:nil];
+        if ([[NSUserDefaults standardUserDefaults] boolForKey:@"CloseAfterSaving"])
+        {
+            putioController.message.stringValue = @"Torrent successfully added, closing in 5 seconds!";
+            [putioController.activityIndicator stopAnimation:nil];
+            [[NSApplication sharedApplication] performSelector:@selector(terminate:) withObject:self afterDelay:5];
+        }
+        else
+        {
+            putioController.message.stringValue = @"Torrent successfully added!";
+            [putioController.activityIndicator stopAnimation:nil];
+        }
     }
     addFailure:^
     {

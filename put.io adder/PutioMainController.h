@@ -29,5 +29,4 @@
 @property (nonatomic, retain) NSTextField *transferInfo;
 @property (nonatomic, retain) NSTextField *versionInfo;
 @property (strong) PutioBrowser *authWindow;
-
 @end

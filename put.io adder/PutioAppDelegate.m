@@ -12,6 +12,10 @@
 
 @implementation PutioAppDelegate
 
+- (void)applicationWillBecomeActive:(NSNotification *)notification {
+    NSInteger state = ([[NSUserDefaults standardUserDefaults] boolForKey:@"CloseAfterSaving"]) ? NSOnState : NSOffState;
+    [self.closeAfterSendingMenuItem setState:state];
+}
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender
 {
@@ -29,5 +33,16 @@
     
     return NO;
 }
+
+- (IBAction)closeAfterSendingClicked:(id)sender {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    [defaults setBool:![defaults boolForKey:@"CloseAfterSaving"] forKey:@"CloseAfterSaving"];
+    [defaults synchronize];
+
+    NSInteger state = ([defaults boolForKey:@"CloseAfterSaving"]) ? NSOnState : NSOffState;
+
+    [self.closeAfterSendingMenuItem setState:state];
+}
+
 
 @end
