@@ -1,29 +1,27 @@
-Put.io magnet: and .torrent Handler for OS X
-==============================
+## Put.io magnet: and .torrent Handler for OS X
 
-*Put.io adder* is a small OS X app, that adds a new handler for **magnet:** URL schemes, so that every time you click
-on a "magnet:" link, the app opens, and adds the clicked link to your [put.io](http://put.io/) download queue.
+*put.io adder* is a small, open source app for OS X, that registers as new handler for **magnet** URI schemes, so that every
+time you click on a manget link, it will automatically add it to your [put.io](http://put.io/) download queue.
 
-Version 1.4 now automatically uploads .torrent files you open with the app, and adds them to the download queue as well.
-There are three ways to do that:
+Versions 1.4 and above now automatically upload .torrent files you choose to open with the app, and add them to the download
+queue as well. There are three ways to do that:
 
-- Drag the .torrent file onto the App icon
+- Drag the .torrent file onto the app icon
 - Make *put.io adder* your default handler for .torrent files
 - Or right click the torrent and pick "Open with" > put.io adder
-
-**IMPORTANT:**
-I added [AFNetworking](https://github.com/AFNetworking/AFNetworking), [PutioKit](https://github.com/PutioKit/PutioKit), and [SSKeyChain](https://github.com/samsoffes/sskeychain) as submodules. 
-So if you want to clone the entire repo, please use:
-
-`$ git clone --recursive git@github.com:nicoSWD/put.io-adder.git`
-
-Please [report issues](https://github.com/nicoSWD/put.io-adder/issues) you may encounter. Pull requests are also very welcome!
 
 Follow me on Twitter: [@nicoSWD](https://twitter.com/nicoSWD)!
 
 **NOTES**
 - The app requires you to have a [put.io](http://put.io/) account. They're probably not free anymore.
 - The app requires KeyChain Access to store put.io's OAuth Token. Denying access might prevent the app from working.
+
+*IMPORTANT:* I added [AFNetworking](https://github.com/AFNetworking/AFNetworking), [PutioKit](https://github.com/PutioKit/PutioKit), and [SSKeyChain](https://github.com/samsoffes/sskeychain) as submodules. 
+So if you want to clone the entire repo, please use:
+
+`$ git clone --recursive git@github.com:nicoSWD/put.io-adder.git`
+
+Please [report issues](https://github.com/nicoSWD/put.io-adder/issues) you may encounter. Pull requests are also very welcome!
 
 **BINARIES**
 - Newest
