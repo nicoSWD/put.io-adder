@@ -50,16 +50,10 @@ static PutioHelper *sharedHelper = nil;
         putioController.message.stringValue = @"Authentication required!";
         
         putioController.authWindow = [[PutioBrowser alloc] initWithWindowNibName:@"Browser"];
+        putioController.authWindow.window.level = kCGPopUpMenuWindowLevel;
         [putioController.authWindow showWindow:nil];
         [putioController.authWindow.window makeKeyWindow];
         [putioController.authWindow.window makeMainWindow];
-        
-        /////////////////////
-        // TODO: move auth window in front of *ALL* other windows.
-        // Seems simple enough, but I can't get it to work.
-        //
-        // Pull request, anyone?
-        /////////////////////
     }
     else
     {
