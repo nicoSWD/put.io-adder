@@ -24,7 +24,9 @@
 - (void)awakeFromNib
 {
     self.versionInfo.stringValue = [NSString stringWithFormat:@"v%@", [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleShortVersionString"]];
-    
+
+    [self.window setContentBorderThickness:24.0 forEdge:NSMinYEdge];
+
     PutioHelper *helper = [PutioHelper sharedHelper];
     [helper authenticateUser];
     
