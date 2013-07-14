@@ -160,8 +160,17 @@ static PutioHelper *sharedHelper = nil;
     
     [self.putioAPI uploadFile:filePath :^(id userInfoObject)
     {
-        putioController.message.stringValue = @"Torrent successfully added!";
-        [putioController.activityIndicator stopAnimation:nil];
+        if ([[NSUserDefaults standardUserDefaults] boolForKey:@"CloseAfterSaving"])
+        {
+            putioController.message.stringValue = @"Torrent successfully added, closing in 5 seconds!";
+            [putioController.activityIndicator stopAnimation:nil];
+            [[NSApplication sharedApplication] performSelector:@selector(terminate:) withObject:self afterDelay:5];
+        }
+        else
+        {
+            putioController.message.stringValue = @"Torrent successfully added!";
+            [putioController.activityIndicator stopAnimation:nil];
+        }
     }
     addFailure:^
     {

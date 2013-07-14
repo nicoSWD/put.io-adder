@@ -39,4 +39,6 @@
     [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/nicoSWD/put.io-adder"]];
 }
 
+
+
 @end
