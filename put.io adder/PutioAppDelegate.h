@@ -9,4 +9,7 @@
 #import <Cocoa/Cocoa.h>
 
 @interface PutioAppDelegate : NSObject <NSApplicationDelegate>
+
+@property (weak) IBOutlet NSMenuItem *closeAfterSendingMenuItem;
+
 @end

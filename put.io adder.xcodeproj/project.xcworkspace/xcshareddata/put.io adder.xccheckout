@@ -3,35 +3,39 @@
 <plist version="1.0">
 <dict>
 	<key>IDESourceControlProjectIdentifier</key>
-	<string>46BBDE4B-CB9D-49FF-8F95-81BFCE35400F</string>
+	<string>A31755A0-43BE-449D-AEC0-CBAABBA5FA76</string>
 	<key>IDESourceControlProjectName</key>
 	<string>put.io adder</string>
 	<key>IDESourceControlProjectOriginsDictionary</key>
 	<dict>
-		<key>431317A3-269D-408C-88A9-F15061C61302</key>
-		<string>ssh://github.com/nicoSWD/put.io-adder.git</string>
 		<key>70275435-878C-4A2A-A401-BC1C3A23B8A0</key>
 		<string>https://github.com/AFNetworking/AFNetworking.git</string>
+		<key>ABBC8CC8-3199-48E7-BDDE-9B7AB118CA60</key>
+		<string>https://github.com/orta/put.io-adder</string>
 		<key>B3A172DC-6C07-41E6-AE51-CE54198CC9F5</key>
 		<string>https://github.com/samsoffes/sskeychain.git</string>
+		<key>F40D1BC1-A646-4D9B-8F86-B66CAABCF957</key>
+		<string>ssh://github.com/PutioKit/PutioKit.git</string>
 	</dict>
 	<key>IDESourceControlProjectPath</key>
 	<string>put.io adder.xcodeproj/project.xcworkspace</string>
 	<key>IDESourceControlProjectRelativeInstallPathDictionary</key>
 	<dict>
-		<key>431317A3-269D-408C-88A9-F15061C61302</key>
-		<string>../..</string>
 		<key>70275435-878C-4A2A-A401-BC1C3A23B8A0</key>
 		<string>../../AFNetworking</string>
+		<key>ABBC8CC8-3199-48E7-BDDE-9B7AB118CA60</key>
+		<string>../..</string>
 		<key>B3A172DC-6C07-41E6-AE51-CE54198CC9F5</key>
 		<string>../../sskeychain</string>
+		<key>F40D1BC1-A646-4D9B-8F86-B66CAABCF957</key>
+		<string>../../PutioKit</string>
 	</dict>
 	<key>IDESourceControlProjectURL</key>
-	<string>ssh://github.com/nicoSWD/put.io-adder.git</string>
+	<string>https://github.com/orta/put.io-adder</string>
 	<key>IDESourceControlProjectVersion</key>
 	<integer>110</integer>
 	<key>IDESourceControlProjectWCCIdentifier</key>
-	<string>431317A3-269D-408C-88A9-F15061C61302</string>
+	<string>ABBC8CC8-3199-48E7-BDDE-9B7AB118CA60</string>
 	<key>IDESourceControlProjectWCConfigurations</key>
 	<array>
 		<dict>
@@ -46,7 +50,15 @@
 			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
 			<string>public.vcs.git</string>
 			<key>IDESourceControlWCCIdentifierKey</key>
-			<string>431317A3-269D-408C-88A9-F15061C61302</string>
+			<string>B3A172DC-6C07-41E6-AE51-CE54198CC9F5</string>
+			<key>IDESourceControlWCCName</key>
+			<string>sskeychain</string>
+		</dict>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>ABBC8CC8-3199-48E7-BDDE-9B7AB118CA60</string>
 			<key>IDESourceControlWCCName</key>
 			<string>put</string>
 		</dict>
@@ -54,9 +66,9 @@
 			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
 			<string>public.vcs.git</string>
 			<key>IDESourceControlWCCIdentifierKey</key>
-			<string>B3A172DC-6C07-41E6-AE51-CE54198CC9F5</string>
+			<string>F40D1BC1-A646-4D9B-8F86-B66CAABCF957</string>
 			<key>IDESourceControlWCCName</key>
-			<string>sskeychain</string>
+			<string>PutioKit</string>
 		</dict>
 	</array>
 </dict>
