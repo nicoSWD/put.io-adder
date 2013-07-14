@@ -25,8 +25,9 @@ Please [report issues](https://github.com/nicoSWD/put.io-adder/issues) you may e
 
 **BINARIES**
 - Newest
-  - [put.io adder v1.5](http://cl.ly/Q7KN) (MD5 checksum: cdf44f9f3dc956fa9e538b168aa1ddec)
+  - [put.io adder v1.6](http://cl.ly/QFQc) (MD5 checksum: 2fb7b99167707643171edafe29211ea1)
 - Older releases
+  - [put.io adder v1.5](http://cl.ly/Q7KN) (MD5 checksum: cdf44f9f3dc956fa9e538b168aa1ddec)
   - [put.io adder v1.4](http://cl.ly/Q5sv) (MD5 checksum: 608372b538a55a2d48826c77eef95cea)
   - [put.io adder v1.3](http://cl.ly/Q6ak) (MD5 checksum: 477afa6d458347c6d24b9af0a53a2ab8)
   - [put.io adder v1.2](http://cl.ly/Q5Vx) (MD5 checksum: c82b0c5007c7dd2cd56ad64eb911112f)
@@ -38,8 +39,13 @@ Please [report issues](https://github.com/nicoSWD/put.io-adder/issues) you may e
 ![alt tag](http://f.cl.ly/items/46070N2Q1E1b2G2T3222/Screen%20Shot%202013-07-08%20at%203.54.00%20PM.png)
 ![alt tag](http://f.cl.ly/items/2L0l3c0S2s3K0l342Q02/Screen%20Shot%202013-07-08%20at%203.54.42%20PM.png)
 ![alt tag](http://f.cl.ly/items/2r3v1Q2p1Q3l0f3K0G1L/Screen%20Shot%202013-07-08%20at%203.55.25%20PM.png)
+![alt tag](https://f.cloud.github.com/assets/49038/794993/1fab8884-eccf-11e2-8266-271fc7df877b.png)
 
 **CHANGELOG**
+- v1.6 (by [orta](https://github.com/orta))
+  - Support for auto closing after uploading (option in menu bar)
+  - Minor design changes
+  - Auth window improvements
 - v1.5
   - Added UTTypeIconFile
   - Version # in UI
