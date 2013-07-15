@@ -17,6 +17,7 @@
     [self.closeAfterSendingMenuItem setState:state];
 }
 
+
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender
 {
     return YES;
@@ -33,6 +34,7 @@
     
     return NO;
 }
+
 
 - (IBAction)closeAfterSendingClicked:(id)sender {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];

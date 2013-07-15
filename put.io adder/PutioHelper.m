@@ -134,8 +134,18 @@ static PutioHelper *sharedHelper = nil;
     
     [self.putioAPI requestTorrentOrMagnetURLAtPath:magnetURL :^(id userInfoObject)
     {
-        putioController.message.stringValue = @"URL successfully added!";
-        [putioController.activityIndicator stopAnimation:nil];
+        if ([[NSUserDefaults standardUserDefaults] boolForKey:@"CloseAfterSaving"])
+        {
+            putioController.message.stringValue = @"URL successfully added, closing in 5 seconds!";
+            [putioController.activityIndicator stopAnimation:nil];
+            [[NSApplication sharedApplication] performSelector:@selector(terminate:) withObject:self afterDelay:5];
+        }
+        else
+        {
+            putioController.message.stringValue = @"URL successfully added!";
+            [putioController.activityIndicator stopAnimation:nil];
+        }
+
     }
     addFailure:^
     {
