@@ -28,7 +28,7 @@ So if you want to clone the entire repo, please use:
 
 Please [report issues](https://github.com/nicoSWD/put.io-adder/issues) you may encounter. Pull requests are also very welcome!
 
-**BINARIES**
+**DOWNLOADS**
 - Newest
   - [put.io adder v2.0](https://nicoswd.com/public/files/putio/put.io-adder-2.0.zip) (MD5 checksum: 4303bb677c36f979d4b7216e4d8343eb)
 - Older releases
