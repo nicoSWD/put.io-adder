@@ -10,6 +10,4 @@
 
 @interface PutioAppDelegate : NSObject <NSApplicationDelegate>
 
-@property (weak) IBOutlet NSMenuItem *closeAfterSendingMenuItem;
-
 @end

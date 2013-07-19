@@ -1,0 +1,49 @@
+/* 
+  Language.strings
+  put.io adder
+
+  Created by Nicolas Oelgart on 7/17/13.
+  Copyright (c) 2013 Nicolas Oelgart. All rights reserved.
+*/
+
+HELPER_FETCHING_USERINFO="Lade info...";
+HELPER_MSG_READY="Bereit";
+HELPER_AUTH_REQUIRED="Log-in notwendig!";
+HELPER_USERINFO_ACCOUNT="%@, %@ benutzt von %@";
+HELPER_USERINFO_FAILED="Konnte Kontoinfo nicht laden!";
+HELPER_NO_PENDING_TRANSFERS="Keine anstehende Transfers! / %i erledigt";
+HELPER_TRANSFERS_FAILED="Konnte Transferinfo nicht laden!";
+HELPER_PENDING_TRANSFERS_PURAL="%i unerledigte Transfers / %i erledigt";
+HELPER_PENDING_TRANSFERS_SINGULAR="1 unerledigter Transfer / %i erledigt";
+HELPER_MAGNET_ADDING="Füge magnet hinzu: %@";
+HELPER_MAGNET_ADDED_CLOSING="URL erfolgreich hinzugefüht, schliesse in 5 Sekunden!";
+HELPER_MAGNET_ADDED="URL erfolgreich hinzugefüht!";
+HELPER_MAGNET_ERROR="Irgendwas ist schief gelaufen!?";
+HELPER_MAGNET_DUPLICATE="Fehler! URL bereist in Warteschlange?";
+HELPER_TORRENT_UPLOADING="Lade torrent: %@";
+HELPER_TORRENT_ADDED_CLOSING="Torrent erfolgreich hinzugefüht, schliesse in 5 Sekunden!";
+HELPER_TORRENT_ADDED="Torrent erfolgreich hinzugefüht!";
+HELPER_TORRENT_DUPLICATE="Fehler! Torrent bereist in Warteschlange?";
+
+HELPER_NEW_VERSION_TITLE="Neue Version Verfügbar";
+HELPER_NEW_VERSION_BODY="Eine neue Version (%@) von put.IO Adder ist auf GitHub verfügbar! Möchtest du sie sehen?";
+HELPER_OKAY="OK";
+HELPER_CANCEL="Abbrechen";
+
+PANEL_AUTO_CLOSE_WHEN="Auto-schliesse App wenn:";
+PANEL_ADDING_MAGNET="Neuer magnet hinzugefügt";
+PANEL_ADDING_TORRENT="Torrent hochgeladen";
+PANEL_CHECK_FOR_UPDATES="Suche nach updates";
+PANEL_CLOSE="Schliessen";
+
+HELPER_TABLEHEADER_NAME="Name";
+HELPER_TABLEHEADER_STATUS="Status";
+
+HELPER_STATE_DOWNLOADING="Lade: %@%%";
+HELPER_STATE_COMPLETED="Fertig";
+HELPER_STATE_WAITING="Warte...";
+HELPER_STATE_COMPLETING="Fertig stellen...";
+HELPER_STATE_SEEDING="Fertig/Seeding...";
+
+HELPER_TRANSFERS_SHOW="Transfers Anzeigen";
+HELPER_TRANSFERS_HIDE="Transfers Verbergen";

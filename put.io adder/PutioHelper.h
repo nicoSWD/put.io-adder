@@ -10,11 +10,12 @@
 #import "PutioMainController.h"
 #import "V2PutIOAPIClient.h"
 
-@interface PutioHelper : NSObject
+@interface PutioHelper : NSObject<NSAlertDelegate>
 {
     PutioMainController *putioController;
     V2PutIOAPIClient *putioAPI;
     NSTimer *userInfoTimer;
+    NSTimer *closeTimer;
 }
 
 + (PutioHelper*)sharedHelper;
@@ -23,6 +24,7 @@
 - (void)updateUserInfo;
 - (void)addMagnet:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)replyEvent;
 - (void)uploadTorrent:(NSString*)filePath;
+- (void)checkForUpdates;
 - (NSString*)transformedValue:(id)value;
 
 @property (strong) PutioMainController *putioController;

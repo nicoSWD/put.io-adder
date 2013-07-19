@@ -1,0 +1,49 @@
+/* 
+  Language.strings
+  put.io adder
+
+  Created by Nicolas Oelgart on 7/17/13.
+  Copyright (c) 2013 Nicolas Oelgart. All rights reserved.
+*/
+
+HELPER_FETCHING_USERINFO="Fetching info...";
+HELPER_MSG_READY="Ready";
+HELPER_AUTH_REQUIRED="Authentication required!";
+HELPER_USERINFO_ACCOUNT="%@, %@ used of %@";
+HELPER_USERINFO_FAILED="Failed to fetch account info!";
+HELPER_NO_PENDING_TRANSFERS="No pending transfers! / %i finished";
+HELPER_TRANSFERS_FAILED="Failed to fetch transfers!";
+HELPER_PENDING_TRANSFERS_PURAL="%i pending transfers / %i finished";
+HELPER_PENDING_TRANSFERS_SINGULAR="1 pending transfer / %i finished";
+HELPER_MAGNET_ADDING="Adding magnet: %@";
+HELPER_MAGNET_ADDED_CLOSING="URL successfully added, closing in 5 seconds!";
+HELPER_MAGNET_ADDED="URL successfully added!";
+HELPER_MAGNET_ERROR="Something went wrong!?";
+HELPER_MAGNET_DUPLICATE="Failed! URL already in queue?";
+HELPER_TORRENT_UPLOADING="Uploading torrent: %@";
+HELPER_TORRENT_ADDED_CLOSING="Torrent successfully added, closing in 5 seconds!";
+HELPER_TORRENT_ADDED="Torrent successfully added!";
+HELPER_TORRENT_DUPLICATE="Failed! Torrent already in queue?";
+
+HELPER_NEW_VERSION_TITLE="New Version available";
+HELPER_NEW_VERSION_BODY="A new version (%@) of put.IO Adder is available on GitHub! Want to check it out?";
+HELPER_OKAY="OK";
+HELPER_CANCEL="Cancel";
+
+PANEL_AUTO_CLOSE_WHEN="Automatically close the app after:";
+PANEL_ADDING_MAGNET="Adding a new magnet";
+PANEL_ADDING_TORRENT="Uploading a new torrent";
+PANEL_CHECK_FOR_UPDATES="Check for updates on startup";
+PANEL_CLOSE="Close";
+
+HELPER_TABLEHEADER_NAME="Name";
+HELPER_TABLEHEADER_STATUS="Status";
+
+HELPER_STATE_DOWNLOADING="Downloading: %@%%";
+HELPER_STATE_COMPLETED="Done";
+HELPER_STATE_WAITING="Waiting...";
+HELPER_STATE_COMPLETING="Completing...";
+HELPER_STATE_SEEDING="Done/Seeding...";
+
+HELPER_TRANSFERS_SHOW="Show Transfers";
+HELPER_TRANSFERS_HIDE="Hide Transfers";

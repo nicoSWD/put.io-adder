@@ -3,15 +3,15 @@
 <plist version="1.0">
 <dict>
 	<key>IDESourceControlProjectIdentifier</key>
-	<string>A31755A0-43BE-449D-AEC0-CBAABBA5FA76</string>
+	<string>8767BC30-9248-44B0-A98F-FF985280EF50</string>
 	<key>IDESourceControlProjectName</key>
 	<string>put.io adder</string>
 	<key>IDESourceControlProjectOriginsDictionary</key>
 	<dict>
 		<key>70275435-878C-4A2A-A401-BC1C3A23B8A0</key>
 		<string>https://github.com/AFNetworking/AFNetworking.git</string>
-		<key>ABBC8CC8-3199-48E7-BDDE-9B7AB118CA60</key>
-		<string>https://github.com/orta/put.io-adder</string>
+		<key>A4CE94B1-947A-48B4-9E58-EAF13355FAB5</key>
+		<string>ssh://github.com/nicoSWD/put.io-adder.git</string>
 		<key>B3A172DC-6C07-41E6-AE51-CE54198CC9F5</key>
 		<string>https://github.com/samsoffes/sskeychain.git</string>
 		<key>F40D1BC1-A646-4D9B-8F86-B66CAABCF957</key>
@@ -23,7 +23,7 @@
 	<dict>
 		<key>70275435-878C-4A2A-A401-BC1C3A23B8A0</key>
 		<string>../../AFNetworking</string>
-		<key>ABBC8CC8-3199-48E7-BDDE-9B7AB118CA60</key>
+		<key>A4CE94B1-947A-48B4-9E58-EAF13355FAB5</key>
 		<string>../..</string>
 		<key>B3A172DC-6C07-41E6-AE51-CE54198CC9F5</key>
 		<string>../../sskeychain</string>
@@ -31,21 +31,13 @@
 		<string>../../PutioKit</string>
 	</dict>
 	<key>IDESourceControlProjectURL</key>
-	<string>https://github.com/orta/put.io-adder</string>
+	<string>ssh://github.com/nicoSWD/put.io-adder.git</string>
 	<key>IDESourceControlProjectVersion</key>
 	<integer>110</integer>
 	<key>IDESourceControlProjectWCCIdentifier</key>
-	<string>ABBC8CC8-3199-48E7-BDDE-9B7AB118CA60</string>
+	<string>A4CE94B1-947A-48B4-9E58-EAF13355FAB5</string>
 	<key>IDESourceControlProjectWCConfigurations</key>
 	<array>
-		<dict>
-			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
-			<string>public.vcs.git</string>
-			<key>IDESourceControlWCCIdentifierKey</key>
-			<string>70275435-878C-4A2A-A401-BC1C3A23B8A0</string>
-			<key>IDESourceControlWCCName</key>
-			<string>AFNetworking</string>
-		</dict>
 		<dict>
 			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
 			<string>public.vcs.git</string>
@@ -58,9 +50,17 @@
 			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
 			<string>public.vcs.git</string>
 			<key>IDESourceControlWCCIdentifierKey</key>
-			<string>ABBC8CC8-3199-48E7-BDDE-9B7AB118CA60</string>
+			<string>A4CE94B1-947A-48B4-9E58-EAF13355FAB5</string>
 			<key>IDESourceControlWCCName</key>
 			<string>put</string>
+		</dict>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>70275435-878C-4A2A-A401-BC1C3A23B8A0</string>
+			<key>IDESourceControlWCCName</key>
+			<string>AFNetworking</string>
 		</dict>
 		<dict>
 			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>

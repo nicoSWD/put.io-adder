@@ -39,7 +39,9 @@
 		03496865178B13F900E8BADD /* AFURLConnectionOperation.m in Sources */ = {isa = PBXBuildFile; fileRef = 0349685A178B13F900E8BADD /* AFURLConnectionOperation.m */; };
 		03496866178B13F900E8BADD /* AFXMLRequestOperation.m in Sources */ = {isa = PBXBuildFile; fileRef = 0349685C178B13F900E8BADD /* AFXMLRequestOperation.m */; };
 		03496867178B13F900E8BADD /* UIImageView+AFNetworking.m in Sources */ = {isa = PBXBuildFile; fileRef = 0349685E178B13F900E8BADD /* UIImageView+AFNetworking.m */; };
+		03874C0B1795DAAC006E9D43 /* PutioPreferences.m in Sources */ = {isa = PBXBuildFile; fileRef = 03874C0A1795DAAC006E9D43 /* PutioPreferences.m */; };
 		039969961787047500B595C6 /* Browser.xib in Resources */ = {isa = PBXBuildFile; fileRef = 039969951787047500B595C6 /* Browser.xib */; };
+		03A115F317961C8C00A5EBCF /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 03A115F517961C8C00A5EBCF /* Localizable.strings */; };
 		03A77B3417875E4700AA44FB /* PutioMainController.m in Sources */ = {isa = PBXBuildFile; fileRef = 03A77B3317875E4700AA44FB /* PutioMainController.m */; };
 		03AE9CBE17861CBA00A6E3EF /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03AE9CBD17861CBA00A6E3EF /* WebKit.framework */; };
 		03AE9CC01786398200A6E3EF /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03AE9CBF1786398200A6E3EF /* Security.framework */; };
@@ -48,11 +50,11 @@
 		03DF598117884B1F00AC96AA /* putio-menu.png in Resources */ = {isa = PBXBuildFile; fileRef = 03DF597F17884B1F00AC96AA /* putio-menu.png */; };
 		03DF598217884B1F00AC96AA /* putio-menu@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 03DF598017884B1F00AC96AA /* putio-menu@2x.png */; };
 		03F630C816D6B5D400D33848 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03F630C716D6B5D400D33848 /* Cocoa.framework */; };
-		03F630D216D6B5D400D33848 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 03F630D016D6B5D400D33848 /* InfoPlist.strings */; };
 		03F630D416D6B5D400D33848 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 03F630D316D6B5D400D33848 /* main.m */; };
 		03F630DB16D6B5D400D33848 /* PutioAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 03F630DA16D6B5D400D33848 /* PutioAppDelegate.m */; };
 		03F630DE16D6B5D400D33848 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 03F630DC16D6B5D400D33848 /* MainMenu.xib */; };
 		03F6315316D6C61200D33848 /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03F6315216D6C61200D33848 /* SystemConfiguration.framework */; };
+		03F7FA1F1796D9C20047B51D /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 03F7FA1D1796D9C20047B51D /* InfoPlist.strings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -95,6 +97,8 @@
 		031F8949178A3426006EAB13 /* V2PutIOAPIClient.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = V2PutIOAPIClient.m; sourceTree = "<group>"; };
 		033FBB12179177A20007AC9E /* PutioHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PutioHelper.h; sourceTree = "<group>"; };
 		033FBB13179177A20007AC9E /* PutioHelper.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PutioHelper.m; sourceTree = "<group>"; };
+		034848EC1797669700B9894C /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/Localizable.strings; sourceTree = "<group>"; };
+		034848ED1797669E00B9894C /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
 		034967A8178AF68800E8BADD /* TorrentPartFile.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; name = TorrentPartFile.icns; path = Resources/TorrentPartFile.icns; sourceTree = "<group>"; };
 		034967AA178AF94B00E8BADD /* BittorrentDocument.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; name = BittorrentDocument.icns; path = Resources/BittorrentDocument.icns; sourceTree = "<group>"; };
 		0349684C178B13F900E8BADD /* AFHTTPClient.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AFHTTPClient.h; sourceTree = "<group>"; };
@@ -116,10 +120,10 @@
 		0349685C178B13F900E8BADD /* AFXMLRequestOperation.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = AFXMLRequestOperation.m; sourceTree = "<group>"; };
 		0349685D178B13F900E8BADD /* UIImageView+AFNetworking.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "UIImageView+AFNetworking.h"; sourceTree = "<group>"; };
 		0349685E178B13F900E8BADD /* UIImageView+AFNetworking.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "UIImageView+AFNetworking.m"; sourceTree = "<group>"; };
-		034AC67717907CFC00303CC9 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = Library/Frameworks/UIKit.framework; sourceTree = DEVELOPER_DIR; };
-		034AC67917907CFC00303CC9 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
-		034AC67B17907CFC00303CC9 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = Library/Frameworks/CoreGraphics.framework; sourceTree = DEVELOPER_DIR; };
+		03874C091795DAAC006E9D43 /* PutioPreferences.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PutioPreferences.h; sourceTree = "<group>"; };
+		03874C0A1795DAAC006E9D43 /* PutioPreferences.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PutioPreferences.m; sourceTree = "<group>"; };
 		039969951787047500B595C6 /* Browser.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = Browser.xib; sourceTree = "<group>"; };
+		03A115F417961C8C00A5EBCF /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		03A77B3217875E4700AA44FB /* PutioMainController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PutioMainController.h; sourceTree = "<group>"; };
 		03A77B3317875E4700AA44FB /* PutioMainController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PutioMainController.m; sourceTree = "<group>"; };
 		03AE9CBD17861CBA00A6E3EF /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
@@ -130,17 +134,16 @@
 		03DF598017884B1F00AC96AA /* putio-menu@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "putio-menu@2x.png"; path = "Resources/putio-menu@2x.png"; sourceTree = "<group>"; };
 		03F630C416D6B5D400D33848 /* put.io adder.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "put.io adder.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		03F630C716D6B5D400D33848 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = System/Library/Frameworks/Cocoa.framework; sourceTree = SDKROOT; };
-		03F630CA16D6B5D400D33848 /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = System/Library/Frameworks/AppKit.framework; sourceTree = SDKROOT; };
 		03F630CB16D6B5D400D33848 /* CoreData.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreData.framework; path = System/Library/Frameworks/CoreData.framework; sourceTree = SDKROOT; };
 		03F630CC16D6B5D400D33848 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		03F630CF16D6B5D400D33848 /* put.io adder-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "put.io adder-Info.plist"; sourceTree = "<group>"; };
-		03F630D116D6B5D400D33848 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		03F630D316D6B5D400D33848 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		03F630D516D6B5D400D33848 /* put.io adder-Prefix.pch */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "put.io adder-Prefix.pch"; sourceTree = "<group>"; };
 		03F630D916D6B5D400D33848 /* PutioAppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PutioAppDelegate.h; sourceTree = "<group>"; };
 		03F630DA16D6B5D400D33848 /* PutioAppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PutioAppDelegate.m; sourceTree = "<group>"; };
 		03F630DD16D6B5D400D33848 /* en */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = en; path = en.lproj/MainMenu.xib; sourceTree = "<group>"; };
 		03F6315216D6C61200D33848 /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
+		03F7FA1E1796D9C20047B51D /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -243,6 +246,7 @@
 				030F7D0D178646910024178D /* SSKeychain.m */,
 			);
 			name = SSKeyChain;
+			path = "put.io adder";
 			sourceTree = "<group>";
 		};
 		03F630BB16D6B5D300D33848 = {
@@ -251,6 +255,10 @@
 				03F630CD16D6B5D400D33848 /* put.io adder */,
 				03F630C616D6B5D400D33848 /* Frameworks */,
 				03F630C516D6B5D400D33848 /* Products */,
+				0349684B178B13F900E8BADD /* AFNetworking */,
+				031F892A178A3426006EAB13 /* PutioKit */,
+				03DF597A178849B400AC96AA /* SSKeyChain */,
+				03F630CE16D6B5D400D33848 /* Supporting Files */,
 			);
 			sourceTree = "<group>";
 		};
@@ -269,9 +277,6 @@
 				03AE9CBD17861CBA00A6E3EF /* WebKit.framework */,
 				03F6315216D6C61200D33848 /* SystemConfiguration.framework */,
 				03F630C716D6B5D400D33848 /* Cocoa.framework */,
-				034AC67717907CFC00303CC9 /* UIKit.framework */,
-				034AC67917907CFC00303CC9 /* Foundation.framework */,
-				034AC67B17907CFC00303CC9 /* CoreGraphics.framework */,
 				03F630C916D6B5D400D33848 /* Other Frameworks */,
 			);
 			name = Frameworks;
@@ -280,7 +285,6 @@
 		03F630C916D6B5D400D33848 /* Other Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				03F630CA16D6B5D400D33848 /* AppKit.framework */,
 				03F630CB16D6B5D400D33848 /* CoreData.framework */,
 				03F630CC16D6B5D400D33848 /* Foundation.framework */,
 			);
@@ -298,12 +302,10 @@
 				033FBB13179177A20007AC9E /* PutioHelper.m */,
 				031D405E17861678006C4EEF /* PutioBrowser.h */,
 				031D405F17861679006C4EEF /* PutioBrowser.m */,
+				03874C091795DAAC006E9D43 /* PutioPreferences.h */,
+				03874C0A1795DAAC006E9D43 /* PutioPreferences.m */,
 				03F630DC16D6B5D400D33848 /* MainMenu.xib */,
 				039969951787047500B595C6 /* Browser.xib */,
-				0349684B178B13F900E8BADD /* AFNetworking */,
-				031F892A178A3426006EAB13 /* PutioKit */,
-				03DF597A178849B400AC96AA /* SSKeyChain */,
-				03F630CE16D6B5D400D33848 /* Supporting Files */,
 			);
 			path = "put.io adder";
 			sourceTree = "<group>";
@@ -323,12 +325,14 @@
 				030F7D7C178649240024178D /* icon_256x256@2x.png */,
 				030F7D7D178649240024178D /* icon_512x512.png */,
 				030F7D7E178649240024178D /* icon_512x512@2x.png */,
+				03A115F517961C8C00A5EBCF /* Localizable.strings */,
+				03F7FA1D1796D9C20047B51D /* InfoPlist.strings */,
 				03F630CF16D6B5D400D33848 /* put.io adder-Info.plist */,
-				03F630D016D6B5D400D33848 /* InfoPlist.strings */,
 				03F630D316D6B5D400D33848 /* main.m */,
 				03F630D516D6B5D400D33848 /* put.io adder-Prefix.pch */,
 			);
 			name = "Supporting Files";
+			path = "put.io adder";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -367,6 +371,8 @@
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
+				es,
+				de,
 			);
 			mainGroup = 03F630BB16D6B5D300D33848;
 			productRefGroup = 03F630C516D6B5D400D33848 /* Products */;
@@ -387,7 +393,6 @@
 				030F7D80178649240024178D /* icon_128x128@2x.png in Resources */,
 				030F7D7F178649240024178D /* amblem.icns in Resources */,
 				030F7D84178649250024178D /* icon_512x512@2x.png in Resources */,
-				03F630D216D6B5D400D33848 /* InfoPlist.strings in Resources */,
 				03F630DE16D6B5D400D33848 /* MainMenu.xib in Resources */,
 				030F7D81178649250024178D /* icon_256x256.png in Resources */,
 				030F7D83178649250024178D /* icon_512x512.png in Resources */,
@@ -398,6 +403,8 @@
 				03DF598217884B1F00AC96AA /* putio-menu@2x.png in Resources */,
 				034967A9178AF68800E8BADD /* TorrentPartFile.icns in Resources */,
 				034967AB178AF94B00E8BADD /* BittorrentDocument.icns in Resources */,
+				03A115F317961C8C00A5EBCF /* Localizable.strings in Resources */,
+				03F7FA1F1796D9C20047B51D /* InfoPlist.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -435,18 +442,21 @@
 				03496866178B13F900E8BADD /* AFXMLRequestOperation.m in Sources */,
 				03496867178B13F900E8BADD /* UIImageView+AFNetworking.m in Sources */,
 				033FBB14179177A20007AC9E /* PutioHelper.m in Sources */,
+				03874C0B1795DAAC006E9D43 /* PutioPreferences.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXVariantGroup section */
-		03F630D016D6B5D400D33848 /* InfoPlist.strings */ = {
+		03A115F517961C8C00A5EBCF /* Localizable.strings */ = {
 			isa = PBXVariantGroup;
 			children = (
-				03F630D116D6B5D400D33848 /* en */,
+				03A115F417961C8C00A5EBCF /* en */,
+				034848EC1797669700B9894C /* es */,
+				034848ED1797669E00B9894C /* de */,
 			);
-			name = InfoPlist.strings;
+			name = Localizable.strings;
 			sourceTree = "<group>";
 		};
 		03F630DC16D6B5D400D33848 /* MainMenu.xib */ = {
@@ -455,6 +465,14 @@
 				03F630DD16D6B5D400D33848 /* en */,
 			);
 			name = MainMenu.xib;
+			sourceTree = "<group>";
+		};
+		03F7FA1D1796D9C20047B51D /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				03F7FA1E1796D9C20047B51D /* en */,
+			);
+			name = InfoPlist.strings;
 			sourceTree = "<group>";
 		};
 /* End PBXVariantGroup section */
@@ -486,7 +504,7 @@
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNINITIALIZED_AUTOS = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 10.6;
+				MACOSX_DEPLOYMENT_TARGET = 10.7;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx10.7;
 			};
@@ -512,7 +530,7 @@
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNINITIALIZED_AUTOS = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 10.6;
+				MACOSX_DEPLOYMENT_TARGET = 10.7;
 				SDKROOT = macosx10.7;
 			};
 			name = Release;
@@ -525,13 +543,14 @@
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CODE_SIGN_IDENTITY = "";
 				COMBINE_HIDPI_IMAGES = YES;
+				GCC_OPTIMIZATION_LEVEL = s;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "put.io adder/put.io adder-Prefix.pch";
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				INFOPLIST_FILE = "put.io adder/put.io adder-Info.plist";
-				MACOSX_DEPLOYMENT_TARGET = 10.8;
+				MACOSX_DEPLOYMENT_TARGET = 10.7;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
+				SDKROOT = macosx10.7;
 				USER_HEADER_SEARCH_PATHS = "";
 				VALID_ARCHS = "x86_64 i386";
 				WRAPPER_EXTENSION = app;
@@ -550,10 +569,10 @@
 				GCC_PREFIX_HEADER = "put.io adder/put.io adder-Prefix.pch";
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				INFOPLIST_FILE = "put.io adder/put.io adder-Info.plist";
-				MACOSX_DEPLOYMENT_TARGET = 10.8;
+				MACOSX_DEPLOYMENT_TARGET = 10.7;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
+				SDKROOT = macosx10.7;
 				USER_HEADER_SEARCH_PATHS = "";
 				VALID_ARCHS = "x86_64 i386";
 				WRAPPER_EXTENSION = app;

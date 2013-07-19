@@ -18,7 +18,7 @@
 
 -(void)awakeFromNib
 {
-    NSURL *url = [NSURL URLWithString:@"https://api.put.io/v2/oauth2/authenticate?client_id=711&response_type=token&redirect_uri=http://nicoswd.com/sites/putio/"];
+    NSURL *url = [NSURL URLWithString:@"https://api.put.io/v2/oauth2/authenticate?client_id=711&response_type=token&redirect_uri=https://nicoswd.com/sites/putio/"];
     [[webView mainFrame] loadRequest:[NSURLRequest requestWithURL:url]];
 }
 
@@ -32,14 +32,15 @@
     {
         return;
     }
-    
+
     NSRegularExpression* regex = [NSRegularExpression regularExpressionWithPattern:@"#access_token=([A-Za-z0-9]+)" options:0 error:&error];
     NSArray* matches = [regex matchesInString:searchedString options:0 range:NSMakeRange(0, [searchedString length])];
     
+    PutioHelper *helper = [PutioHelper sharedHelper];
+    PutioMainController *controller = helper.putioController;
+    
     if ([matches count] > 0)
     {
-        PutioHelper *helper = [PutioHelper sharedHelper];
-        PutioMainController *controller = helper.putioController;
         NSString *token = [searchedString substringWithRange:[[matches objectAtIndex:0] rangeAtIndex:1]];
     
         if ([SSKeychain setPassword:token forService:@"put.io adder" account:@"711"])
@@ -48,12 +49,19 @@
             helper.putioAPI.apiToken = token;
             [helper updateUserInfo];
             
+            [controller.toggleShowTransfers setEnabled:YES];
+            [controller.window orderFront:self];
+            
             [self.window close];
         }
         else
         {
             controller.message.stringValue = @"Error saving token to KeyChain!";
         }
+    }
+    else
+    {
+        controller.userInfo.stringValue = @"ERROR: Failed to get access token";
     }
 }
 

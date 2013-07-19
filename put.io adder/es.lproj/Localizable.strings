@@ -1,0 +1,49 @@
+/* 
+  Language.strings
+  put.io adder
+
+  Created by Nicolas Oelgart on 7/17/13.
+  Copyright (c) 2013 Nicolas Oelgart. All rights reserved.
+*/
+
+HELPER_FETCHING_USERINFO="Cargando info...";
+HELPER_MSG_READY="Preparado";
+HELPER_AUTH_REQUIRED="¡Autenticación requerida!";
+HELPER_USERINFO_ACCOUNT="%@, %@ utilizados de %@";
+HELPER_USERINFO_FAILED="Imposible cargar info de la cuenta!";
+HELPER_NO_PENDING_TRANSFERS="No hay descargas pendientes! / %i finalizadas";
+HELPER_TRANSFERS_FAILED="Imposible cargar info de descargas!";
+HELPER_PENDING_TRANSFERS_PURAL="%i cargas pendientes / %i finalizadas";
+HELPER_PENDING_TRANSFERS_SINGULAR="1 carga pendiente / %i finalizadas";
+HELPER_MAGNET_ADDING="Agregando magnet: %@";
+HELPER_MAGNET_ADDED_CLOSING="URL agregada con éxito! Cerrando en 5 segundos!";
+HELPER_MAGNET_ADDED="URL agregada con éxito!";
+HELPER_MAGNET_ERROR="Algo no ha ido bien!?";
+HELPER_MAGNET_DUPLICATE="Error! URL ya esta en la cola?";
+HELPER_TORRENT_UPLOADING="Subiendo torrent: %@";
+HELPER_TORRENT_ADDED_CLOSING="Torrent agregado con éxito! Cerrando en 5 segundos!";
+HELPER_TORRENT_ADDED="Torrent agregado con éxito!";
+HELPER_TORRENT_DUPLICATE="Error! Torrent ya esta en la cola?";
+
+HELPER_NEW_VERSION_TITLE="¡Nueva versión disponible!";
+HELPER_NEW_VERSION_BODY="Una nueva versión (%@) de put.IO Adder está disponible en GitHub! Quieres verla?";
+HELPER_OKAY="OK";
+HELPER_CANCEL="Cancelar";
+
+PANEL_AUTO_CLOSE_WHEN="Automaticamente cerrar después de:";
+PANEL_ADDING_MAGNET="Agregar un nuevo magnet";
+PANEL_ADDING_TORRENT="Subir un nuevo torrent";
+PANEL_CHECK_FOR_UPDATES="Buscar actualizaciones";
+PANEL_CLOSE="Cerrar";
+
+HELPER_TABLEHEADER_NAME="Nombre";
+HELPER_TABLEHEADER_STATUS="Estado";
+
+HELPER_STATE_DOWNLOADING="Descargando: %@%%";
+HELPER_STATE_COMPLETED="Finalizado";
+HELPER_STATE_WAITING="Esperando...";
+HELPER_STATE_COMPLETING="Completando...";
+HELPER_STATE_SEEDING="Finalizado/Seeding...";
+
+HELPER_TRANSFERS_SHOW="Mostrar Descargas";
+HELPER_TRANSFERS_HIDE="Esconder Descargas";
