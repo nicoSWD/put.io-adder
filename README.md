@@ -1,5 +1,7 @@
 ## Put.io magnet: and .torrent Handler for OS X
 
+![alt tag](http://f.cl.ly/items/3Q2t3g311h442c3o1z0K/Screen%20Shot%202013-07-19%20at%209.31.28%20PM.png)
+
 *put.io adder* is a small, open source app for OS X, that registers as new handler for **magnet** URI schemes, so that every
 time you click on a manget link, it will automatically add it to your [put.io](http://put.io/) download queue.
 
@@ -25,8 +27,9 @@ Please [report issues](https://github.com/nicoSWD/put.io-adder/issues) you may e
 
 **BINARIES**
 - Newest
-  - [put.io adder v1.6](http://cl.ly/QFQc) (MD5 checksum: 2fb7b99167707643171edafe29211ea1)
+  - [put.io adder v2.0](https://nicoswd.com/public/files/putio/put.io-adder-2.0.zip) (MD5 checksum: 9e60a93bd668f5bd4ea11b6832ad41d3)
 - Older releases
+  - [put.io adder v1.6](http://cl.ly/QFQc) (MD5 checksum: 2fb7b99167707643171edafe29211ea1)
   - [put.io adder v1.5](http://cl.ly/Q7KN) (MD5 checksum: cdf44f9f3dc956fa9e538b168aa1ddec)
   - [put.io adder v1.4](http://cl.ly/Q5sv) (MD5 checksum: 608372b538a55a2d48826c77eef95cea)
   - [put.io adder v1.3](http://cl.ly/Q6ak) (MD5 checksum: 477afa6d458347c6d24b9af0a53a2ab8)
@@ -36,12 +39,16 @@ Please [report issues](https://github.com/nicoSWD/put.io-adder/issues) you may e
 
 **SCREENSHOTS**
 
-![alt tag](http://f.cl.ly/items/46070N2Q1E1b2G2T3222/Screen%20Shot%202013-07-08%20at%203.54.00%20PM.png)
-![alt tag](http://f.cl.ly/items/2L0l3c0S2s3K0l342Q02/Screen%20Shot%202013-07-08%20at%203.54.42%20PM.png)
-![alt tag](http://f.cl.ly/items/2r3v1Q2p1Q3l0f3K0G1L/Screen%20Shot%202013-07-08%20at%203.55.25%20PM.png)
-![alt tag](https://f.cloud.github.com/assets/49038/794993/1fab8884-eccf-11e2-8266-271fc7df877b.png)
+![alt tag](http://f.cl.ly/items/3Q2t3g311h442c3o1z0K/Screen%20Shot%202013-07-19%20at%209.31.28%20PM.png)
+![alt tag](http://f.cl.ly/items/0Y3n24003K0Z2c2X2s2i/Screen%20Shot%202013-07-19%20at%209.31.39%20PM.png)
+![alt tag](http://f.cl.ly/items/420N3Y1w3N0h3U27451I/Screen%20Shot%202013-07-19%20at%209.31.48%20PM.png)
 
 **CHANGELOG**
+- v.2.0 (Big update)
+  - View your transfers (double click opens file in browser)
+  - Support for multiple languages (feel free to add more)
+  - Added preferences pane (⌘ + ,)
+  - Automatically checks for updates
 - v1.6 (by [orta](https://github.com/orta))
   - Support for auto closing after uploading (option in menu bar)
   - Minor design changes
