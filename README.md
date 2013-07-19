@@ -12,6 +12,9 @@ queue as well. There are three ways to do that:
 - Make *put.io adder* your default handler for .torrent files
 - Or right click the torrent and pick "Open with" > put.io adder
 
+Versions 2.0 and above now lets you see your current transfers. Double clicking a transfer will open the browser and load the clicked
+file, so you can download it. Support for multiple languages has been added. Feel free to add more!
+
 Follow me on Twitter: [@nicoSWD](https://twitter.com/nicoSWD)!
 
 **NOTES**
