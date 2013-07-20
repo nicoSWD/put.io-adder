@@ -60,7 +60,7 @@ static BOOL transfersAreHidden = YES;
     [self.tableView setSortDescriptors:[NSArray arrayWithObject:sortDescriptor]];
     
     [[[self.tableView.tableColumns objectAtIndex:0] headerCell] setTitle: NSLocalizedString(@"HELPER_TABLEHEADER_NAME", nil)];
-    [[[self.tableView.tableColumns objectAtIndex:0] headerCell] setTitle: NSLocalizedString(@"HELPER_TABLEHEADER_STATUS", nil)];
+    [[[self.tableView.tableColumns objectAtIndex:1] headerCell] setTitle: NSLocalizedString(@"HELPER_TABLEHEADER_STATUS", nil)];
     
     /*
     if ([defaults boolForKey:@"showtransfers"])
