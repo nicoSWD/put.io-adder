@@ -49,7 +49,7 @@ Please [report issues](https://github.com/nicoSWD/put.io-adder/issues) you may e
 
 **CHANGELOG**
 - v.2.1
-  - Fixes a torrent upload issue.
+  - Fixes a torrent upload issue
 - v.2.0 (Big update)
   - View your transfers (double click opens file in browser)
   - Support for multiple languages (feel free to add more)
