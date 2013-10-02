@@ -30,8 +30,9 @@ Please [report issues](https://github.com/nicoSWD/put.io-adder/issues) you may e
 
 **DOWNLOADS**
 - Newest
-  - [put.io adder v2.1](https://github.com/nicoSWD/put.io-adder/releases/download/v2.1/put.io-adder-2.1.zip) (MD5 checksum: 0115b6a53c940ef4aad14dcc14c4c49d)
+  - [put.io adder v2.2](https://github.com/nicoSWD/put.io-adder/releases/download/v2.2/put.io-adder-v2.2.zip) (MD5 checksum: 061f4f985fc0f9c8ddf82a22ba0e3149)
 - Older releases
+  - [put.io adder v2.1](https://github.com/nicoSWD/put.io-adder/releases/download/v2.1/put.io-adder-2.1.zip) (MD5 checksum: 0115b6a53c940ef4aad14dcc14c4c49d)
   - [put.io adder v2.0](https://nicoswd.com/public/files/putio/put.io-adder-2.0.zip) (MD5 checksum: 4303bb677c36f979d4b7216e4d8343eb)
   - [put.io adder v1.6](http://cl.ly/QFQc) (MD5 checksum: 2fb7b99167707643171edafe29211ea1)
   - [put.io adder v1.5](http://cl.ly/Q7KN) (MD5 checksum: cdf44f9f3dc956fa9e538b168aa1ddec)
@@ -48,9 +49,12 @@ Please [report issues](https://github.com/nicoSWD/put.io-adder/issues) you may e
 ![alt tag](http://f.cl.ly/items/420N3Y1w3N0h3U27451I/Screen%20Shot%202013-07-19%20at%209.31.48%20PM.png)
 
 **CHANGELOG**
-- v.2.1
+- v2.2
+  - Automatically updates transfer list after adding a new torrent/magnet
+  - Added proper support for "in queue" statuses
+- v2.1
   - Fixes a torrent upload issue
-- v.2.0 (Big update)
+- v2.0 (Big update)
   - View your transfers (double click opens file in browser)
   - Support for multiple languages (feel free to add more)
   - Added preferences pane (⌘ + ,)
