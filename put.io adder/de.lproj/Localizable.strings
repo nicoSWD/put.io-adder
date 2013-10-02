@@ -44,6 +44,7 @@ HELPER_STATE_COMPLETED="Fertig";
 HELPER_STATE_WAITING="Warte...";
 HELPER_STATE_COMPLETING="Fertig stellen...";
 HELPER_STATE_SEEDING="Fertig/Seeding...";
+HELPER_STATE_QUEDED="In Warteschlange";
 
 HELPER_TRANSFERS_SHOW="Transfers Anzeigen";
 HELPER_TRANSFERS_HIDE="Transfers Verbergen";

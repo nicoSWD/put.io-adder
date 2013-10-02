@@ -151,6 +151,10 @@ static BOOL transfersAreHidden = YES;
         {
             return NSLocalizedString(@"HELPER_STATE_WAITING", nil);
         }
+        else if ([trans.status isEqualToString:@"IN_QUEUE"])
+        {
+            return NSLocalizedString(@"HELPER_STATE_QUEDED", nil);
+        }
         else if ([trans.status isEqualToString:@"DOWNLOADING"])
         {
             return [NSString stringWithFormat:NSLocalizedString(@"HELPER_STATE_DOWNLOADING", nil), trans.percentDone];

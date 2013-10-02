@@ -64,8 +64,14 @@ static PutioHelper *sharedHelper = nil;
         [self updateUserInfo];
         [self.putioController.toggleShowTransfers setEnabled:YES];
         
-        userInfoTimer = [NSTimer scheduledTimerWithTimeInterval:20.0  target:self selector:@selector(updateUserInfo) userInfo:nil repeats:YES];
+        [self startUserinfoTimer];
     }
+}
+
+
+- (void)startUserinfoTimer
+{
+    userInfoTimer = [NSTimer scheduledTimerWithTimeInterval:20.0  target:self selector:@selector(updateUserInfo) userInfo:nil repeats:YES];
 }
 
 
@@ -98,7 +104,7 @@ static PutioHelper *sharedHelper = nil;
         {
             status = [[putioTransfers objectAtIndex:i] valueForKey:@"status"];
 
-            if ([status isEqualToString:@"WAITING"] || [status isEqualToString:@"DOWNLOADING"])
+            if ([status isEqualToString:@"WAITING"] || [status isEqualToString:@"DOWNLOADING"] || [status isEqualToString:@"IN_QUEUE"])
             {
                 pendingDownloads++;
             }
@@ -162,6 +168,7 @@ static PutioHelper *sharedHelper = nil;
             putioController.message.stringValue = NSLocalizedString(@"HELPER_MAGNET_ADDED", nil);
         }
        
+        [self updateUserInfo];
         [putioController.activityIndicator stopAnimation:nil];
     }
     addFailure:^
@@ -182,6 +189,7 @@ static PutioHelper *sharedHelper = nil;
 - (void)uploadTorrent:(NSString*)filePath
 {
     [closeTimer invalidate];
+    //[userInfoTimer invalidate];
     
     NSString *fileName = [filePath lastPathComponent];
     putioController.message.stringValue = [NSString stringWithFormat: NSLocalizedString(@"HELPER_TORRENT_UPLOADING", nil), [fileName displayNameString]];
@@ -199,6 +207,7 @@ static PutioHelper *sharedHelper = nil;
             putioController.message.stringValue = NSLocalizedString(@"HELPER_TORRENT_ADDED", nil);
         }
         
+        [self updateUserInfo];
         [putioController.activityIndicator stopAnimation:nil];
     }
     addFailure:^

@@ -44,6 +44,7 @@ HELPER_STATE_COMPLETED="Finalizado";
 HELPER_STATE_WAITING="Esperando...";
 HELPER_STATE_COMPLETING="Completando...";
 HELPER_STATE_SEEDING="Finalizado/Seeding...";
+HELPER_STATE_QUEDED="En Espera";
 
 HELPER_TRANSFERS_SHOW="Mostrar Descargas";
 HELPER_TRANSFERS_HIDE="Esconder Descargas";
