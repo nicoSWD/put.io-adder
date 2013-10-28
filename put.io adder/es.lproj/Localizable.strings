@@ -48,3 +48,9 @@ HELPER_STATE_QUEDED="En Espera";
 
 HELPER_TRANSFERS_SHOW="Mostrar Descargas";
 HELPER_TRANSFERS_HIDE="Esconder Descargas";
+
+NOTIFICATION_TITLE="Descarga Finalizada";
+NOTIFICATION_MSG="\"%@\" se descargó";
+
+NOTIFICATION_TITLE="Erfolgreicher Download";
+NOTIFICATION_MSG="\"%@\" Wurde Erfolgreich Heruntergeladen";

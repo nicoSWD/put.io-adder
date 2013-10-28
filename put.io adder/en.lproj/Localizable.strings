@@ -48,3 +48,6 @@ HELPER_STATE_QUEDED="In Queue";
 
 HELPER_TRANSFERS_SHOW="Show Transfers";
 HELPER_TRANSFERS_HIDE="Hide Transfers";
+
+NOTIFICATION_TITLE="Finished Download";
+NOTIFICATION_MSG="\"%@\" finished downloading";

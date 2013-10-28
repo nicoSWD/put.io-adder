@@ -12,16 +12,16 @@
 @implementation PutioMainController
 
 @synthesize
-    message,
-    activityIndicator,
-    authWindow,
-    userInfo,
-    versionInfo,
-    transferInfo,
-    putiowindow,
-    transfers,
-    tableView,
-    toggleShowTransfers;
+message,
+activityIndicator,
+authWindow,
+userInfo,
+versionInfo,
+transferInfo,
+putiowindow,
+transfers,
+tableView,
+toggleShowTransfers;
 
 static BOOL transfersAreHidden = YES;
 
@@ -40,7 +40,7 @@ static BOOL transfersAreHidden = YES;
     self.toggleShowTransfers.title = NSLocalizedString(@"HELPER_TRANSFERS_SHOW", nil);
     self.userInfo.stringValue = NSLocalizedString(@"HELPER_FETCHING_USERINFO", nil);
     self.message.stringValue = NSLocalizedString(@"HELPER_MSG_READY", nil);
-
+    
     PutioHelper *helper = [PutioHelper sharedHelper];
     [helper authenticateUser];
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
@@ -50,7 +50,7 @@ static BOOL transfersAreHidden = YES;
     {
         [helper checkForUpdates];
     }
-
+    
     [[NSAppleEventManager sharedAppleEventManager] setEventHandler:helper andSelector:@selector(addMagnet:withReplyEvent:) forEventClass:kInternetEventClass andEventID:kAEGetURL];
     
     NSSortDescriptor *sortDescriptor = [[NSSortDescriptor alloc] initWithKey:@"status" ascending:YES];
@@ -63,10 +63,10 @@ static BOOL transfersAreHidden = YES;
     [[[self.tableView.tableColumns objectAtIndex:1] headerCell] setTitle: NSLocalizedString(@"HELPER_TABLEHEADER_STATUS", nil)];
     
     /*
-    if ([defaults boolForKey:@"showtransfers"])
-    {
+     if ([defaults boolForKey:@"showtransfers"])
+     {
      
-    }
+     }
      */
 }
 
@@ -118,10 +118,10 @@ static BOOL transfersAreHidden = YES;
     }
     
     /*
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    [defaults setBool:transfersAreHidden forKey:@"showtransfers"];
-    [defaults synchronize];
-    */
+     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+     [defaults setBool:transfersAreHidden forKey:@"showtransfers"];
+     [defaults synchronize];
+     */
     transfersAreHidden = !transfersAreHidden;
     [self.putiowindow setFrame:frame display:YES animate:YES];
 }
@@ -203,7 +203,7 @@ static BOOL transfersAreHidden = YES;
     {
         url = @"https://put.io/transfers";
     }
-
+    
     [[NSWorkspace sharedWorkspace] openURL: [NSURL URLWithString: url]];
 }
 

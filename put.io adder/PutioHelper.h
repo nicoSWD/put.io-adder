@@ -19,8 +19,8 @@
 }
 
 + (PutioHelper*)sharedHelper;
-- (id)init;
 - (void)authenticateUser;
+- (void)startUserinfoTimer;
 - (void)updateUserInfo;
 - (void)addMagnet:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)replyEvent;
 - (void)uploadTorrent:(NSString*)filePath;
