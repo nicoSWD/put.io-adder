@@ -30,7 +30,7 @@ Please [report issues](https://github.com/nicoSWD/put.io-adder/issues) you may e
 
 **DOWNLOADS**
 - Newest
-  - [put.io adder v2.3](https://github.com/nicoSWD/put.io-adder/releases/download/v2.3/put.io-.adder-v2.3.zip) (MD5 checksum: 45af40b80f3426aabda2bf54be75385b)
+  - [put.io adder v2.3](https://github.com/nicoSWD/put.io-adder/releases/download/v2.3/put.io-adder-v2.3.zip) (MD5 checksum: 45af40b80f3426aabda2bf54be75385b)
 - Older releases
   - [put.io adder v2.2](https://github.com/nicoSWD/put.io-adder/releases/download/v2.2/put.io-adder-v2.2.zip) (MD5 checksum: 061f4f985fc0f9c8ddf82a22ba0e3149)
   - [put.io adder v2.1](https://github.com/nicoSWD/put.io-adder/releases/download/v2.1/put.io-adder-2.1.zip) (MD5 checksum: 0115b6a53c940ef4aad14dcc14c4c49d)
