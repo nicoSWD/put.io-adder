@@ -103,7 +103,7 @@ static PutioHelper *sharedHelper = nil;
                           (![currentTransfer.status isEqualToString:@"COMPLETED"] &&
                            [newTransfer.status isEqualToString:@"COMPLETED"]))
                          ||
-                         (![currentTransfer.status isEqualToString:@"SEEDING"] &&
+                         (![currentTransfer.status isEqualToString:@"DOWNLOADING"] &&
                           [newTransfer.status isEqualToString:@"SEEDING"]))
                      {
                          NSUserNotification *notification = [[NSUserNotification alloc] init];
