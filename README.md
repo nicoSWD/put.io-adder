@@ -20,6 +20,7 @@ Follow me on Twitter: [@nicoSWD](https://twitter.com/nicoSWD)!
 **NOTES**
 - The app requires you to have a [put.io](http://put.io/) account. They're probably not free anymore.
 - The app requires KeyChain Access to store put.io's OAuth Token. Denying access might prevent the app from working.
+- To disable NotificationCenter, go to System Preferences -> Notifications -> Scroll to Put.IO Adder, and make your changes.
 
 *IMPORTANT:* I added [AFNetworking](https://github.com/AFNetworking/AFNetworking), [PutioKit](https://github.com/PutioKit/PutioKit), and [SSKeyChain](https://github.com/samsoffes/sskeychain) as submodules. 
 So if you want to clone the entire repo, please use:
