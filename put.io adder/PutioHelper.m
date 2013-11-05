@@ -72,90 +72,92 @@ static PutioHelper *sharedHelper = nil;
 - (void)updateUserInfo
 {
     [self.putioAPI getAccount:^(PKAccount *account)
-     {
-         putioController.userInfo.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_USERINFO_ACCOUNT", nil),
-                                                 [account username],
-                                                 [self transformedValue:[account diskUsed]],
-                                                 [self transformedValue:[account diskSize]]
-                                                 ];
-     }
-                      failure:^(NSError *error)
-     {
-         putioController.userInfo.stringValue = NSLocalizedString(@"HELPER_USERINFO_FAILED", nil);
-     }];
+    {
+        putioController.userInfo.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_USERINFO_ACCOUNT", nil),
+             [account username],
+             [self transformedValue:[account diskUsed]],
+             [self transformedValue:[account diskSize]]
+        ];
+    }
+    failure:^(NSError *error)
+    {
+        putioController.userInfo.stringValue = NSLocalizedString(@"HELPER_USERINFO_FAILED", nil);
+    }];
     
     [self.putioAPI getTransfers:^(NSArray *putioTransfers)
-     {
-         if (putioController.transfers.count > 0)
-         {
-             PKTransfer *currentTransfer;
-             PKTransfer *newTransfer;
+    {
+        if (putioController.transfers.count > 0)
+        {
+            PKTransfer *currentTransfer;
+            PKTransfer *newTransfer;
              
-             for (unsigned i = 0; i < putioController.transfers.count; i++)
-             {
-                 currentTransfer = (PKTransfer*)[putioController.transfers objectAtIndex:i];
+            for (unsigned i = 0; i < putioController.transfers.count; i++)
+            {
+                currentTransfer = (PKTransfer*)[putioController.transfers objectAtIndex:i];
                  
-                 for (unsigned j = 0; j < putioTransfers.count; j++)
-                 {
-                     newTransfer = (PKTransfer*)[putioTransfers objectAtIndex:j];
+                for (unsigned j = 0; j < putioTransfers.count; j++)
+                {
+                    newTransfer = (PKTransfer*)[putioTransfers objectAtIndex:j];
                      
-                     if (((currentTransfer.id == newTransfer.id) &&
-                          (![currentTransfer.status isEqualToString:@"COMPLETED"] &&
-                           [newTransfer.status isEqualToString:@"COMPLETED"]))
-                         ||
-                         (![currentTransfer.status isEqualToString:@"DOWNLOADING"] &&
-                          [newTransfer.status isEqualToString:@"SEEDING"]))
-                     {
-                         NSUserNotification *notification = [[NSUserNotification alloc] init];
-                         notification.title = NSLocalizedString(@"NOTIFICATION_TITLE", nil);
-                         notification.informativeText = [NSString stringWithFormat:NSLocalizedString(@"NOTIFICATION_MSG", nil), newTransfer.name];
-                         notification.soundName = NSUserNotificationDefaultSoundName;
+                    if ((currentTransfer.id == newTransfer.id) &&
+                         (![currentTransfer.status isEqualToString:@"COMPLETED"] &&
+                          ([newTransfer.status isEqualToString:@"COMPLETED"]
+                          || [newTransfer.status isEqualToString:@"SEEDING"])))
+                    {
+                        NSUserNotification *notification = [[NSUserNotification alloc] init];
+                        notification.title = NSLocalizedString(@"NOTIFICATION_TITLE", nil);
+                        notification.informativeText = [NSString stringWithFormat:NSLocalizedString(@"NOTIFICATION_MSG", nil), newTransfer.name];
+                        notification.soundName = NSUserNotificationDefaultSoundName;
+                        
+                        [[NSUserNotificationCenter defaultUserNotificationCenter] deliverNotification:notification];
                          
-                         [[NSUserNotificationCenter defaultUserNotificationCenter] deliverNotification:notification];
-                     }
-                 }
-             }
-         }
+                        NSImage *badge = [[NSImage alloc] initWithSize:NSSizeFromCGSize(CGSizeMake(20, 20))];
+                        badge.backgroundColor = [NSColor redColor];
+                        [NSApp setApplicationIconImage: badge];
+                    }
+                }
+            }
+        }
          
-         [self.putioController setTransfers: [putioTransfers mutableCopy]];
-         [self.putioController.tableView reloadData];
+        [self.putioController setTransfers: [putioTransfers mutableCopy]];
+        [self.putioController.tableView reloadData];
          
-         int pendingDownloads = 0;
-         int completedDownloads = 0;
-         int totalTransfers = (int)putioTransfers.count;
-         NSString *status;
+        int pendingDownloads = 0;
+        int completedDownloads = 0;
+        int totalTransfers = (int)putioTransfers.count;
+        NSString *status;
          
-         for (int i = 0; i < totalTransfers; i++)
-         {
-             status = [[putioTransfers objectAtIndex:i] valueForKey:@"status"];
+        for (int i = 0; i < totalTransfers; i++)
+        {
+            status = [[putioTransfers objectAtIndex:i] valueForKey:@"status"];
              
-             if ([status isEqualToString:@"WAITING"] || [status isEqualToString:@"DOWNLOADING"] || [status isEqualToString:@"IN_QUEUE"])
-             {
-                 pendingDownloads++;
-             }
-             else if ([status isEqualToString:@"COMPLETED"] || [status isEqualToString:@"SEEDING"])
-             {
-                 completedDownloads++;
-             }
-         }
+            if ([status isEqualToString:@"WAITING"] || [status isEqualToString:@"DOWNLOADING"] || [status isEqualToString:@"IN_QUEUE"])
+            {
+                pendingDownloads++;
+            }
+            else if ([status isEqualToString:@"COMPLETED"] || [status isEqualToString:@"SEEDING"])
+            {
+                completedDownloads++;
+            }
+        }
          
-         if (pendingDownloads == 0)
-         {
-             putioController.transferInfo.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_NO_PENDING_TRANSFERS", nil), completedDownloads];
-         }
-         else if (pendingDownloads == 1)
-         {
-             putioController.transferInfo.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_PENDING_TRANSFERS_SINGULAR", nil), completedDownloads];
-         }
-         else
-         {
-             putioController.transferInfo.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_PENDING_TRANSFERS_PURAL", nil), pendingDownloads, completedDownloads];
-         }
-     }
-                        failure:^(NSError *error)
-     {
-         putioController.userInfo.stringValue = NSLocalizedString(@"HELPER_TRANSFERS_FAILED", nil);
-     }];
+        if (pendingDownloads == 0)
+        {
+            putioController.transferInfo.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_NO_PENDING_TRANSFERS", nil), completedDownloads];
+        }
+        else if (pendingDownloads == 1)
+        {
+            putioController.transferInfo.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_PENDING_TRANSFERS_SINGULAR", nil), completedDownloads];
+        }
+        else
+        {
+            putioController.transferInfo.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_PENDING_TRANSFERS_PURAL", nil), pendingDownloads, completedDownloads];
+        }
+    }
+    failure:^(NSError *error)
+    {
+        putioController.userInfo.stringValue = NSLocalizedString(@"HELPER_TRANSFERS_FAILED", nil);
+    }];
 }
 
 
@@ -196,7 +198,7 @@ static PutioHelper *sharedHelper = nil;
          [self updateUserInfo];
          [putioController.activityIndicator stopAnimation:nil];
      }
-                                        addFailure:^
+     addFailure:^
      {
          putioController.message.stringValue = NSLocalizedString(@"HELPER_MAGNET_ERROR", nil);
          [putioController.activityIndicator stopAnimation:nil];
@@ -234,12 +236,12 @@ static PutioHelper *sharedHelper = nil;
          [self updateUserInfo];
          [putioController.activityIndicator stopAnimation:nil];
      }
-                   addFailure:^
+     addFailure:^
      {
          putioController.message.stringValue = NSLocalizedString(@"HELPER_MAGNET_ERROR", nil);
          [putioController.activityIndicator stopAnimation:nil];
      }
-               networkFailure:^(NSError *error)
+     networkFailure:^(NSError *error)
      {
          // Put.io returns HTTP 400 if you're adding an URL that's already in the queue...
          // ... and thereby causing AFNetworking to throw a network error.
