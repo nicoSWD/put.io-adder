@@ -31,8 +31,9 @@ Please [report issues](https://github.com/nicoSWD/put.io-adder/issues) you may e
 
 **DOWNLOADS**
 - Newest
-  - [put.io adder v2.4](https://github.com/nicoSWD/put.io-adder/releases/tag/v2.4) (MD5 checksum: fb0fe1c3e2d88bf8606ddfb3c7609092)
+  - [put.io adder v2.5](https://github.com/nicoSWD/put.io-adder/releases/tag/v2.5) (MD5 checksum: 554908ea747c65d9d6a199b4197dec13)
 - Older releases
+  - [put.io adder v2.4](https://github.com/nicoSWD/put.io-adder/releases/tag/v2.4) (MD5 checksum: fb0fe1c3e2d88bf8606ddfb3c7609092)
   - [put.io adder v2.3](https://github.com/nicoSWD/put.io-adder/releases/download/v2.3/put.io-adder-v2.3.zip) (MD5 checksum: 45af40b80f3426aabda2bf54be75385b)
   - [put.io adder v2.2](https://github.com/nicoSWD/put.io-adder/releases/download/v2.2/put.io-adder-v2.2.zip) (MD5 checksum: 061f4f985fc0f9c8ddf82a22ba0e3149)
   - [put.io adder v2.1](https://github.com/nicoSWD/put.io-adder/releases/download/v2.1/put.io-adder-2.1.zip) (MD5 checksum: 0115b6a53c940ef4aad14dcc14c4c49d)
@@ -53,6 +54,13 @@ Please [report issues](https://github.com/nicoSWD/put.io-adder/issues) you may e
 ![alt tag](http://f.cl.ly/items/420N3Y1w3N0h3U27451I/Screen%20Shot%202013-07-19%20at%209.31.48%20PM.png)
 
 **CHANGELOG**
+- v2.5
+  - Ability to cancel transfers
+  - Further NotificationCenter bug fixes
+  - Fixed spelling mistake (thanks to [fbparis](https://github.com/fbparis) for reporting this)
+  - Fixed German translation
+- v2.4
+  - Fixed NC bug
 - v2.3
   - Added NotificationCenter support
 - v2.2
