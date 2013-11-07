@@ -12,16 +12,17 @@
 @implementation PutioMainController
 
 @synthesize
-message,
-activityIndicator,
-authWindow,
-userInfo,
-versionInfo,
-transferInfo,
-putiowindow,
-transfers,
-tableView,
-toggleShowTransfers;
+    message,
+    activityIndicator,
+    authWindow,
+    userInfo,
+    versionInfo,
+    transferInfo,
+    putiowindow,
+    transfers,
+    tableView,
+    toggleShowTransfers,
+    cancelTransfer;
 
 static BOOL transfersAreHidden = YES;
 
@@ -40,6 +41,7 @@ static BOOL transfersAreHidden = YES;
     self.toggleShowTransfers.title = NSLocalizedString(@"HELPER_TRANSFERS_SHOW", nil);
     self.userInfo.stringValue = NSLocalizedString(@"HELPER_FETCHING_USERINFO", nil);
     self.message.stringValue = NSLocalizedString(@"HELPER_MSG_READY", nil);
+    self.cancelTransfer.stringValue = NSLocalizedString(@"HELPER_CANCEL", nil);
     
     PutioHelper *helper = [PutioHelper sharedHelper];
     [helper authenticateUser];
@@ -180,6 +182,56 @@ static BOOL transfersAreHidden = YES;
     NSArray *newDescriptors = [_tableView sortDescriptors];
     [self.transfers sortUsingDescriptors:newDescriptors];
     [self.tableView reloadData];
+}
+
+
+- (void)tableViewSelectionDidChange:(NSNotification *)notification
+{
+    [self.cancelTransfer setHidden: (self.tableView.selectedRow > -1 ? NO : YES)];
+}
+
+
+- (IBAction)cancelTransfer:(id)sender
+{
+    if (self.tableView.selectedRow == -1)
+    {
+        return;
+    }
+    
+    PKTransfer *transfer;
+    
+    @try
+    {
+        transfer = [self.transfers objectAtIndex: [self.tableView selectedRow]];
+    }
+    @catch (NSException *exception)
+    {
+        return;
+    }
+    @finally {}
+    
+    self.message.stringValue = NSLocalizedString(@"HELPER_CANCELING_DOWNLOAD", nil);
+    [self.activityIndicator startAnimation:nil];
+    [self.cancelTransfer setEnabled:NO];
+    
+    PutioHelper *helper = [PutioHelper sharedHelper];
+    
+    [[helper putioAPI] cancelTransfer:transfer:^
+    {
+        self.message.stringValue = NSLocalizedString(@"HELPER_DOWNLOAD_CANCELED", nil);
+        [self.activityIndicator stopAnimation:nil];
+        [self.cancelTransfer setEnabled:YES];
+        [self.cancelTransfer setHidden:YES];
+        
+        [helper updateUserInfo];
+    }
+    failure:^(NSError *error)
+    {
+        self.message.stringValue = NSLocalizedString(@"HELPER_CANCEL_FAILED", nil);
+        [self.activityIndicator stopAnimation:nil];
+        [self.cancelTransfer setEnabled:YES];
+        [self.cancelTransfer setHidden:YES];
+    }];
 }
 
 

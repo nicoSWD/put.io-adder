@@ -20,6 +20,7 @@
     IBOutlet NSPanel *prefSheet;
     IBOutlet NSTableView *tableView;
     IBOutlet NSButton *toggleShowTransfers;
+    IBOutlet NSButton *cancelTransfer;
     
     PutioBrowser *authWindow;
     NSMutableArray *transfers;
@@ -31,6 +32,7 @@
 - (IBAction)closePreferences:(id)sender;
 - (IBAction)checkForUpdates:(id)sender;
 - (IBAction)toggleShowTransfers:(id)sender;
+- (IBAction)cancelTransfer:(id)sender;
 - (void)openFileOnPutIO;
 
 @property (nonatomic, retain) NSTextField *message;
@@ -41,6 +43,7 @@
 @property (assign) IBOutlet NSWindow *putiowindow;
 @property (nonatomic, retain) IBOutlet NSTableView *tableView;
 @property (nonatomic, retain) IBOutlet NSButton *toggleShowTransfers;
+@property (nonatomic, retain) IBOutlet NSButton *cancelTransfer;
 
 @property (strong) PutioBrowser *authWindow;
 @property (strong) NSMutableArray *transfers;

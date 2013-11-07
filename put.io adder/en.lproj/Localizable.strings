@@ -49,5 +49,9 @@ HELPER_STATE_QUEDED="In Queue";
 HELPER_TRANSFERS_SHOW="Show Transfers";
 HELPER_TRANSFERS_HIDE="Hide Transfers";
 
+HELPER_CANCELING_DOWNLOAD="Canceling Download...";
+HELPER_DOWNLOAD_CANCELED="Download Canceled";
+HELPER_CANCEL_FAILED="Error Canceling Download";
+
 NOTIFICATION_TITLE="Finished Download";
 NOTIFICATION_MSG="\"%@\" finished downloading";

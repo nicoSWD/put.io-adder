@@ -48,3 +48,10 @@ HELPER_STATE_QUEDED="In Warteschlange";
 
 HELPER_TRANSFERS_SHOW="Transfers Anzeigen";
 HELPER_TRANSFERS_HIDE="Transfers Verbergen";
+
+HELPER_CANCELING_DOWNLOAD="Download wird Abgebrochen...";
+HELPER_DOWNLOAD_CANCELED="Download Abgebrochen";
+HELPER_CANCEL_FAILED="Download konnte nicht abgrbrochen werden";
+
+NOTIFICATION_TITLE="Erfolgreicher Download";
+NOTIFICATION_MSG="\"%@\" Wurde Erfolgreich Heruntergeladen";

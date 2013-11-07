@@ -100,7 +100,9 @@ static PutioHelper *sharedHelper = nil;
                     newTransfer = (PKTransfer*)[putioTransfers objectAtIndex:j];
                      
                     if ((currentTransfer.id == newTransfer.id) &&
-                         (![currentTransfer.status isEqualToString:@"COMPLETED"] &&
+                         ((![currentTransfer.status isEqualToString:@"COMPLETED"] &&
+                           ![currentTransfer.status isEqualToString:@"SEEDING"])
+                          &&
                           ([newTransfer.status isEqualToString:@"COMPLETED"]
                           || [newTransfer.status isEqualToString:@"SEEDING"])))
                     {
@@ -110,10 +112,12 @@ static PutioHelper *sharedHelper = nil;
                         notification.soundName = NSUserNotificationDefaultSoundName;
                         
                         [[NSUserNotificationCenter defaultUserNotificationCenter] deliverNotification:notification];
-                         
+                        // [NSImageView alloc] ini
+                         /*
                         NSImage *badge = [[NSImage alloc] initWithSize:NSSizeFromCGSize(CGSizeMake(20, 20))];
                         badge.backgroundColor = [NSColor redColor];
-                        [NSApp setApplicationIconImage: badge];
+                        //[NSApp setApplicationIconImage: badge];
+                          */
                     }
                 }
             }

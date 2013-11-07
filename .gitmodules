@@ -7,6 +7,3 @@
 [submodule "PutioKit"]
 	path = PutioKit
 	url = git@github.com:PutioKit/PutioKit.git
-[submodule "UIView-Badge"]
-	path = UIView-Badge
-	url = git@github.com:robrasmussen/UIView-Badge.git
