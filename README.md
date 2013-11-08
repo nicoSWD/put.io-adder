@@ -56,11 +56,12 @@ Some ideas for improvement are:
 - A ["Default folder preference"](https://github.com/nicoSWD/put.io-adder/issues/3) option could be added.
 - An option to download finished transfers to the computer through the app would be nice.
 - A setting to automatically *cancel* finished transfers that are currenly seeding, in order to speed up the download process of other transfers.
-- Design improvments
+- Design improvments.
 - A way to stream finished files through the app.
 - Authentication could be improved by adding a new custom URI scheme. When authenticating, the browser should open and go to *put.io's* authentication page, and a callback to something like *putio://callback* would open the app and pass over the OAuth token. Just like [mikker's Putter app does](https://github.com/mikker/Putter.app/blob/master/Putter/BBAppDelegate.m).
 - A way to browse through existing files and folders on *put.io*.
 - More languages.
+- Settings could be moved to a new preference pane in *System Preferences*.
 - etc...
 
 
