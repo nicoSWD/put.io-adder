@@ -46,6 +46,23 @@ Please [report issues](https://github.com/nicoSWD/put.io-adder/issues) you may e
   - [put.io adder v1.1](http://cl.ly/Q4uX) (MD5 checksum: f0dad56b625b78d2ef503f3113ff4e55)
   - [put.io adder v1.0](http://cl.ly/Q4r2) (MD5 checksum: 826fb0c5280783bc2b9d08e921255b82)
 
+
+**CONTRIBUTE**
+All contributions are greatly appreciated. If you want to help, send a pull request, or open a [new issue](https://github.com/nicoSWD/put.io-adder/issues/new) with a feature request.
+Some ideas for improvement are:
+
+- Check if *put.io adder* is the default handler for magnet links and torrent files on startup. *~/Library/Preferences/com.apple.LaunchServices.plist* needs to be parsed and/or modified for that. If it's not, an alert asking to change that should be fired.
+- A ["Default folder preference"](https://github.com/nicoSWD/put.io-adder/issues/3) option could be added.
+- An option to download finished transfers to the computer through the app would be nice.
+- A setting to automatically *cancel* finished transfers that are currenly seeding, in order to speed up the download process of other transfers.
+- Design improvments
+- A way to stream finished files through the app.
+- Authentication could be improved by adding a new custom URI scheme. When authenticating, the browser should open and go to *put.io's* authentication page, and a callback to something like *putio://callback* would open the app and pass over the OAuth token. Just like [mikker's Putter app does](https://github.com/mikker/Putter.app/blob/master/Putter/BBAppDelegate.m).
+- A way to browse through existing files and folders on *put.io*.
+- More languages.
+- etc...
+
+
 **SCREENSHOTS**
 
 ![alt tag](http://f.cl.ly/items/0m3d2a1k1Y460v2y292L/Screen%20Shot%202013-10-28%20at%2022.06.57%20copy.png)
