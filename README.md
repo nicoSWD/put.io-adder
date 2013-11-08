@@ -62,6 +62,7 @@ Some ideas for improvement are:
 - A way to browse through existing files and folders on *put.io*.
 - More languages.
 - Settings could be moved to a new preference pane in *System Preferences*.
+- Besides Notification Center, a badge could be added to the app icon, indicating the number of finished downloads. Or the download progress could be shown there.
 - etc...
 
 
