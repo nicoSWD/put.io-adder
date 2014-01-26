@@ -45,6 +45,7 @@
 		03A77B3417875E4700AA44FB /* PutioMainController.m in Sources */ = {isa = PBXBuildFile; fileRef = 03A77B3317875E4700AA44FB /* PutioMainController.m */; };
 		03AE9CBE17861CBA00A6E3EF /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03AE9CBD17861CBA00A6E3EF /* WebKit.framework */; };
 		03AE9CC01786398200A6E3EF /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03AE9CBF1786398200A6E3EF /* Security.framework */; };
+		03BCC0481895A2D300DF1FA3 /* puticon.png in Resources */ = {isa = PBXBuildFile; fileRef = 03BCC0471895A2D300DF1FA3 /* puticon.png */; };
 		03DF597D17884AAB00AC96AA /* github.png in Resources */ = {isa = PBXBuildFile; fileRef = 03DF597B17884AAB00AC96AA /* github.png */; };
 		03DF597E17884AAB00AC96AA /* github@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 03DF597C17884AAB00AC96AA /* github@2x.png */; };
 		03DF598117884B1F00AC96AA /* putio-menu.png in Resources */ = {isa = PBXBuildFile; fileRef = 03DF597F17884B1F00AC96AA /* putio-menu.png */; };
@@ -128,6 +129,7 @@
 		03A77B3317875E4700AA44FB /* PutioMainController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PutioMainController.m; sourceTree = "<group>"; };
 		03AE9CBD17861CBA00A6E3EF /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 		03AE9CBF1786398200A6E3EF /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		03BCC0471895A2D300DF1FA3 /* puticon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = puticon.png; path = Resources/puticon.png; sourceTree = "<group>"; };
 		03DF597B17884AAB00AC96AA /* github.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = github.png; path = Resources/github.png; sourceTree = "<group>"; };
 		03DF597C17884AAB00AC96AA /* github@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "github@2x.png"; path = "Resources/github@2x.png"; sourceTree = "<group>"; };
 		03DF597F17884B1F00AC96AA /* putio-menu.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "putio-menu.png"; path = "Resources/putio-menu.png"; sourceTree = "<group>"; };
@@ -318,6 +320,7 @@
 				034967A8178AF68800E8BADD /* TorrentPartFile.icns */,
 				030F7D7A178649240024178D /* icon_128x128@2x.png */,
 				03DF597B17884AAB00AC96AA /* github.png */,
+				03BCC0471895A2D300DF1FA3 /* puticon.png */,
 				03DF597F17884B1F00AC96AA /* putio-menu.png */,
 				03DF598017884B1F00AC96AA /* putio-menu@2x.png */,
 				03DF597C17884AAB00AC96AA /* github@2x.png */,
@@ -397,6 +400,7 @@
 				030F7D81178649250024178D /* icon_256x256.png in Resources */,
 				030F7D83178649250024178D /* icon_512x512.png in Resources */,
 				039969961787047500B595C6 /* Browser.xib in Resources */,
+				03BCC0481895A2D300DF1FA3 /* puticon.png in Resources */,
 				03DF597D17884AAB00AC96AA /* github.png in Resources */,
 				03DF597E17884AAB00AC96AA /* github@2x.png in Resources */,
 				03DF598117884B1F00AC96AA /* putio-menu.png in Resources */,

@@ -21,6 +21,7 @@
     IBOutlet NSTableView *tableView;
     IBOutlet NSButton *toggleShowTransfers;
     IBOutlet NSButton *cancelTransfer;
+    IBOutlet NSMenu *transfersMenu;
     
     PutioBrowser *authWindow;
     NSMutableArray *transfers;
@@ -44,6 +45,8 @@
 @property (nonatomic, retain) IBOutlet NSTableView *tableView;
 @property (nonatomic, retain) IBOutlet NSButton *toggleShowTransfers;
 @property (nonatomic, retain) IBOutlet NSButton *cancelTransfer;
+@property (strong, nonatomic) IBOutlet NSMenu *transfersMenu;
+@property (strong, nonatomic) NSStatusItem *statusItem;
 
 @property (strong) PutioBrowser *authWindow;
 @property (strong) NSMutableArray *transfers;

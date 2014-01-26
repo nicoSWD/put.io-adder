@@ -133,6 +133,7 @@ static PutioHelper *sharedHelper = nil;
         int pendingDownloads = 0;
         int completedDownloads = 0;
         int totalTransfers = (int)putioTransfers.count;
+        int percentDone = 0;
         NSString *status;
          
         for (int i = 0; i < totalTransfers; i++)
@@ -142,24 +143,42 @@ static PutioHelper *sharedHelper = nil;
             if ([status isEqualToString:@"WAITING"] || [status isEqualToString:@"DOWNLOADING"] || [status isEqualToString:@"IN_QUEUE"])
             {
                 pendingDownloads++;
+                
+                percentDone += [[[putioTransfers objectAtIndex:i] percentDone] integerValue];
             }
             else if ([status isEqualToString:@"COMPLETED"] || [status isEqualToString:@"SEEDING"])
             {
                 completedDownloads++;
             }
         }
-         
+        
+        if (putioController.statusItem == nil)
+        {
+            putioController.statusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
+            
+            [putioController.statusItem setMenu:self.putioController.transfersMenu];
+            [putioController.statusItem setImage:[NSImage imageNamed:@"puticon"]];
+        }
+        
         if (pendingDownloads == 0)
         {
             putioController.transferInfo.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_NO_PENDING_TRANSFERS", nil), completedDownloads];
-        }
-        else if (pendingDownloads == 1)
-        {
-            putioController.transferInfo.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_PENDING_TRANSFERS_SINGULAR", nil), completedDownloads];
+            
+            putioController.statusItem = nil;
         }
         else
         {
-            putioController.transferInfo.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_PENDING_TRANSFERS_PURAL", nil), pendingDownloads, completedDownloads];
+            
+            [putioController.statusItem setTitle:[NSString stringWithFormat:@"%i%%", (percentDone / pendingDownloads)]];
+            
+            if (pendingDownloads == 1)
+            {
+                putioController.transferInfo.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_PENDING_TRANSFERS_SINGULAR", nil), completedDownloads];
+            }
+            else
+            {
+                putioController.transferInfo.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_PENDING_TRANSFERS_PURAL", nil), pendingDownloads, completedDownloads];
+            }
         }
     }
     failure:^(NSError *error)

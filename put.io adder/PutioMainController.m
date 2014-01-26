@@ -22,7 +22,8 @@
     transfers,
     tableView,
     toggleShowTransfers,
-    cancelTransfer;
+    cancelTransfer,
+    transfersMenu;
 
 static BOOL transfersAreHidden = YES;
 

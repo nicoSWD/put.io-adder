@@ -317,7 +317,7 @@
 								<int key="NSCellFlags">68157504</int>
 								<int key="NSCellFlags2">4195328</int>
 								<string key="NSContents"/>
-								<object class="NSFont" key="NSSupport" id="293254509">
+								<object class="NSFont" key="NSSupport" id="137510533">
 									<string key="NSName">.LucidaGrandeUI</string>
 									<double key="NSSize">12</double>
 									<int key="NSfFlags">787</int>
@@ -386,7 +386,7 @@
 								<int key="NSCellFlags">68157504</int>
 								<int key="NSCellFlags2">272630784</int>
 								<string key="NSContents"/>
-								<reference key="NSSupport" ref="293254509"/>
+								<reference key="NSSupport" ref="137510533"/>
 								<string key="NSCellIdentifier">_NS:1535</string>
 								<reference key="NSControlView" ref="383158630"/>
 								<reference key="NSBackgroundColor" ref="902470006"/>
@@ -849,6 +849,10 @@
 			<object class="NSCustomObject" id="976324537">
 				<string key="NSClassName">PutioAppDelegate</string>
 			</object>
+			<object class="NSMenu" id="649750038">
+				<string key="NSTitle"/>
+				<array class="NSMutableArray" key="NSMenuItems"/>
+			</object>
 		</array>
 		<object class="IBObjectContainer" key="IBDocument.Objects">
 			<array class="NSMutableArray" key="connectionRecords">
@@ -1043,6 +1047,14 @@
 						<reference key="destination" ref="991148080"/>
 					</object>
 					<int key="connectionID">1707</int>
+				</object>
+				<object class="IBConnectionRecord">
+					<object class="IBOutletConnection" key="connection">
+						<string key="label">transfersMenu</string>
+						<reference key="source" ref="765545372"/>
+						<reference key="destination" ref="649750038"/>
+					</object>
+					<int key="connectionID">1723</int>
 				</object>
 				<object class="IBConnectionRecord">
 					<object class="IBOutletConnection" key="connection">
@@ -2492,6 +2504,12 @@
 						<reference key="object" ref="746177414"/>
 						<reference key="parent" ref="439893737"/>
 					</object>
+					<object class="IBObjectRecord">
+						<int key="objectID">1719</int>
+						<reference key="object" ref="649750038"/>
+						<array class="NSMutableArray" key="children"/>
+						<reference key="parent" ref="0"/>
+					</object>
 				</array>
 			</object>
 			<dictionary class="NSMutableDictionary" key="flattenedProperties">
@@ -2624,6 +2642,7 @@
 				<string key="1713.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
 				<string key="1717.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
 				<string key="1718.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
+				<string key="1719.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
 				<string key="19.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
 				<string key="217.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
 				<string key="236.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
@@ -2687,7 +2706,7 @@
 			<nil key="activeLocalization"/>
 			<dictionary class="NSMutableDictionary" key="localizations"/>
 			<nil key="sourceID"/>
-			<int key="maxID">1718</int>
+			<int key="maxID">1729</int>
 		</object>
 		<object class="IBClassDescriber" key="IBDocument.Classes"/>
 		<int key="IBDocument.localizationMode">0</int>
