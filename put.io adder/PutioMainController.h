@@ -10,7 +10,7 @@
 #import "PutioBrowser.h"
 #import "V2PutIOAPIClient.h"
 
-@interface PutioMainController : NSWindowController<NSTableViewDataSource, NSTableViewDelegate>
+@interface PutioMainController : NSWindowController<NSTableViewDataSource, NSTableViewDelegate, NSUserNotificationCenterDelegate>
 {
     IBOutlet NSTextField *message;
     IBOutlet NSProgressIndicator *activityIndicator;

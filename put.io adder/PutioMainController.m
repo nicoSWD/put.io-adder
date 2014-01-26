@@ -235,6 +235,13 @@ static BOOL transfersAreHidden = YES;
 }
 
 
+- (void)userNotificationCenter:(NSUserNotificationCenter *)center didActivateNotification:(NSUserNotification *)notification
+{
+    NSString *url = [NSString stringWithFormat:@"https://put.io/file/%@", [notification.userInfo valueForKey:@"fileID"]];
+    [[NSWorkspace sharedWorkspace] openURL: [NSURL URLWithString: url]];
+}
+
+
 - (void)openFileOnPutIO
 {
     // Table header was clicked

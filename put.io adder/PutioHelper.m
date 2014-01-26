@@ -110,8 +110,12 @@ static PutioHelper *sharedHelper = nil;
                         notification.title = NSLocalizedString(@"NOTIFICATION_TITLE", nil);
                         notification.informativeText = [NSString stringWithFormat:NSLocalizedString(@"NOTIFICATION_MSG", nil), newTransfer.name];
                         notification.soundName = NSUserNotificationDefaultSoundName;
+                        notification.userInfo = @{@"fileID": newTransfer.fileID};
                         
-                        [[NSUserNotificationCenter defaultUserNotificationCenter] deliverNotification:notification];
+                        NSUserNotificationCenter *notificationCenter = [NSUserNotificationCenter defaultUserNotificationCenter];
+                        [notificationCenter setDelegate:self.putioController];
+                        [notificationCenter deliverNotification:notification];
+                        
                         // [NSImageView alloc] ini
                          /*
                         NSImage *badge = [[NSImage alloc] initWithSize:NSSizeFromCGSize(CGSizeMake(20, 20))];

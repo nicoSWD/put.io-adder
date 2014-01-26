@@ -317,10 +317,10 @@
 								<int key="NSCellFlags">68157504</int>
 								<int key="NSCellFlags2">4195328</int>
 								<string key="NSContents"/>
-								<object class="NSFont" key="NSSupport" id="28">
+								<object class="NSFont" key="NSSupport" id="293254509">
 									<string key="NSName">.LucidaGrandeUI</string>
 									<double key="NSSize">12</double>
-									<int key="NSfFlags">4883</int>
+									<int key="NSfFlags">787</int>
 								</object>
 								<string key="NSCellIdentifier">_NS:1535</string>
 								<reference key="NSControlView" ref="897315859"/>
@@ -386,7 +386,7 @@
 								<int key="NSCellFlags">68157504</int>
 								<int key="NSCellFlags2">272630784</int>
 								<string key="NSContents"/>
-								<reference key="NSSupport" ref="28"/>
+								<reference key="NSSupport" ref="293254509"/>
 								<string key="NSCellIdentifier">_NS:1535</string>
 								<reference key="NSControlView" ref="383158630"/>
 								<reference key="NSBackgroundColor" ref="902470006"/>
@@ -439,7 +439,7 @@
 											<int key="NSvFlags">256</int>
 											<string key="NSFrameSize">{368, 19}</string>
 											<reference key="NSSuperview" ref="472819522"/>
-											<reference key="NSNextKeyView" ref="458402787"/>
+											<reference key="NSNextKeyView" ref="989422997"/>
 											<string key="NSReuseIdentifierKey">_NS:13</string>
 											<bool key="NSEnabled">YES</bool>
 											<bool key="NSAllowsLogicalLayoutDirection">NO</bool>
@@ -619,7 +619,7 @@
 							</array>
 							<string key="NSFrame">{{15, 40}, {370, 18}}</string>
 							<reference key="NSSuperview" ref="439893737"/>
-							<reference key="NSNextKeyView" ref="989422997"/>
+							<reference key="NSNextKeyView" ref="472819522"/>
 							<string key="NSReuseIdentifierKey">_NS:9</string>
 							<int key="NSsFlags">133746</int>
 							<reference key="NSVScroller" ref="251563782"/>
