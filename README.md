@@ -31,8 +31,9 @@ Please [report issues](https://github.com/nicoSWD/put.io-adder/issues) you may e
 
 **DOWNLOADS**
 - Newest
-  - [put.io adder v2.6](https://github.com/nicoSWD/put.io-adder/releases/tag/v2.6) (MD5 checksum: aec18168ac362d6ab2d6084d6427e069)
+  - [put.io adder v2.6.1](https://github.com/nicoSWD/put.io-adder/releases/tag/v2.6.1) (MD5 checksum: ae3661cfb1b9aacd33f0650e21880675)
 - Older releases
+  - [put.io adder v2.6](https://github.com/nicoSWD/put.io-adder/releases/tag/v2.6) (MD5 checksum: aec18168ac362d6ab2d6084d6427e069)
   - [put.io adder v2.5](https://github.com/nicoSWD/put.io-adder/releases/tag/v2.5) (MD5 checksum: 554908ea747c65d9d6a199b4197dec13)
   - [put.io adder v2.4](https://github.com/nicoSWD/put.io-adder/releases/tag/v2.4) (MD5 checksum: fb0fe1c3e2d88bf8606ddfb3c7609092)
   - [put.io adder v2.3](https://github.com/nicoSWD/put.io-adder/releases/download/v2.3/put.io-adder-v2.3.zip) (MD5 checksum: 45af40b80f3426aabda2bf54be75385b)
@@ -76,6 +77,8 @@ Some ideas for improvement are:
 ![alt tag](http://f.cl.ly/items/420N3Y1w3N0h3U27451I/Screen%20Shot%202013-07-19%20at%209.31.48%20PM.png)
 
 **CHANGELOG**
+- v2.6.1
+  - Fixed torrent upload issue
 - v2.6
   - Clicking on a notification will open the file on [put.io](http://put.io)
   - Download progress shows in the status bar
