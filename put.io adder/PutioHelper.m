@@ -12,6 +12,7 @@
 #import "V2PutIOAPIClient.h"
 #import "NSString+DisplayName.h"
 #import "AFPropertyListRequestOperation.h"
+#import <AppKit/AppKit.h>
 
 @implementation PutioHelper
 
@@ -46,11 +47,8 @@ static PutioHelper *sharedHelper = nil;
         self.putioController.userInfo.stringValue = self.putioController.message.stringValue;
         self.putioController.transferInfo.stringValue = @"Please log into put.io";
         
-        self.putioController.authWindow = [[PutioBrowser alloc] initWithWindowNibName:@"Browser"];
-        self.putioController.authWindow.window.level = kCGPopUpMenuWindowLevel;
-        [self.putioController.authWindow.window makeMainWindow];
-        [self.putioController.toggleShowTransfers setEnabled:NO];
-        [NSApp activateIgnoringOtherApps:YES];
+        NSString *url = @"https://api.put.io/v2/oauth2/authenticate?client_id=711&response_type=token&redirect_uri=putio://callback";
+        [[NSWorkspace sharedWorkspace] openURL: [NSURL URLWithString: url]];
     }
     else
     {
@@ -111,17 +109,57 @@ static PutioHelper *sharedHelper = nil;
                         notification.informativeText = [NSString stringWithFormat:NSLocalizedString(@"NOTIFICATION_MSG", nil), newTransfer.name];
                         notification.soundName = NSUserNotificationDefaultSoundName;
                         notification.userInfo = @{@"fileID": newTransfer.fileID};
-                        
+
                         NSUserNotificationCenter *notificationCenter = [NSUserNotificationCenter defaultUserNotificationCenter];
                         [notificationCenter setDelegate:self.putioController];
-                        [notificationCenter deliverNotification:notification];
-                        
-                        // [NSImageView alloc] ini
-                         /*
-                        NSImage *badge = [[NSImage alloc] initWithSize:NSSizeFromCGSize(CGSizeMake(20, 20))];
-                        badge.backgroundColor = [NSColor redColor];
-                        //[NSApp setApplicationIconImage: badge];
-                          */
+
+                        // NS_AVAILABLE(10_9, NA)
+                        if ([notification respondsToSelector:@selector(setContentImage:)])
+                        {
+                            // PutioKit failed me at getting additional file info.
+                            // Maybe I failed
+                            // Using this until I know how to fix it.
+                            NSString *baseurl = @"https://api.put.io/";
+                            NSString *path = [NSString stringWithFormat:@"/v2/files/%@", newTransfer.fileID];
+                            
+                            AFHTTPClient *client = [[AFHTTPClient alloc] initWithBaseURL:[NSURL URLWithString:baseurl]];
+                            [client registerHTTPOperationClass:[AFJSONRequestOperation class]];
+                            [client setDefaultHeader:@"Accept" value:@"application/json"];
+                            [client setParameterEncoding:AFJSONParameterEncoding];
+                            
+                            [client
+                                getPath:path
+                                parameters:@{@"oauth_token": sharedHelper.putioAPI.apiToken}
+                                success: ^(AFHTTPRequestOperation *operation, id JSON)
+                            {
+                                NSDictionary *file = [JSON valueForKey:@"file"];
+                                NSString *contentImage;
+
+                                if (file)
+                                {
+                                    if ([file valueForKey:@"screenshot"] != nil)
+                                    {
+                                        contentImage = [file valueForKey:@"screenshot"];
+                                    }
+                                    else
+                                    {
+                                        contentImage = [file valueForKey:@"icon"];
+                                    }
+                                    
+                                    notification.contentImage = [[NSImage alloc] initWithContentsOfURL:[NSURL URLWithString:contentImage]];
+                                    [notificationCenter deliverNotification:notification];
+                                }
+                                
+                            }
+                            failure:^(AFHTTPRequestOperation *operation, NSError *error)
+                            {
+                                // NSLog("Failed to fetch screenshot/icon");
+                            }];
+                        }
+                        else
+                        {
+                            [notificationCenter deliverNotification:notification];
+                        }
                     }
                 }
             }
@@ -143,7 +181,6 @@ static PutioHelper *sharedHelper = nil;
             if ([status isEqualToString:@"WAITING"] || [status isEqualToString:@"DOWNLOADING"] || [status isEqualToString:@"IN_QUEUE"])
             {
                 pendingDownloads++;
-                
                 percentDone += [[[putioTransfers objectAtIndex:i] percentDone] integerValue];
             }
             else if ([status isEqualToString:@"COMPLETED"] || [status isEqualToString:@"SEEDING"])
@@ -152,11 +189,10 @@ static PutioHelper *sharedHelper = nil;
             }
         }
         
-        if (putioController.statusItem == nil)
+        if (putioController.statusItem == nil && pendingDownloads > 0)
         {
             putioController.statusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
-            
-            [putioController.statusItem setMenu:self.putioController.transfersMenu];
+            [putioController.statusItem setMenu:[[NSMenu alloc] init]];
             [putioController.statusItem setImage:[NSImage imageNamed:@"puticon"]];
         }
         
@@ -164,11 +200,11 @@ static PutioHelper *sharedHelper = nil;
         {
             putioController.transferInfo.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_NO_PENDING_TRANSFERS", nil), completedDownloads];
             
+            [[NSStatusBar systemStatusBar] removeStatusItem: putioController.statusItem];
             putioController.statusItem = nil;
         }
         else
         {
-            
             [putioController.statusItem setTitle:[NSString stringWithFormat:@"%i%%", (percentDone / pendingDownloads)]];
             
             if (pendingDownloads == 1)
@@ -188,14 +224,28 @@ static PutioHelper *sharedHelper = nil;
 }
 
 
-- (void)addMagnet:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)replyEvent
+- (void)handleURLEvent:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)replyEvent
+{
+    NSString *url = [[event paramDescriptorForKeyword:keyDirectObject] stringValue];
+    
+    if ([url hasPrefix:@"magnet:"])
+    {
+        [self addMagnet:url];
+    }
+    else if ([url hasPrefix:@"putio:"])
+    {
+        [self saveAccessToken:url];
+    }
+}
+
+
+- (void)addMagnet:(NSString *)magnetURL
 {
     [closeTimer invalidate];
     
     NSError *error = nil;
-    NSString *magnetURL = [[event paramDescriptorForKeyword:keyDirectObject] stringValue];
-    NSRegularExpression* regex = [NSRegularExpression regularExpressionWithPattern:@"dn=([^&]{5,})" options:0 error:&error];
-    NSArray* matches = [regex matchesInString:magnetURL options:0 range:NSMakeRange(0, [magnetURL length])];
+    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"dn=([^&]{5,})" options:0 error:&error];
+    NSArray *matches = [regex matchesInString:magnetURL options:0 range:NSMakeRange(0, [magnetURL length])];
     NSString *displayName;
     
     if ([matches count] > 0)
@@ -322,6 +372,41 @@ static PutioHelper *sharedHelper = nil;
      }];
     
     [operation start];
+}
+
+
+- (void)saveAccessToken:(NSString *)url
+{
+    NSError *error = nil;
+    NSString *pattern = @"^putio://callback#access_token=(.*)";
+    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:&error];
+    NSArray *matches = [regex matchesInString:url options:0 range:NSMakeRange(0, [url length])];
+    
+    PutioHelper *helper = [PutioHelper sharedHelper];
+    PutioMainController *controller = self.putioController;
+
+    if ([matches count] > 0)
+    {
+        NSString *token = [url substringWithRange:[[matches objectAtIndex:0] rangeAtIndex:1]];
+        
+        if ([SSKeychain setPassword:token forService:@"put.io adder" account:@"711"])
+        {
+            controller.message.stringValue = @"Authenticated and ready to go!";
+            helper.putioAPI.apiToken = token;
+            [helper updateUserInfo];
+            
+            [controller.toggleShowTransfers setEnabled:YES];
+            [controller.window orderFront:self];
+        }
+        else
+        {
+            controller.message.stringValue = @"Error saving token to KeyChain!";
+        }
+    }
+    else
+    {
+        controller.userInfo.stringValue = @"ERROR: Failed to get access token";
+    }
 }
 
 

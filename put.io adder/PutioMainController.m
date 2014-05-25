@@ -14,7 +14,6 @@
 @synthesize
     message,
     activityIndicator,
-    authWindow,
     userInfo,
     versionInfo,
     transferInfo,
@@ -22,8 +21,7 @@
     transfers,
     tableView,
     toggleShowTransfers,
-    cancelTransfer,
-    transfersMenu;
+    cancelTransfer;
 
 static BOOL transfersAreHidden = YES;
 
@@ -54,7 +52,7 @@ static BOOL transfersAreHidden = YES;
         [helper checkForUpdates];
     }
     
-    [[NSAppleEventManager sharedAppleEventManager] setEventHandler:helper andSelector:@selector(addMagnet:withReplyEvent:) forEventClass:kInternetEventClass andEventID:kAEGetURL];
+    [[NSAppleEventManager sharedAppleEventManager] setEventHandler:helper andSelector:@selector(handleURLEvent:withReplyEvent:) forEventClass:kInternetEventClass andEventID:kAEGetURL];
     
     NSSortDescriptor *sortDescriptor = [[NSSortDescriptor alloc] initWithKey:@"status" ascending:YES];
     [self.window setContentBorderThickness:24.0 forEdge:NSMinYEdge];
@@ -64,13 +62,6 @@ static BOOL transfersAreHidden = YES;
     
     [[[self.tableView.tableColumns objectAtIndex:0] headerCell] setTitle: NSLocalizedString(@"HELPER_TABLEHEADER_NAME", nil)];
     [[[self.tableView.tableColumns objectAtIndex:1] headerCell] setTitle: NSLocalizedString(@"HELPER_TABLEHEADER_STATUS", nil)];
-    
-    /*
-     if ([defaults boolForKey:@"showtransfers"])
-     {
-     
-     }
-     */
 }
 
 
@@ -120,11 +111,6 @@ static BOOL transfersAreHidden = YES;
         self.toggleShowTransfers.title = NSLocalizedString(@"HELPER_TRANSFERS_HIDE", nil);
     }
     
-    /*
-     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-     [defaults setBool:transfersAreHidden forKey:@"showtransfers"];
-     [defaults synchronize];
-     */
     transfersAreHidden = !transfersAreHidden;
     [self.putiowindow setFrame:frame display:YES animate:YES];
 }

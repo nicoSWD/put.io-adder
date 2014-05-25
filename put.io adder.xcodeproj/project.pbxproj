@@ -14,7 +14,6 @@
 		030F7D82178649250024178D /* icon_256x256@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7C178649240024178D /* icon_256x256@2x.png */; };
 		030F7D83178649250024178D /* icon_512x512.png in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7D178649240024178D /* icon_512x512.png */; };
 		030F7D84178649250024178D /* icon_512x512@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 030F7D7E178649240024178D /* icon_512x512@2x.png */; };
-		031D406017861679006C4EEF /* PutioBrowser.m in Sources */ = {isa = PBXBuildFile; fileRef = 031D405F17861679006C4EEF /* PutioBrowser.m */; };
 		031F894A178A3426006EAB13 /* NSString+DisplayName.m in Sources */ = {isa = PBXBuildFile; fileRef = 031F892D178A3426006EAB13 /* NSString+DisplayName.m */; };
 		031F894B178A3426006EAB13 /* PKAccount.m in Sources */ = {isa = PBXBuildFile; fileRef = 031F8930178A3426006EAB13 /* PKAccount.m */; };
 		031F894C178A3426006EAB13 /* PKAccountSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 031F8932178A3426006EAB13 /* PKAccountSettings.m */; };
@@ -40,7 +39,6 @@
 		03496866178B13F900E8BADD /* AFXMLRequestOperation.m in Sources */ = {isa = PBXBuildFile; fileRef = 0349685C178B13F900E8BADD /* AFXMLRequestOperation.m */; };
 		03496867178B13F900E8BADD /* UIImageView+AFNetworking.m in Sources */ = {isa = PBXBuildFile; fileRef = 0349685E178B13F900E8BADD /* UIImageView+AFNetworking.m */; };
 		03874C0B1795DAAC006E9D43 /* PutioPreferences.m in Sources */ = {isa = PBXBuildFile; fileRef = 03874C0A1795DAAC006E9D43 /* PutioPreferences.m */; };
-		039969961787047500B595C6 /* Browser.xib in Resources */ = {isa = PBXBuildFile; fileRef = 039969951787047500B595C6 /* Browser.xib */; };
 		03A115F317961C8C00A5EBCF /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 03A115F517961C8C00A5EBCF /* Localizable.strings */; };
 		03A77B3417875E4700AA44FB /* PutioMainController.m in Sources */ = {isa = PBXBuildFile; fileRef = 03A77B3317875E4700AA44FB /* PutioMainController.m */; };
 		03AE9CBE17861CBA00A6E3EF /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03AE9CBD17861CBA00A6E3EF /* WebKit.framework */; };
@@ -67,8 +65,6 @@
 		030F7D7C178649240024178D /* icon_256x256@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "icon_256x256@2x.png"; path = "Resources/icon_256x256@2x.png"; sourceTree = "<group>"; };
 		030F7D7D178649240024178D /* icon_512x512.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = icon_512x512.png; path = Resources/icon_512x512.png; sourceTree = "<group>"; };
 		030F7D7E178649240024178D /* icon_512x512@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "icon_512x512@2x.png"; path = "Resources/icon_512x512@2x.png"; sourceTree = "<group>"; };
-		031D405E17861678006C4EEF /* PutioBrowser.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PutioBrowser.h; sourceTree = "<group>"; };
-		031D405F17861679006C4EEF /* PutioBrowser.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PutioBrowser.m; sourceTree = "<group>"; };
 		031F892C178A3426006EAB13 /* NSString+DisplayName.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "NSString+DisplayName.h"; sourceTree = "<group>"; };
 		031F892D178A3426006EAB13 /* NSString+DisplayName.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "NSString+DisplayName.m"; sourceTree = "<group>"; };
 		031F892F178A3426006EAB13 /* PKAccount.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PKAccount.h; sourceTree = "<group>"; };
@@ -123,7 +119,6 @@
 		0349685E178B13F900E8BADD /* UIImageView+AFNetworking.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "UIImageView+AFNetworking.m"; sourceTree = "<group>"; };
 		03874C091795DAAC006E9D43 /* PutioPreferences.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PutioPreferences.h; sourceTree = "<group>"; };
 		03874C0A1795DAAC006E9D43 /* PutioPreferences.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PutioPreferences.m; sourceTree = "<group>"; };
-		039969951787047500B595C6 /* Browser.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = Browser.xib; sourceTree = "<group>"; };
 		03A115F417961C8C00A5EBCF /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		03A77B3217875E4700AA44FB /* PutioMainController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PutioMainController.h; sourceTree = "<group>"; };
 		03A77B3317875E4700AA44FB /* PutioMainController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PutioMainController.m; sourceTree = "<group>"; };
@@ -302,12 +297,9 @@
 				03A77B3317875E4700AA44FB /* PutioMainController.m */,
 				033FBB12179177A20007AC9E /* PutioHelper.h */,
 				033FBB13179177A20007AC9E /* PutioHelper.m */,
-				031D405E17861678006C4EEF /* PutioBrowser.h */,
-				031D405F17861679006C4EEF /* PutioBrowser.m */,
 				03874C091795DAAC006E9D43 /* PutioPreferences.h */,
 				03874C0A1795DAAC006E9D43 /* PutioPreferences.m */,
 				03F630DC16D6B5D400D33848 /* MainMenu.xib */,
-				039969951787047500B595C6 /* Browser.xib */,
 			);
 			path = "put.io adder";
 			sourceTree = "<group>";
@@ -367,6 +359,11 @@
 				CLASSPREFIX = Putio;
 				LastUpgradeCheck = 0500;
 				ORGANIZATIONNAME = "Nicolas Oelgart";
+				TargetAttributes = {
+					03F630C316D6B5D400D33848 = {
+						DevelopmentTeam = 8JR6HMQNDE;
+					};
+				};
 			};
 			buildConfigurationList = 03F630BF16D6B5D300D33848 /* Build configuration list for PBXProject "put.io adder" */;
 			compatibilityVersion = "Xcode 3.2";
@@ -399,7 +396,6 @@
 				03F630DE16D6B5D400D33848 /* MainMenu.xib in Resources */,
 				030F7D81178649250024178D /* icon_256x256.png in Resources */,
 				030F7D83178649250024178D /* icon_512x512.png in Resources */,
-				039969961787047500B595C6 /* Browser.xib in Resources */,
 				03BCC0481895A2D300DF1FA3 /* puticon.png in Resources */,
 				03DF597D17884AAB00AC96AA /* github.png in Resources */,
 				03DF597E17884AAB00AC96AA /* github@2x.png in Resources */,
@@ -422,7 +418,6 @@
 				03F630D416D6B5D400D33848 /* main.m in Sources */,
 				03F630DB16D6B5D400D33848 /* PutioAppDelegate.m in Sources */,
 				030F7D0E178646910024178D /* SSKeychain.m in Sources */,
-				031D406017861679006C4EEF /* PutioBrowser.m in Sources */,
 				03A77B3417875E4700AA44FB /* PutioMainController.m in Sources */,
 				031F894A178A3426006EAB13 /* NSString+DisplayName.m in Sources */,
 				031F894B178A3426006EAB13 /* PKAccount.m in Sources */,
