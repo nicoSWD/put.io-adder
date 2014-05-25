@@ -22,7 +22,7 @@ Follow me on Twitter: [@nicoSWD](https://twitter.com/nicoSWD)!
 - The app requires KeyChain Access to store put.io's OAuth Token. Denying access might prevent the app from working.
 - To disable NotificationCenter, go to System Preferences -> Notifications -> Scroll to Put.IO Adder, and make your changes.
 
-*IMPORTANT:* I added [AFNetworking](https://github.com/AFNetworking/AFNetworking), [PutioKit](https://github.com/PutioKit/PutioKit), and [SSKeyChain](https://github.com/samsoffes/sskeychain) as submodules. 
+*IMPORTANT:* I added [AFNetworking](https://github.com/AFNetworking/AFNetworking), [PutioKit](https://github.com/PutioKit/PutioKit), and [SSKeyChain](https://github.com/samsoffes/sskeychain) as submodules.
 So if you want to clone the entire repo, please use:
 
 `$ git clone --recursive git@github.com:nicoSWD/put.io-adder.git`
@@ -31,8 +31,9 @@ Please [report issues](https://github.com/nicoSWD/put.io-adder/issues) you may e
 
 **DOWNLOADS**
 - Newest
-  - [put.io adder v2.6.1](https://github.com/nicoSWD/put.io-adder/releases/tag/v2.6.1) (MD5 checksum: ae3661cfb1b9aacd33f0650e21880675)
+  - [put.io adder v2.7](https://github.com/nicoSWD/put.io-adder/releases/tag/v2.7) (MD5 checksum: 317b8919dd3c1f7c94febd7a9148486d)
 - Older releases
+  - [put.io adder v2.6.1](https://github.com/nicoSWD/put.io-adder/releases/tag/v2.6.1) (MD5 checksum: ae3661cfb1b9aacd33f0650e21880675)
   - [put.io adder v2.6](https://github.com/nicoSWD/put.io-adder/releases/tag/v2.6) (MD5 checksum: aec18168ac362d6ab2d6084d6427e069)
   - [put.io adder v2.5](https://github.com/nicoSWD/put.io-adder/releases/tag/v2.5) (MD5 checksum: 554908ea747c65d9d6a199b4197dec13)
   - [put.io adder v2.4](https://github.com/nicoSWD/put.io-adder/releases/tag/v2.4) (MD5 checksum: fb0fe1c3e2d88bf8606ddfb3c7609092)
@@ -57,10 +58,10 @@ Some ideas for improvement are:
 - Check if *put.io adder* is the default handler for magnet links and torrent files on startup. *~/Library/Preferences/com.apple.LaunchServices.plist* needs to be parsed and/or modified for that. If it's not, an alert asking to change that should be fired.
 - A ["Default folder preference"](https://github.com/nicoSWD/put.io-adder/issues/3) option could be added.
 - An option to download finished transfers to the computer through the app would be nice.
-- A setting to automatically *cancel* finished transfers that are currenly seeding, in order to speed up the download process of other transfers.
-- Design improvments.
+- A setting to automatically *cancel* finished transfers that are currently seeding, in order to speed up the download process of other transfers.
+- Design improvements.
 - A way to stream finished files through the app.
-- Authentication could be improved by adding a new custom URI scheme. When authenticating, the browser should open and go to *put.io's* authentication page, and a callback to something like *putio://callback* would open the app and pass over the OAuth token. Just like [mikker's Putter app does](https://github.com/mikker/Putter.app/blob/master/Putter/BBAppDelegate.m).
+- ~~Authentication could be improved by adding a new custom URI scheme. When authenticating, the browser should open and go to *put.io's* authentication page, and a callback to something like *putio://callback* would open the app and pass over the OAuth token. Just like [mikker's Putter app does](https://github.com/mikker/Putter.app/blob/master/Putter/BBAppDelegate.m).~~ (Added in v2.7)
 - A way to browse through existing files and folders on *put.io*.
 - More languages.
 - Settings could be moved to a new preference pane in *System Preferences*.
@@ -77,6 +78,12 @@ Some ideas for improvement are:
 ![alt tag](http://f.cl.ly/items/420N3Y1w3N0h3U27451I/Screen%20Shot%202013-07-19%20at%209.31.48%20PM.png)
 
 **CHANGELOG**
+New in this version:
+
+- v2.7
+  - Authentication callback uses a custom scheme, making the app independent of my own server now.
+  - A screenshot (if available) will be displayed in NSUserNotification.
+  - Cleanup
 - v2.6.1
   - Fixed torrent upload issue
 - v2.6
