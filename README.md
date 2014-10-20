@@ -81,6 +81,8 @@ Some ideas for improvement are:
 **CHANGELOG**
 New in this version:
 
+- 2.8
+  - Prevents the app from crashing when a transfer completes (#10)
 - v2.7
   - Authentication callback uses a custom scheme, making the app independent of my own server now.
   - A screenshot (if available) will be displayed in NSUserNotification.
