@@ -20,6 +20,7 @@
     IBOutlet NSTableView *tableView;
     IBOutlet NSButton *toggleShowTransfers;
     IBOutlet NSButton *cancelTransfer;
+    IBOutlet NSStatusItem *statusItem;
     
     NSMutableArray *transfers;
 }

@@ -146,8 +146,8 @@ static PutioHelper *sharedHelper = nil;
                                         contentImage = [file valueForKey:@"icon"];
                                     }
                                     
-                                    notification.contentImage = [[NSImage alloc] initWithContentsOfURL:[NSURL URLWithString:contentImage]];
-                                    [notificationCenter deliverNotification:notification];
+                                  notification.contentImage = [[NSImage alloc] initWithContentsOfURL:[NSURL URLWithString:contentImage]];
+                                  [notificationCenter deliverNotification:notification];
                                 }
                                 
                             }
