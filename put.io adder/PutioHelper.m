@@ -134,7 +134,6 @@ static PutioHelper *sharedHelper = nil;
                             {
                                 NSDictionary *file = [JSON valueForKey:@"file"];
                                 NSString *contentImage;
-
                                 if (file)
                                 {
                                     if ([file valueForKey:@"screenshot"] != nil)
@@ -146,9 +145,19 @@ static PutioHelper *sharedHelper = nil;
                                         contentImage = [file valueForKey:@"icon"];
                                     }
                                     
-                                  notification.contentImage = [[NSImage alloc] initWithContentsOfURL:[NSURL URLWithString:contentImage]];
-                                  [notificationCenter deliverNotification:notification];
+                                    @try
+                                    {
+                                        notification.contentImage = [[NSImage alloc] initWithContentsOfURL:[NSURL URLWithString:contentImage]];
+                                    }
+                                    @catch (NSException *e)
+                                    {
+                                    }
+                                    @finally
+                                    {
+                                        [notificationCenter deliverNotification:notification];
+                                    }
                                 }
+
                                 
                             }
                             failure:^(AFHTTPRequestOperation *operation, NSError *error)

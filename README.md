@@ -31,8 +31,9 @@ Please [report issues](https://github.com/nicoSWD/put.io-adder/issues) you may e
 
 **DOWNLOADS**
 - Newest
-  - [put.io adder v2.8](https://github.com/nicoSWD/put.io-adder/releases/tag/v2.8) (MD5 checksum: 3651653276824406b23d6446dd64d265)
+  - [put.io adder v2.9](https://github.com/nicoSWD/put.io-adder/releases/tag/v2.9) (MD5 checksum: a0f545d2c4b354af8bbaaa8d245c340f)
 - Older releases
+  - [put.io adder v2.8](https://github.com/nicoSWD/put.io-adder/releases/tag/v2.8) (MD5 checksum: 3651653276824406b23d6446dd64d265)
   - [put.io adder v2.7](https://github.com/nicoSWD/put.io-adder/releases/tag/v2.7) (MD5 checksum: 317b8919dd3c1f7c94febd7a9148486d)
   - [put.io adder v2.6.1](https://github.com/nicoSWD/put.io-adder/releases/tag/v2.6.1) (MD5 checksum: ae3661cfb1b9aacd33f0650e21880675)
   - [put.io adder v2.6](https://github.com/nicoSWD/put.io-adder/releases/tag/v2.6) (MD5 checksum: aec18168ac362d6ab2d6084d6427e069)
@@ -81,6 +82,9 @@ Some ideas for improvement are:
 **CHANGELOG**
 New in this version:
 
+- 2.9
+  - Fixes ([#11](https://github.com/nicoSWD/put.io-adder/issues/11)) (All torrents failing because of duplicate)
+  - Fixes ([#10](https://github.com/nicoSWD/put.io-adder/issues/10)) (Persistent App Crashing after Download Completes)
 - 2.8
   - Prevents the app from crashing when a transfer completes ([#10](https://github.com/nicoSWD/put.io-adder/issues/10))
 - v2.7
