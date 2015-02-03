@@ -14,6 +14,10 @@
 		<string>github.com:nicoSWD/put.io-adder.git</string>
 		<key>C16576B571172538D95183F9515DC5DB064EAF7F</key>
 		<string>https://github.com/samsoffes/sskeychain.git</string>
+		<key>CE7EA561763805DACBC7B43AEC9128B8D4A24DF1</key>
+		<string>github.com:PutioKit/PutioKit.git</string>
+		<key>DD20A1A48C66B5213E0FEBB87A95EF51D6C6F3E8</key>
+		<string>https://github.com/AFNetworking/AFNetworking.git</string>
 	</dict>
 	<key>IDESourceControlProjectPath</key>
 	<string>put.io adder.xcodeproj</string>
@@ -22,7 +26,11 @@
 		<key>577FB7CA1C505AE30B8C5B3FBAB741240BD8F4B2</key>
 		<string>../..</string>
 		<key>C16576B571172538D95183F9515DC5DB064EAF7F</key>
-		<string>../..sskeychain/</string>
+		<string>../..sskeychain</string>
+		<key>CE7EA561763805DACBC7B43AEC9128B8D4A24DF1</key>
+		<string>../../PutioKit/</string>
+		<key>DD20A1A48C66B5213E0FEBB87A95EF51D6C6F3E8</key>
+		<string>../../AFNetworking/</string>
 	</dict>
 	<key>IDESourceControlProjectURL</key>
 	<string>github.com:nicoSWD/put.io-adder.git</string>
@@ -32,6 +40,14 @@
 	<string>577FB7CA1C505AE30B8C5B3FBAB741240BD8F4B2</string>
 	<key>IDESourceControlProjectWCConfigurations</key>
 	<array>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>DD20A1A48C66B5213E0FEBB87A95EF51D6C6F3E8</string>
+			<key>IDESourceControlWCCName</key>
+			<string>AFNetworking</string>
+		</dict>
 		<dict>
 			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
 			<string>public.vcs.git</string>
@@ -46,7 +62,15 @@
 			<key>IDESourceControlWCCIdentifierKey</key>
 			<string>C16576B571172538D95183F9515DC5DB064EAF7F</string>
 			<key>IDESourceControlWCCName</key>
-			<string>sskeychain</string>
+			<string>put.io-addersskeychain</string>
+		</dict>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>CE7EA561763805DACBC7B43AEC9128B8D4A24DF1</string>
+			<key>IDESourceControlWCCName</key>
+			<string>PutioKit</string>
 		</dict>
 	</array>
 </dict>
