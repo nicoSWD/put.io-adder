@@ -82,10 +82,10 @@ Some ideas for improvement are:
 **CHANGELOG**
 New in this version:
 
-- 2.9
+- v2.9
   - Fixes ([#11](https://github.com/nicoSWD/put.io-adder/issues/11)) (All torrents failing because of duplicate)
   - Fixes ([#10](https://github.com/nicoSWD/put.io-adder/issues/10)) (Persistent App Crashing after Download Completes)
-- 2.8
+- v2.8
   - Prevents the app from crashing when a transfer completes ([#10](https://github.com/nicoSWD/put.io-adder/issues/10))
 - v2.7
   - Authentication callback uses a custom scheme, making the app independent of my own server now.
