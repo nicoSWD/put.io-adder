@@ -1,4 +1,4 @@
-## Put.io magnet: and .torrent Handler for OS X
+## Put.io magnet: and .torrent Handler for OS X [![downloads](https://img.shields.io/github/downloads/nicoSWD/put.io-adder/latest/total.svg)](https://github.com/nicoSWD/put.io-adder/releases)
 
 ![alt tag](http://f.cl.ly/items/0K420o1W192i0i2u0r31/Screen%20Shot%202013-11-07%20at%2017.51.05.png)
 
