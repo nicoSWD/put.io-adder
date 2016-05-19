@@ -13,12 +13,6 @@
 - (void)mouseUp:(NSEvent *)theEvent
 {
     [super mouseUp:theEvent];
-    
-//    NSMenu *theMenu = [[NSMenu alloc] initWithTitle:@"Contextual Menu"];
-//    [theMenu insertItemWithTitle:@"Log Out" action:@selector(beep:) keyEquivalent:@"" atIndex:0];
-//    [theMenu insertItemWithTitle:@"Honk" action:@selector(honk:) keyEquivalent:@"" atIndex:1];
-//    
-//    [NSMenu popUpContextMenu:theMenu withEvent:theEvent forView:self];
 }
 
 @end

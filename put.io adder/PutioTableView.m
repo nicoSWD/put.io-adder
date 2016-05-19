@@ -15,31 +15,20 @@
 
 - (NSMenu*)menuForEvent:(NSEvent*)event
 {
-    if (event.type == NSRightMouseDown)
-    {
-        if (self.selectedColumn == 0 || self.selectedColumn ==1)
-        {
+    if (event.type == NSRightMouseDown) {
+        if (self.selectedColumn == 0 || self.selectedColumn == 1) {
             return nil;
-        }
-        else
-        {
+        } else {
             PutioMainController *controller = [PutioHelper sharedHelper].putioController;
             NSPoint mousePoint = [self convertPoint:[event locationInWindow] fromView:nil];
             long row = [self rowAtPoint:mousePoint];
             PKTransfer *transfer;
             
-            @try
-            {
+            @try {
                 transfer = [controller.transfers objectAtIndex: row];
-            }
-            @catch (NSException *e)
-            {
+            } @catch (NSException *e) {
                 return nil;
-            }
-            @finally
-            {
-                
-            }
+            } @finally {}
             
             NSDictionary *attributes = @{
                NSFontAttributeName: [NSFont fontWithName:@"Montserrat-Regular" size:10],

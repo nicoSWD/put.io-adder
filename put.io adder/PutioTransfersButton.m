@@ -19,13 +19,11 @@
     [self.window invalidateCursorRectsForView:self];
 }
 
-
 - (void)resetCursorRects
 {
     [super resetCursorRects];
     [self addCursorRect:self.bounds cursor:[NSCursor pointingHandCursor]];
 }
-
 
 - (void)mouseEntered:(NSEvent*)theEvent
 {
@@ -33,19 +31,17 @@
     [[NSCursor pointingHandCursor] push];
 }
 
-
 - (void)mouseExited:(NSEvent*)theEvent
 {
     [super mouseExited:theEvent];
     [[NSCursor pointingHandCursor] pop];
 }
 
-
 - (void)mouseUp:(NSEvent*)theEvent
 {
     [super mouseUp:theEvent];
     CABasicAnimation *imageRotation = [CABasicAnimation animationWithKeyPath:@"transform.rotation"];
-    bool isOpen = ![PutioHelper sharedHelper].putioController.transfersAreHidden;
+    bool isOpen = ![[PutioHelper sharedHelper].putioController transfersAreVisible];
     
     imageRotation.fromValue = [NSNumber numberWithFloat: isOpen ? -M_PI : 0];
     double to = isOpen ? 0 : M_PI;

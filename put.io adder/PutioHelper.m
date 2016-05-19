@@ -22,11 +22,9 @@
 
 static PutioHelper *sharedHelper = nil;
 
-
 + (PutioHelper*)sharedHelper
 {
-    @synchronized(self)
-    {
+    @synchronized(self) {
         static dispatch_once_t onceToken;
         dispatch_once(&onceToken, ^{
             sharedHelper = [[self alloc] init];
@@ -37,40 +35,33 @@ static PutioHelper *sharedHelper = nil;
     return sharedHelper;
 }
 
-
 - (void)authenticateUser
 {
     NSError *error;
     NSString *token = [SSKeychain passwordForService:@"put.io adder" account:@"711" error:&error];
     
-    if ([error code] == SSKeychainErrorNotFound)
-    {
+    if ([error code] == SSKeychainErrorNotFound) {
         self.putioController.message.stringValue = NSLocalizedString(@"HELPER_AUTH_REQUIRED", nil);
         self.putioController.userInfo.stringValue = self.putioController.message.stringValue;
         self.putioController.transferInfo.stringValue = @"Please log into put.io";
         
         NSString *url = @"https://api.put.io/v2/oauth2/authenticate?client_id=711&response_type=token&redirect_uri=putio://callback";
         [[NSWorkspace sharedWorkspace] openURL: [NSURL URLWithString: url]];
-    }
-    else
-    {
+    } else {
         [self.putioAPI setApiToken: token];
         [self updateUserInfo];        
         [self startUserinfoTimer];
     }
 }
 
-
 - (void)startUserinfoTimer
 {
     userInfoTimer = [NSTimer scheduledTimerWithTimeInterval:20.0  target:self selector:@selector(updateUserInfo) userInfo:nil repeats:YES];
 }
 
-
 - (void)updateUserInfo
 {
-    [self.putioAPI getAccount:^(PKAccount *account)
-    {
+    [self.putioAPI getAccount:^(PKAccount *account) {
         float total = [[account diskSize] floatValue];
         float used  = [[account diskUsed] floatValue];
         float leftBytes = total - used;
@@ -83,22 +74,19 @@ static PutioHelper *sharedHelper = nil;
             putioController.diskusage.frame.size.height
         );
         
+        putioController.userInfo.stringValue = [account username];
+        putioController.usageMsg.stringValue = [NSString stringWithFormat:@"%@ left", [self transformedValue:leftBytes]];
+        putioController.usageMsg.font = [NSFont fontWithName:@"Montserrat-Bold" size:12];
+        putioController.usageMsg.layer.zPosition = 5;
+        
         [NSAnimationContext beginGrouping];
         [[NSAnimationContext currentContext] setDuration:2.0f];
         [[putioController.diskusage animator] setFrame:newFrame];
         [NSAnimationContext endGrouping];
         
-        putioController.userInfo.stringValue = [account username];
-        putioController.usageMsg.stringValue = [NSString stringWithFormat:@"%@ left", [self transformedValue:leftBytes]];
-        
-        putioController.usageMsg.font = [NSFont fontWithName:@"Montserrat-Bold" size:12];
-        [putioController.usageMsg setNeedsDisplay: YES];
-        
-        putioController.avatar.image = [[NSImage alloc] initWithContentsOfURL:[NSURL URLWithString:[NSString stringWithFormat:@"http://www.gravatar.com/avatar/%@?s=%d", [[account mail] md5], (int)putioController.avatar.image.size.width]]];
+        putioController.avatar.image = [[NSImage alloc] initWithContentsOfURL:[NSURL URLWithString:[NSString stringWithFormat:@"https://www.gravatar.com/avatar/%@?s=%d", [[account mail] md5], (int)putioController.avatar.image.size.width]]];
         putioController.avatar.layer.cornerRadius = 8.0;
-    }
-    failure:^(NSError *error)
-    {
+    } failure:^(NSError *error) {
         putioController.userInfo.stringValue = NSLocalizedString(@"HELPER_USERINFO_FAILED", nil);
     }];
     
@@ -134,8 +122,7 @@ static PutioHelper *sharedHelper = nil;
                         [notificationCenter setDelegate:self.putioController];
 
                         // NS_AVAILABLE(10_9, NA)
-                        if ([notification respondsToSelector:@selector(setContentImage:)])
-                        {
+                        if ([notification respondsToSelector:@selector(setContentImage:)]) {
                             // PutioKit failed me at getting additional file info.
                             // Maybe I failed
                             // Using this until I know how to fix it.
@@ -150,31 +137,21 @@ static PutioHelper *sharedHelper = nil;
                             [client
                                 getPath:path
                                 parameters:@{@"oauth_token": sharedHelper.putioAPI.apiToken}
-                                success: ^(AFHTTPRequestOperation *operation, id JSON)
-                            {
+                                success: ^(AFHTTPRequestOperation *operation, id JSON) {
                                 NSDictionary *file = [JSON valueForKey:@"file"];
                                 NSString *contentImage;
 
-                                if (file)
-                                {
-                                    if ([file valueForKey:@"screenshot"] != nil)
-                                    {
+                                if (file) {
+                                    if ([file valueForKey:@"screenshot"] != nil) {
                                         contentImage = [file valueForKey:@"screenshot"];
-                                    }
-                                    else
-                                    {
+                                    } else {
                                         contentImage = [file valueForKey:@"icon"];
                                     }
                                 
-                                    @try
-                                    {
+                                    @try {
                                         notification.contentImage = [[NSImage alloc] initWithContentsOfURL:[NSURL URLWithString:contentImage]];
-                                    }
-                                    @catch (NSException *e)
-                                    {
-                                    }
-                                    @finally
-                                    {
+                                    } @catch (NSException *e) {
+                                    } @finally {
                                         [notificationCenter deliverNotification:notification];
                                     }
                                 }
@@ -202,35 +179,25 @@ static PutioHelper *sharedHelper = nil;
         int percentDone = 0;
         NSString *status;
          
-        for (int i = 0; i < totalTransfers; i++)
-        {
+        for (int i = 0; i < totalTransfers; i++) {
             status = [[putioTransfers objectAtIndex:i] valueForKey:@"status"];
              
-            if ([status isEqualToString:@"WAITING"] || [status isEqualToString:@"DOWNLOADING"] || [status isEqualToString:@"IN_QUEUE"])
-            {
+            if ([status isEqualToString:@"WAITING"] || [status isEqualToString:@"DOWNLOADING"] || [status isEqualToString:@"IN_QUEUE"]) {
                 pendingDownloads++;
                 percentDone += [[[putioTransfers objectAtIndex:i] percentDone] integerValue];
-            }
-            else if ([status isEqualToString:@"COMPLETED"] || [status isEqualToString:@"SEEDING"])
-            {
+            } else if ([status isEqualToString:@"COMPLETED"] || [status isEqualToString:@"SEEDING"]) {
                 completedDownloads++;
             }
         }
         
         id badgeText = nil;
         
-        if (pendingDownloads == 0)
-        {
+        if (pendingDownloads == 0) {
             putioController.message.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_NO_PENDING_TRANSFERS", nil), completedDownloads];
-        }
-        else
-        {
-            if (pendingDownloads == 1)
-            {
+        } else {
+            if (pendingDownloads == 1) {
                 putioController.message.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_PENDING_TRANSFERS_SINGULAR", nil), completedDownloads];
-            }
-            else
-            {
+            } else {
                 putioController.message.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_PENDING_TRANSFERS_PURAL", nil), pendingDownloads, completedDownloads];
             }
             
@@ -239,27 +206,21 @@ static PutioHelper *sharedHelper = nil;
         
         [[[NSApplication sharedApplication] dockTile] setBadgeLabel:badgeText];
     }
-    failure:^(NSError *error)
-    {
+    failure:^(NSError *error) {
         putioController.message.stringValue = NSLocalizedString(@"HELPER_TRANSFERS_FAILED", nil);
     }];
 }
-
 
 - (void)handleURLEvent:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)replyEvent
 {
     NSString *url = [[event paramDescriptorForKeyword:keyDirectObject] stringValue];
     
-    if ([url hasPrefix:@"magnet:"])
-    {
+    if ([url hasPrefix:@"magnet:"]) {
         [self addMagnet:url];
-    }
-    else if ([url hasPrefix:@"putio:"])
-    {
+    } else if ([url hasPrefix:@"putio:"]) {
         [self saveAccessToken:url];
     }
 }
-
 
 - (void)addMagnet:(NSString *)magnetURL
 {
@@ -270,52 +231,39 @@ static PutioHelper *sharedHelper = nil;
     NSArray *matches = [regex matchesInString:magnetURL options:0 range:NSMakeRange(0, [magnetURL length])];
     NSString *displayName;
     
-    if ([matches count] > 0)
-    {
+    if ([matches count] > 0) {
         displayName = [[magnetURL substringWithRange:[[matches objectAtIndex:0] rangeAtIndex:1]] displayNameString];
-    }
-    else
-    {
+    } else {
         displayName = magnetURL;
     }
     
     putioController.message.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_MAGNET_ADDING", nil), displayName];
     [putioController.activityIndicator startAnimation:nil];
     
-    [self.putioAPI requestTorrentOrMagnetURLAtPath:magnetURL :^(id userInfoObject)
-     {
-         if ([[NSUserDefaults standardUserDefaults] boolForKey:@"close.magnet"])
-         {
+    [self.putioAPI requestTorrentOrMagnetURLAtPath:magnetURL :^(id userInfoObject) {
+         if ([[NSUserDefaults standardUserDefaults] boolForKey:@"close.magnet"]) {
              putioController.message.stringValue = NSLocalizedString(@"HELPER_MAGNET_ADDED_CLOSING", nil);
              closeTimer = [NSTimer scheduledTimerWithTimeInterval:5.0  target:[NSApplication sharedApplication] selector:@selector(terminate:) userInfo:nil repeats:NO];
-         }
-         else
-         {
+         } else {
              putioController.message.stringValue = NSLocalizedString(@"HELPER_MAGNET_ADDED", nil);
              
-             if ([PutioHelper sharedHelper].putioController.transfersAreHidden)
-             {
-                 [putioController.toggleTransfers mouseUp:nil];
-             }
+//             if ([PutioHelper sharedHelper].putioController.transfersAreHidden) {
+//                 [putioController.toggleTransfers mouseUp:nil];
+//             }
          }
          
          [self updateUserInfo];
          [putioController.activityIndicator stopAnimation:nil];
-     }
-     addFailure:^
-     {
+     } addFailure:^ {
          putioController.message.stringValue = NSLocalizedString(@"HELPER_MAGNET_ERROR", nil);
          [putioController.activityIndicator stopAnimation:nil];
-     }
-     networkFailure:^(NSError *error)
-     {
+     } networkFailure:^(NSError *error) {
          // Put.io returns HTTP 400 if you're adding an URL that's already in the queue...
          // ... and thereby causing AFNetworking to throw a network error.
          putioController.message.stringValue = NSLocalizedString(@"HELPER_MAGNET_DUPLICATE", nil);
          [putioController.activityIndicator stopAnimation:nil];
      }];
 }
-
 
 - (void)uploadTorrent:(NSString*)filePath
 {
@@ -325,35 +273,26 @@ static PutioHelper *sharedHelper = nil;
     putioController.message.stringValue = [NSString stringWithFormat: NSLocalizedString(@"HELPER_TORRENT_UPLOADING", nil), [fileName displayNameString]];
     [putioController.activityIndicator startAnimation:nil];
     
-    [self.putioAPI uploadFile:filePath :^(id userInfoObject)
-     {
-         if ([[NSUserDefaults standardUserDefaults] boolForKey:@"close.torrent"])
-         {
+    [self.putioAPI uploadFile:filePath :^(id userInfoObject) {
+         if ([[NSUserDefaults standardUserDefaults] boolForKey:@"close.torrent"]) {
              putioController.message.stringValue = NSLocalizedString(@"HELPER_TORRENT_ADDED_CLOSING", nil);
              closeTimer = [NSTimer scheduledTimerWithTimeInterval:5.0  target:[NSApplication sharedApplication] selector:@selector(terminate:) userInfo:nil repeats:NO];
-         }
-         else
-         {
+         } else {
              putioController.message.stringValue = NSLocalizedString(@"HELPER_TORRENT_ADDED", nil);
          }
          
          [self updateUserInfo];
          [putioController.activityIndicator stopAnimation:nil];
-     }
-     addFailure:^
-     {
+     } addFailure: ^{
          putioController.message.stringValue = NSLocalizedString(@"HELPER_MAGNET_ERROR", nil);
          [putioController.activityIndicator stopAnimation:nil];
-     }
-     networkFailure:^(NSError *error)
-     {
+     } networkFailure:^(NSError *error) {
          // Put.io returns HTTP 400 if you're adding an URL that's already in the queue...
          // ... and thereby causing AFNetworking to throw a network error.
          putioController.message.stringValue = NSLocalizedString(@"HELPER_TORRENT_DUPLICATE", nil);
          [putioController.activityIndicator stopAnimation:nil];
      }];
 }
-
 
 - (void)checkForUpdates
 {
@@ -363,13 +302,11 @@ static PutioHelper *sharedHelper = nil;
     // GitHub doesn't send the correct x-plist content-type header.
     [AFPropertyListRequestOperation addAcceptableContentTypes:[NSSet setWithObject:@"text/plain"]];
     AFPropertyListRequestOperation *operation = [AFPropertyListRequestOperation propertyListRequestOperationWithRequest:request
-    success:^(NSURLRequest *request, NSHTTPURLResponse *response, id propertyList)
-     {
+    success:^(NSURLRequest *request, NSHTTPURLResponse *response, id propertyList) {
          NSString *latestVersion = [propertyList valueForKey:@"CFBundleShortVersionString"];
          NSString *currentVersion = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleShortVersionString"];
          
-         if (![latestVersion isEqualToString:currentVersion])
-         {
+         if (![latestVersion isEqualToString:currentVersion]) {
              [closeTimer invalidate];
              
              NSAlert *alert = [[NSAlert alloc] init];
@@ -380,27 +317,22 @@ static PutioHelper *sharedHelper = nil;
              [alert setInformativeText:[NSString stringWithFormat:NSLocalizedString(@"HELPER_NEW_VERSION_BODY", nil), latestVersion]];
              [alert setShowsSuppressionButton:YES];
              
-             if ([alert runModal] == NSAlertFirstButtonReturn)
-             {
+             if ([alert runModal] == NSAlertFirstButtonReturn) {
                  [self.putioController openGithub:nil];
              }
              
-             if ([[alert suppressionButton] state] == NSOnState)
-             {
+             if ([[alert suppressionButton] state] == NSOnState) {
                  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
                  [defaults setBool:NO forKey:@"checkupdate"];
                  [defaults synchronize];
              }
          }
-     }
-     failure:^(NSURLRequest *request, NSHTTPURLResponse *response, NSError *error, id propertyList)
-     {
+     } failure:^(NSURLRequest *request, NSHTTPURLResponse *response, NSError *error, id propertyList) {
          NSLog(@"Error: %@", error);
      }];
     
     [operation start];
 }
-
 
 - (void)saveAccessToken:(NSString *)url
 {
@@ -412,24 +344,18 @@ static PutioHelper *sharedHelper = nil;
     PutioHelper *helper = [PutioHelper sharedHelper];
     PutioMainController *controller = self.putioController;
 
-    if ([matches count] > 0)
-    {
+    if ([matches count] > 0) {
         NSString *token = [url substringWithRange:[[matches objectAtIndex:0] rangeAtIndex:1]];
         
-        if ([SSKeychain setPassword:token forService:@"put.io adder" account:@"711"])
-        {
+        if ([SSKeychain setPassword:token forService:@"put.io adder" account:@"711"]) {
             controller.message.stringValue = @"Authenticated and ready to go!";
             helper.putioAPI.apiToken = token;
             [helper updateUserInfo];
             [controller.window orderFront:self];
-        }
-        else
-        {
+        } else {
             controller.message.stringValue = @"Error saving token to KeyChain!";
         }
-    }
-    else
-    {
+    } else {
         controller.userInfo.stringValue = @"ERROR: Failed to get access token";
     }
 }
@@ -437,17 +363,15 @@ static PutioHelper *sharedHelper = nil;
 
 /**
  * transformedValue method by "Parag Bafna", from: http://stackoverflow.com/questions/7846495/
- *
- **/
+ */
 - (NSString*)transformedValue:(double)value
 {
-    double convertedValue = value; //[value doubleValue];
+    double convertedValue = value;
     int multiplyFactor = 0;
     
     NSArray *tokens = [NSArray arrayWithObjects:@"B",@"KB",@"MB",@"GB",@"TB",nil];
     
-    while (convertedValue > 1024)
-    {
+    while (convertedValue > 1024) {
         convertedValue /= 1024;
         multiplyFactor++;
     }

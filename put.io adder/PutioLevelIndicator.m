@@ -7,24 +7,13 @@
 //
 
 #import <Cocoa/Cocoa.h>
-
-
-
-
 #import "PutioLevelIndicator.h"
-
 
 @implementation PutioLevelIndicator
 
 - (void)awakeFromNib
 {
     [self setBackgroundStyle:NSBackgroundStyleDark];
-
-}
-
--(void) setPercentage:(unsigned int) inPercent
-{
-
 }
 
 @end

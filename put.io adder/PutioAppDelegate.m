@@ -19,8 +19,7 @@
 
 - (BOOL)application:(NSApplication *)sender openFile:(NSString *)pathname
 {
-    if ([[[pathname pathExtension] lowercaseString] isEqualToString:@"torrent"])
-    {
+    if ([[[pathname pathExtension] lowercaseString] isEqualToString:@"torrent"]) {
         [[PutioHelper sharedHelper] uploadTorrent:pathname];
         return YES;
     }

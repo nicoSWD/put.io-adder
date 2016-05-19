@@ -25,7 +25,6 @@
     IBOutlet PutioSearchResultsTableView *searchResults;
     
     NSMutableArray *transfers;
-    BOOL transfersAreHidden;
 }
 
 - (id)init;
@@ -34,6 +33,7 @@
 - (IBAction)closePreferences:(id)sender;
 - (IBAction)checkForUpdates:(id)sender;
 - (void)toggleShowTransfers;
+- (bool)transfersAreVisible;
 - (void)streamVideo:(NSMenuItem*)sender;
 - (void)cancelTransfer:(NSMenuItem*)sender;
 - (void)openFileOnPutIO;
@@ -50,8 +50,6 @@
 @property (strong, nonatomic) IBOutlet NSImageView *avatar;
 @property (strong, nonatomic) PutioSearchResultsTableView *searchResults;
 @property (strong, nonatomic) IBOutlet NSPopover *popResults;
-
 @property (strong) NSMutableArray *transfers;
-@property (nonatomic, assign) BOOL transfersAreHidden;
 
 @end

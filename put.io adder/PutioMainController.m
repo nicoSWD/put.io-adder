@@ -13,8 +13,6 @@
 
 @implementation PutioMainController
 
-static CGRect oldFrame;
-
 @synthesize
     message,
     activityIndicator,
@@ -24,7 +22,6 @@ static CGRect oldFrame;
     transfers,
     tableView,
     diskusage,
-    transfersAreHidden,
     usageMsg,
     toggleTransfers,
     avatar,
@@ -35,15 +32,12 @@ static CGRect oldFrame;
 {
     PutioHelper *helper = [PutioHelper sharedHelper];
     [helper setPutioController:self];
-    self.transfersAreHidden = YES;
     
     return self;
 }
 
 - (void)awakeFromNib
 {
-    oldFrame = self.putiowindow.frame;
-    
     self.window.title = [NSString stringWithFormat:@"%@ v%@", self.window.title, [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleShortVersionString"]];
     self.userInfo.stringValue = NSLocalizedString(@"HELPER_FETCHING_USERINFO", nil);
     self.message.stringValue = NSLocalizedString(@"HELPER_MSG_READY", nil);
@@ -53,36 +47,31 @@ static CGRect oldFrame;
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
     // Run if "not set" or "enabled"
-    if ([defaults objectForKey:@"checkupdate"] == nil || [defaults boolForKey:@"checkupdate"] == YES)
-    {
+    if ([defaults objectForKey:@"checkupdate"] == nil || [defaults boolForKey:@"checkupdate"] == YES) {
         [helper checkForUpdates];
     }
     
     [[NSAppleEventManager sharedAppleEventManager] setEventHandler:helper andSelector:@selector(handleURLEvent:withReplyEvent:) forEventClass:kInternetEventClass andEventID:kAEGetURL];
     
     NSSortDescriptor *sortDescriptor = [[NSSortDescriptor alloc] initWithKey:@"status" ascending:YES];
+    
     [self.tableView setTarget:self];
     [self.tableView setDoubleAction:@selector(openFileOnPutIO)];
     [self.tableView setSortDescriptors:[NSArray arrayWithObject:sortDescriptor]];
     
     [[[self.tableView.tableColumns objectAtIndex:0] headerCell] setTitle: NSLocalizedString(@"HELPER_TABLEHEADER_NAME", nil)];
     [[[self.tableView.tableColumns objectAtIndex:1] headerCell] setTitle: NSLocalizedString(@"HELPER_TABLEHEADER_STATUS", nil)];
-    
-//    [self.tableView setSelectionHighlightStyle:NSTableViewSelectionHighlightStyleNone];
 }
-
 
 - (IBAction)openGithub:(id)sender
 {
     [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/nicoSWD/put.io-adder"]];
 }
 
-
 - (IBAction)openPrefefrences:(id)sender
 {
     [NSApp beginSheet:prefSheet modalForWindow:(NSWindow *)putiowindow modalDelegate:self didEndSelector:nil contextInfo:nil];
 }
-
 
 - (IBAction)closePreferences:(id)sender
 {
@@ -90,95 +79,63 @@ static CGRect oldFrame;
     [prefSheet orderOut:sender];
 }
 
-
 - (IBAction)checkForUpdates:(id)sender
 {
     [[PutioHelper sharedHelper] checkForUpdates];
 }
 
+- (bool)transfersAreVisible
+{
+    return self.putiowindow.frame.size.height > self.putiowindow.minSize.height;
+}
 
 - (void)toggleShowTransfers
 {
-//    [[[self.tableView superview] superview] setHidden:!self.transfersAreHidden];
-    
-    
-//    float Y = self.transfersAreHidden ? 115 : -115;
-//    float X = 0;
-//    
-//    NSRect frame = [self.putiowindow frame];
-//    frame.origin.y -= Y;
-//    frame.size.height += Y;
-//    frame.size.width += X;
-//    
-//    self.transfersAreHidden = !self.transfersAreHidden;
-//    [self.putiowindow setFrame:frame display:YES animate:YES];
-    
     CGRect newFrame;
+    int extraMargin = 106;
     
-    if (!self.transfersAreHidden)
-    {
+    if ([self transfersAreVisible]) {
         newFrame = CGRectMake(
             self.putiowindow.frame.origin.x,
-            self.putiowindow.frame.origin.y,
+            self.putiowindow.frame.origin.y + self.putiowindow.minSize.height + extraMargin,
             self.putiowindow.minSize.width,
             self.putiowindow.minSize.height
         );
-        
-//        [window setMinSize:[window frame].size];
-//        [window setMaxSize:[window frame].size];
-        
-//        oldFrame = self.putiowindow.frame;
-        
-//        [self.putiowindow setStyleMask:[self.putiowindow styleMask] & NSResizableWindowMask];
-    }
-    else
-    {
-//        newFrame = oldFrame;
+    } else {
         newFrame = CGRectMake(
-          self.putiowindow.frame.origin.x,
-          self.putiowindow.frame.origin.y,
-          550,
-          300
-          );
+            self.putiowindow.frame.origin.x,
+            self.putiowindow.frame.origin.y - self.putiowindow.minSize.height - extraMargin,
+            self.putiowindow.maxSize.width,
+            self.putiowindow.maxSize.height
+        );
         
         [self.putiowindow setShowsResizeIndicator:YES];
-//        [self.putiowindow setStyleMask:[self.putiowindow styleMask] & ~NSResizableWindowMask];
     }
     
-    self.transfersAreHidden = !self.transfersAreHidden;
     [self.putiowindow setFrame:newFrame display:YES animate:YES];
 }
-
 
 - (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView
 {
     return [self.transfers count];
 }
 
-
 - (id)tableView:(NSTableView *)aTableView objectValueForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row
 {
     PKTransfer *trans = [self.transfers objectAtIndex:row];
     
-    if ([tableColumn.identifier isEqualToString:@"name"])
-    {
+    if ([tableColumn.identifier isEqualToString:@"name"]) {
         return [trans name];
-    }
-    else if ([tableColumn.identifier isEqualToString:@"speed"])
-    {
-        if (![trans.status isEqualToString:@"DOWNLOADING"])
-        {
+    } else if ([tableColumn.identifier isEqualToString:@"speed"]) {
+        if (![trans.status isEqualToString:@"DOWNLOADING"]) {
             return @"0";
         }
         
         return [[PutioHelper sharedHelper] transformedValue: [trans.downSpeed doubleValue]];
-    }
-    else if ([tableColumn.identifier isEqualToString:@"eta"])
-    {
+    } else if ([tableColumn.identifier isEqualToString:@"eta"]) {
         int numberOfSeconds = (int)[trans.estimatedTime integerValue];
         
-        if (![trans.status isEqualToString:@"DOWNLOADING"] || numberOfSeconds <= 0)
-        {
+        if (![trans.status isEqualToString:@"DOWNLOADING"] || numberOfSeconds <= 0) {
             return @"Done";
         }
         
@@ -186,24 +143,18 @@ static CGRect oldFrame;
         int minutes = (numberOfSeconds / 60) % 60;
         int hours = numberOfSeconds / 3600;
         
-        if (hours)
-        {
+        if (hours) {
             return [NSString stringWithFormat:@"%dh %02dm", hours, minutes];
         }
 
-        if (minutes)
-        {
+        if (minutes) {
             return [NSString stringWithFormat:@"%dm %02ds", minutes, seconds];
         }
 
         return [NSString stringWithFormat:@"%ds", seconds];
-    }
-    else if ([tableColumn.identifier isEqualToString:@"size"])
-    {
+    } else if ([tableColumn.identifier isEqualToString:@"size"]) {
         return [[PutioHelper sharedHelper] transformedValue: [trans.size doubleValue]];
-    }
-    else if ([tableColumn.identifier isEqualToString:@"status"])
-    {
+    } else if ([tableColumn.identifier isEqualToString:@"status"]) {
         return trans.percentDone;
     }
     
@@ -305,7 +256,7 @@ static CGRect oldFrame;
     
     self.message.stringValue = @"Streaming video...";
     
-    NSArray *args = [NSArray arrayWithObjects:@"vvv", @"https://put.io/v2/files/312186790/mp4/stream?token=d5561d5a559311e5948e0a51cd8fa0d3", nil];
+    NSArray *args = [NSArray arrayWithObjects:@"vvv", @"https://put.io/v2/files/312186790/mp4/stream?token=", nil];
     NSTask *task = [NSTask launchedTaskWithLaunchPath:bundle.executablePath arguments:args];
     
     while (task.isRunning) {
