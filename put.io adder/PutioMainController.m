@@ -244,7 +244,7 @@ static BOOL transfersAreHidden = YES;
     
     if (![[trans fileID] isEqualTo:[NSNull alloc]] && fileID != nil)
     {
-        url = [NSString stringWithFormat:@"https://put.io/file/%@", fileID];
+        url = [NSString stringWithFormat:@"https://put.io/files/%@", fileID];
     }
     else
     {
