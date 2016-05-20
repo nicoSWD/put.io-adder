@@ -7,3 +7,6 @@
 [submodule "PutioKit"]
 	path = PutioKit
 	url = git@github.com:PutioKit/PutioKit.git
+[submodule "put.io adder/NSString-UrlEncode"]
+	path = put.io adder/NSString-UrlEncode
+	url = https://github.com/kevinrenskers/NSString-UrlEncode.git

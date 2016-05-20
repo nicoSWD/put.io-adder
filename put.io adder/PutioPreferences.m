@@ -8,7 +8,6 @@
 
 #import "PutioPreferences.h"
 
-
 @implementation PutioPreferences
 
 @synthesize
@@ -19,8 +18,7 @@
     labelAutoCloseWhen;
 
 
-- (void)awakeFromNib
-{
+- (void)awakeFromNib {
     self.labelAutoCloseWhen.stringValue = NSLocalizedString(@"PANEL_AUTO_CLOSE_WHEN", nil);
     self.closeWhenFinishedMagnet.title = NSLocalizedString(@"PANEL_ADDING_MAGNET", nil);
     self.closeWhenFinishedTorrent.title = NSLocalizedString(@"PANEL_ADDING_TORRENT", nil);
@@ -28,9 +26,7 @@
     self.closeButton.title = NSLocalizedString(@"PANEL_CLOSE", nil);
 }
 
-
-- (void)becomeKeyWindow
-{
+- (void)becomeKeyWindow {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
 
     self.closeWhenFinishedTorrent.state = [defaults boolForKey:@"close.torrent"];
@@ -38,9 +34,7 @@
     self.checkForUpdates.state = [defaults boolForKey:@"checkupdate"];
 }
 
-
-- (IBAction)toggleSetting:(NSButton*)sender
-{
+- (IBAction)toggleSetting:(NSButton*)sender {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     [defaults setBool:(BOOL)sender.state forKey:(NSString *)sender.identifier];
     [defaults synchronize];

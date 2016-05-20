@@ -8,6 +8,7 @@
 
 #import "PutioMainController.h"
 #import "PutioHelper.h"
+#import "PutioSearchResultsTableView.h"
 
 @implementation PutioMainController
 
@@ -15,17 +16,17 @@
     message,
     activityIndicator,
     userInfo,
-    versionInfo,
     transferInfo,
     putiowindow,
     transfers,
     tableView,
-    toggleShowTransfers,
-    cancelTransfer,
-    statusItem;
-
-static BOOL transfersAreHidden = YES;
-
+    diskusage,
+    usageMsg,
+    toggleTransfers,
+    avatar,
+    searchResults,
+    popResults,
+    scrollView;
 
 - (id)init
 {
@@ -37,26 +38,23 @@ static BOOL transfersAreHidden = YES;
 
 - (void)awakeFromNib
 {
-    self.versionInfo.stringValue = [NSString stringWithFormat:@"v%@", [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleShortVersionString"]];
-    self.toggleShowTransfers.title = NSLocalizedString(@"HELPER_TRANSFERS_SHOW", nil);
+    self.window.title = [NSString stringWithFormat:@"%@ v%@", self.window.title, [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleShortVersionString"]];
     self.userInfo.stringValue = NSLocalizedString(@"HELPER_FETCHING_USERINFO", nil);
     self.message.stringValue = NSLocalizedString(@"HELPER_MSG_READY", nil);
-    self.cancelTransfer.stringValue = NSLocalizedString(@"HELPER_CANCEL", nil);
     
     PutioHelper *helper = [PutioHelper sharedHelper];
     [helper authenticateUser];
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
     // Run if "not set" or "enabled"
-    if ([defaults objectForKey:@"checkupdate"] == nil || [defaults boolForKey:@"checkupdate"] == YES)
-    {
+    if ([defaults objectForKey:@"checkupdate"] == nil || [defaults boolForKey:@"checkupdate"] == YES) {
         [helper checkForUpdates];
     }
     
     [[NSAppleEventManager sharedAppleEventManager] setEventHandler:helper andSelector:@selector(handleURLEvent:withReplyEvent:) forEventClass:kInternetEventClass andEventID:kAEGetURL];
     
     NSSortDescriptor *sortDescriptor = [[NSSortDescriptor alloc] initWithKey:@"status" ascending:YES];
-    [self.window setContentBorderThickness:24.0 forEdge:NSMinYEdge];
+    
     [self.tableView setTarget:self];
     [self.tableView setDoubleAction:@selector(openFileOnPutIO)];
     [self.tableView setSortDescriptors:[NSArray arrayWithObject:sortDescriptor]];
@@ -65,18 +63,15 @@ static BOOL transfersAreHidden = YES;
     [[[self.tableView.tableColumns objectAtIndex:1] headerCell] setTitle: NSLocalizedString(@"HELPER_TABLEHEADER_STATUS", nil)];
 }
 
-
 - (IBAction)openGithub:(id)sender
 {
     [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/nicoSWD/put.io-adder"]];
 }
 
-
 - (IBAction)openPrefefrences:(id)sender
 {
     [NSApp beginSheet:prefSheet modalForWindow:(NSWindow *)putiowindow modalDelegate:self didEndSelector:nil contextInfo:nil];
 }
-
 
 - (IBAction)closePreferences:(id)sender
 {
@@ -84,86 +79,103 @@ static BOOL transfersAreHidden = YES;
     [prefSheet orderOut:sender];
 }
 
-
 - (IBAction)checkForUpdates:(id)sender
 {
     [[PutioHelper sharedHelper] checkForUpdates];
 }
 
-
-- (IBAction)toggleShowTransfers:(id)sender
+- (bool)transfersAreVisible
 {
-    [[[self.tableView superview] superview] setHidden:!transfersAreHidden];
-    
-    float Y = transfersAreHidden ? 100 : -100;
-    float X = 0;
-    
-    NSRect frame = [self.putiowindow frame];
-    frame.origin.y -= Y;
-    frame.size.height += Y;
-    frame.size.width += X;
-    
-    if (!transfersAreHidden)
-    {
-        self.toggleShowTransfers.title = NSLocalizedString(@"HELPER_TRANSFERS_SHOW", nil);
-    }
-    else
-    {
-        self.toggleShowTransfers.title = NSLocalizedString(@"HELPER_TRANSFERS_HIDE", nil);
-    }
-    
-    transfersAreHidden = !transfersAreHidden;
-    [self.putiowindow setFrame:frame display:YES animate:YES];
+    return self.putiowindow.frame.size.height > self.putiowindow.minSize.height;
 }
 
+- (void)toggleShowTransfers
+{
+    CGRect newFrame;
+    int extraMargin = 106;
+    int tableHeight;
+    int tableWidth;
+    
+    if ([self transfersAreVisible]) {
+        tableHeight = 0;
+        tableWidth = 0;
+        newFrame = CGRectMake(
+            self.putiowindow.frame.origin.x,
+            self.putiowindow.frame.origin.y + self.putiowindow.minSize.height + extraMargin,
+            self.putiowindow.minSize.width,
+            self.putiowindow.minSize.height
+        );
+    } else {
+        tableHeight = 203;
+        tableWidth = 526;
+        newFrame = CGRectMake(
+            self.putiowindow.frame.origin.x,
+            self.putiowindow.frame.origin.y - self.putiowindow.minSize.height - extraMargin,
+            self.putiowindow.maxSize.width,
+            self.putiowindow.maxSize.height
+        );
+    }
+    
+    [[NSAnimationContext currentContext] setCompletionHandler:^{
+        [self.scrollView setFrame:CGRectMake(12, 11, tableWidth, tableHeight)];
+    }];
+    
+    [self.putiowindow setFrame:newFrame display:YES animate:YES];
+}
 
 - (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView
 {
     return [self.transfers count];
 }
 
-
-- (id)tableView:(NSTableView *)tableView objectValueForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row
+- (id)tableView:(NSTableView *)aTableView objectValueForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row
 {
     PKTransfer *trans = [self.transfers objectAtIndex:row];
     
-    if ([tableColumn.identifier isEqualToString:@"name"])
-    {
+    if ([tableColumn.identifier isEqualToString:@"name"]) {
         return [trans name];
-    }
-    else if ([tableColumn.identifier isEqualToString:@"status"])
-    {
-        if ([trans.status isEqualToString:@"COMPLETED"])
-        {
-            return NSLocalizedString(@"HELPER_STATE_COMPLETED", nil);
-        }
-        else if ([trans.status isEqualToString:@"WAITING"])
-        {
-            return NSLocalizedString(@"HELPER_STATE_WAITING", nil);
-        }
-        else if ([trans.status isEqualToString:@"IN_QUEUE"])
-        {
-            return NSLocalizedString(@"HELPER_STATE_QUEDED", nil);
-        }
-        else if ([trans.status isEqualToString:@"DOWNLOADING"])
-        {
-            return [NSString stringWithFormat:NSLocalizedString(@"HELPER_STATE_DOWNLOADING", nil), trans.percentDone];
-        }
-        else if ([trans.status isEqualToString:@"COMPLETING"])
-        {
-            return NSLocalizedString(@"HELPER_STATE_COMPLETING", nil);
-        }
-        else if ([trans.status isEqualToString:@"SEEDING"])
-        {
-            return NSLocalizedString(@"HELPER_STATE_SEEDING", nil);
+    } else if ([tableColumn.identifier isEqualToString:@"speed"]) {
+        if (![trans.status isEqualToString:@"DOWNLOADING"]) {
+            return @"0";
         }
         
-        return trans.status;
+        return [[PutioHelper sharedHelper] transformedValue: [trans.downSpeed doubleValue]];
+    } else if ([tableColumn.identifier isEqualToString:@"eta"]) {
+        int numberOfSeconds = (int)[trans.estimatedTime integerValue];
+        
+        if ([trans.status isEqualToString:@"COMPLETING"]) {
+            return @"Finishing";
+        }
+        
+        if ([trans.status isEqualToString:@"COMPLETED"] || [trans.status isEqualToString:@"SEEDING"]) {
+            return @"Done";
+        }
+        
+        int seconds = numberOfSeconds % 60;
+        int minutes = (numberOfSeconds / 60) % 60;
+        int hours = numberOfSeconds / 3600;
+        
+        if (hours) {
+            return [NSString stringWithFormat:@"%dh %02dm", hours, minutes];
+        }
+
+        if (minutes) {
+            return [NSString stringWithFormat:@"%dm %02ds", minutes, seconds];
+        }
+        
+        if (seconds <= 0) {
+            return @"Waiting...";
+        }
+
+        return [NSString stringWithFormat:@"%ds", seconds];
+    } else if ([tableColumn.identifier isEqualToString:@"size"]) {
+        return [[PutioHelper sharedHelper] transformedValue: [trans.size doubleValue]];
+    } else if ([tableColumn.identifier isEqualToString:@"status"]) {
+        return trans.percentDone;
     }
     
     return nil;
 }
-
 
 - (void)tableView:(NSTableView *)_tableView sortDescriptorsDidChange: (NSArray *)oldDescriptors
 {
@@ -172,56 +184,64 @@ static BOOL transfersAreHidden = YES;
     [self.tableView reloadData];
 }
 
-
-- (void)tableViewSelectionDidChange:(NSNotification *)notification
+- (void)cancelTransfer:(NSMenuItem*)sender
 {
-    [self.cancelTransfer setHidden: (self.tableView.selectedRow > -1 ? NO : YES)];
-}
-
-
-- (IBAction)cancelTransfer:(id)sender
-{
-    if (self.tableView.selectedRow == -1)
-    {
-        return;
-    }
-    
     PKTransfer *transfer;
-    
-    @try
-    {
-        transfer = [self.transfers objectAtIndex: [self.tableView selectedRow]];
-    }
-    @catch (NSException *exception)
-    {
+ 
+    @try {
+        transfer = [self.transfers objectAtIndex: sender.tag];
+    } @catch (NSException *exception) {
         return;
-    }
-    @finally {}
+    } @finally {}
     
     self.message.stringValue = NSLocalizedString(@"HELPER_CANCELING_DOWNLOAD", nil);
     [self.activityIndicator startAnimation:nil];
-    [self.cancelTransfer setEnabled:NO];
     
     PutioHelper *helper = [PutioHelper sharedHelper];
     
-    [[helper putioAPI] cancelTransfer:transfer:^
-    {
+    [[helper putioAPI] cancelTransfer:transfer:^ {
         self.message.stringValue = NSLocalizedString(@"HELPER_DOWNLOAD_CANCELED", nil);
         [self.activityIndicator stopAnimation:nil];
-        [self.cancelTransfer setEnabled:YES];
-        [self.cancelTransfer setHidden:YES];
         
         [helper updateUserInfo];
-    }
-    failure:^(NSError *error)
-    {
+    } failure:^(NSError *error) {
         self.message.stringValue = NSLocalizedString(@"HELPER_CANCEL_FAILED", nil);
         [self.activityIndicator stopAnimation:nil];
-        [self.cancelTransfer setEnabled:YES];
-        [self.cancelTransfer setHidden:YES];
     }];
 }
 
+- (void)streamVideo:(NSMenuItem *)sender
+{
+    PKTransfer *transfer;
+    
+    @try {
+        transfer = [self.transfers objectAtIndex: sender.tag];
+    } @catch (NSException *exception) {
+        return;
+    } @finally {}
+    
+    NSBundle *bundle = [NSBundle bundleWithPath:@"/Applications/VLC.app"];
+    
+    if (bundle == nil) {
+        NSAlert *alert = [NSAlert
+            alertWithMessageText:@"Error"
+            defaultButton:@"Okay"
+            alternateButton:nil
+            otherButton:nil
+            informativeTextWithFormat:@"Unable to find VLC.app in /Applications"
+        ];
+        [alert runModal];
+        return;
+    }
+    
+    self.message.stringValue = @"Streaming video...";
+    
+    PutioHelper *helper = [PutioHelper sharedHelper];
+    NSString *url = [NSString stringWithFormat:@"https://put.io/v2/files/%@/stream?oauth_token=%@", [transfer fileID], [helper putioAPI].apiToken];
+    NSArray *args = [NSArray arrayWithObjects:url, nil];
+    NSTask *task = [NSTask launchedTaskWithLaunchPath:bundle.executablePath arguments:args];
+    [task launch];
+}
 
 - (void)userNotificationCenter:(NSUserNotificationCenter *)center didActivateNotification:(NSUserNotification *)notification
 {
@@ -229,12 +249,10 @@ static BOOL transfersAreHidden = YES;
     [[NSWorkspace sharedWorkspace] openURL: [NSURL URLWithString: url]];
 }
 
-
 - (void)openFileOnPutIO
 {
-    // Table header was clicked
-    if (self.tableView.clickedRow == -1)
-    {
+    if (self.tableView.clickedRow == -1) {
+        // Table header was clicked
         return;
     }
     
@@ -242,12 +260,9 @@ static BOOL transfersAreHidden = YES;
     NSString *fileID = [trans fileID];
     NSString *url;
     
-    if (![[trans fileID] isEqualTo:[NSNull alloc]] && fileID != nil)
-    {
+    if (![[trans fileID] isEqualTo:[NSNull alloc]] && fileID != nil) {
         url = [NSString stringWithFormat:@"https://put.io/file/%@", fileID];
-    }
-    else
-    {
+    } else {
         url = @"https://put.io/transfers";
     }
     

@@ -8,21 +8,22 @@
 
 #import <Foundation/Foundation.h>
 #import "V2PutIOAPIClient.h"
+#import "PutioSearchResultsTableView.h"
 
-@interface PutioMainController : NSWindowController<NSTableViewDataSource, NSTableViewDelegate, NSUserNotificationCenterDelegate>
+@interface PutioMainController : NSWindowController<NSTableViewDataSource, NSTableViewDelegate, NSUserNotificationCenterDelegate, NSMenuDelegate>
 {
     IBOutlet NSTextField *message;
     IBOutlet NSProgressIndicator *activityIndicator;
     IBOutlet NSTextField *userInfo;
     IBOutlet NSTextField *transferInfo;
-    IBOutlet NSTextField *versionInfo;
     IBOutlet NSPanel *prefSheet;
     IBOutlet NSTableView *tableView;
-    IBOutlet NSButton *toggleShowTransfers;
-    IBOutlet NSButton *cancelTransfer;
-    IBOutlet NSStatusItem *statusItem;
-    
-    NSMutableArray *transfers;
+    IBOutlet NSView *diskusage;
+    IBOutlet NSTextField *usageMsg;
+    IBOutlet NSImageView *toggleTransfers;
+    IBOutlet NSImageView *avatar;
+    IBOutlet NSScrollView *scrollView;
+    IBOutlet PutioSearchResultsTableView *searchResults;
 }
 
 - (id)init;
@@ -30,21 +31,25 @@
 - (IBAction)openPrefefrences:(id)sender;
 - (IBAction)closePreferences:(id)sender;
 - (IBAction)checkForUpdates:(id)sender;
-- (IBAction)toggleShowTransfers:(id)sender;
-- (IBAction)cancelTransfer:(id)sender;
+- (void)toggleShowTransfers;
+- (bool)transfersAreVisible;
+- (void)streamVideo:(NSMenuItem*)sender;
+- (void)cancelTransfer:(NSMenuItem*)sender;
 - (void)openFileOnPutIO;
 
 @property (nonatomic, retain) NSTextField *message;
 @property (nonatomic, retain) NSProgressIndicator *activityIndicator;
 @property (nonatomic, retain) NSTextField *userInfo;
 @property (nonatomic, retain) NSTextField *transferInfo;
-@property (nonatomic, retain) NSTextField *versionInfo;
 @property (assign) IBOutlet NSWindow *putiowindow;
 @property (nonatomic, retain) IBOutlet NSTableView *tableView;
-@property (nonatomic, retain) IBOutlet NSButton *toggleShowTransfers;
-@property (nonatomic, retain) IBOutlet NSButton *cancelTransfer;
-@property (strong, nonatomic) NSStatusItem *statusItem;
-
+@property (strong, nonatomic) IBOutlet NSView *diskusage;
+@property (strong, nonatomic) IBOutlet NSTextField *usageMsg;
+@property (strong, nonatomic) IBOutlet NSImageView *toggleTransfers;
+@property (strong, nonatomic) IBOutlet NSImageView *avatar;
+@property (strong, nonatomic) PutioSearchResultsTableView *searchResults;
+@property (strong, nonatomic) IBOutlet NSPopover *popResults;
+@property (strong, nonatomic) IBOutlet NSScrollView *scrollView;
 @property (strong) NSMutableArray *transfers;
 
 @end

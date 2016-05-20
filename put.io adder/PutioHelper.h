@@ -26,7 +26,7 @@
 - (void)addMagnet:(NSString *)magnetURL;
 - (void)uploadTorrent:(NSString *)filePath;
 - (void)checkForUpdates;
-- (NSString *)transformedValue:(id)value;
+- (NSString*)transformedValue:(double)value;
 
 @property (strong) PutioMainController *putioController;
 @property (strong) V2PutIOAPIClient *putioAPI;
