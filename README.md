@@ -1,7 +1,5 @@
 ## Put.io magnet: and .torrent Handler for OS X
-
 ![alt tag](http://f.cl.ly/items/0K420o1W192i0i2u0r31/Screen%20Shot%202013-11-07%20at%2017.51.05.png)
-
 *Put.IO Adder* is a small open source app for OS X, that registers as new handler for `magnet:` URI schemes, so that every time you click on a magnet link, it will automatically add it to your [put.io](http://put.io/) download queue.
 
 Follow me on Twitter: [@nicoSWD](https://twitter.com/nicoSWD)!
@@ -10,15 +8,17 @@ Follow me on Twitter: [@nicoSWD](https://twitter.com/nicoSWD)!
 - Automatically add `magnet:` links and `.torrent` files to your download queue by clicking on them
 - Stream finished movies directly from the app (requires [VLC](https://www.videolan.org/vlc/index.html) to be installed in /Applications)
 - View current transfers and their download status
+- Double click transfers to open them on put.io
 - `Notification Center` notifications on finished downloads
 - etc...
 
 **DOWNLOADS**
-- Newest
-  - [put.io adder v3.0](https://github.com/nicoSWD/put.io-adder/releases/tag/v3.0)
-- Older releases
-  - [put.io adder v2.9](https://github.com/nicoSWD/put.io-adder/releases/tag/v2.9)
-  - Other releases can be found [here](https://github.com/nicoSWD/put.io-adder/releases/)
+
+| Version | Downloads |
+|:----------:|:---------------:|
+| [put.io adder v3.0](https://github.com/nicoSWD/put.io-adder/releases/tag/v3.0)  | ![downloads](https://img.shields.io/github/downloads/nicoSWD/put.io-adder/v2.9/total.svg)
+
+  (Older releases can be found [here](https://github.com/nicoSWD/put.io-adder/releases/))
 
 **NOTES**
 - The app requires you to have a [put.io](http://put.io/) account. They're ~~probably~~ not free anymore.
