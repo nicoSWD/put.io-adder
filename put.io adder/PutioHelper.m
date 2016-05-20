@@ -15,6 +15,7 @@
 #import "PutioTransfersButton.h"
 #import <AppKit/AppKit.h>
 #import "NSString+md5.h"
+#import "NSString+UrlEncode.h"
 
 @implementation PutioHelper
 
@@ -54,11 +55,6 @@ static PutioHelper *sharedHelper = nil;
     }
 }
 
-- (void)startUserinfoTimer
-{
-    userInfoTimer = [NSTimer scheduledTimerWithTimeInterval:20.0  target:self selector:@selector(updateUserInfo) userInfo:nil repeats:YES];
-}
-
 - (void)updateUserInfo
 {
     [self.putioAPI getAccount:^(PKAccount *account) {
@@ -79,92 +75,30 @@ static PutioHelper *sharedHelper = nil;
         putioController.usageMsg.font = [NSFont fontWithName:@"Montserrat-Bold" size:12];
         putioController.usageMsg.layer.zPosition = 5;
         
+        putioController.avatar.image = [[NSImage alloc] initWithContentsOfURL:[NSURL URLWithString:[NSString stringWithFormat:@"https://www.gravatar.com/avatar/%@?s=%d", [[account mail] md5], (int)putioController.avatar.image.size.width]]];
+        putioController.avatar.layer.cornerRadius = 8.0;
+        
         [NSAnimationContext beginGrouping];
         [[NSAnimationContext currentContext] setDuration:2.0f];
         [[putioController.diskusage animator] setFrame:newFrame];
         [NSAnimationContext endGrouping];
-        
-        putioController.avatar.image = [[NSImage alloc] initWithContentsOfURL:[NSURL URLWithString:[NSString stringWithFormat:@"https://www.gravatar.com/avatar/%@?s=%d", [[account mail] md5], (int)putioController.avatar.image.size.width]]];
-        putioController.avatar.layer.cornerRadius = 8.0;
     } failure:^(NSError *error) {
         putioController.userInfo.stringValue = NSLocalizedString(@"HELPER_USERINFO_FAILED", nil);
     }];
     
-    [self.putioAPI getTransfers:^(NSArray *putioTransfers)
-    {
-        if (putioController.transfers.count > 0)
-        {
+    [self.putioAPI getTransfers:^(NSArray *putioTransfers) {
+        if (putioController.transfers.count > 0) {
             PKTransfer *currentTransfer;
             PKTransfer *newTransfer;
              
-            for (unsigned i = 0; i < putioController.transfers.count; i++)
-            {
+            for (unsigned i = 0; i < putioController.transfers.count; i++) {
                 currentTransfer = (PKTransfer*)[putioController.transfers objectAtIndex:i];
                  
-                for (unsigned j = 0; j < putioTransfers.count; j++)
-                {
+                for (unsigned j = 0; j < putioTransfers.count; j++) {
                     newTransfer = (PKTransfer*)[putioTransfers objectAtIndex:j];
                      
-                    if ((currentTransfer.id == newTransfer.id) &&
-                         ((![currentTransfer.status isEqualToString:@"COMPLETED"] &&
-                           ![currentTransfer.status isEqualToString:@"SEEDING"])
-                          &&
-                          ([newTransfer.status isEqualToString:@"COMPLETED"]
-                          || [newTransfer.status isEqualToString:@"SEEDING"])))
-                    {
-                        NSUserNotification *notification = [[NSUserNotification alloc] init];
-                        notification.title = NSLocalizedString(@"NOTIFICATION_TITLE", nil);
-                        notification.informativeText = [NSString stringWithFormat:NSLocalizedString(@"NOTIFICATION_MSG", nil), newTransfer.name];
-                        notification.soundName = NSUserNotificationDefaultSoundName;
-                        notification.userInfo = @{@"fileID": newTransfer.fileID};
-
-                        NSUserNotificationCenter *notificationCenter = [NSUserNotificationCenter defaultUserNotificationCenter];
-                        [notificationCenter setDelegate:self.putioController];
-
-                        // NS_AVAILABLE(10_9, NA)
-                        if ([notification respondsToSelector:@selector(setContentImage:)]) {
-                            // PutioKit failed me at getting additional file info.
-                            // Maybe I failed
-                            // Using this until I know how to fix it.
-                            NSString *baseurl = @"https://api.put.io/";
-                            NSString *path = [NSString stringWithFormat:@"/v2/files/%@", newTransfer.fileID];
-                            
-                            AFHTTPClient *client = [[AFHTTPClient alloc] initWithBaseURL:[NSURL URLWithString:baseurl]];
-                            [client registerHTTPOperationClass:[AFJSONRequestOperation class]];
-                            [client setDefaultHeader:@"Accept" value:@"application/json"];
-                            [client setParameterEncoding:AFJSONParameterEncoding];
-                            
-                            [client
-                                getPath:path
-                                parameters:@{@"oauth_token": sharedHelper.putioAPI.apiToken}
-                                success: ^(AFHTTPRequestOperation *operation, id JSON) {
-                                NSDictionary *file = [JSON valueForKey:@"file"];
-                                NSString *contentImage;
-
-                                if (file) {
-                                    if ([file valueForKey:@"screenshot"] != nil) {
-                                        contentImage = [file valueForKey:@"screenshot"];
-                                    } else {
-                                        contentImage = [file valueForKey:@"icon"];
-                                    }
-                                
-                                    @try {
-                                        notification.contentImage = [[NSImage alloc] initWithContentsOfURL:[NSURL URLWithString:contentImage]];
-                                    } @catch (NSException *e) {
-                                    } @finally {
-                                        [notificationCenter deliverNotification:notification];
-                                    }
-                                }
-                            }
-                            failure:^(AFHTTPRequestOperation *operation, NSError *error)
-                            {
-                                // NSLog("Failed to fetch screenshot/icon");
-                            }];
-                        }
-                        else
-                        {
-                            [notificationCenter deliverNotification:notification];
-                        }
+                    if (currentTransfer.id == newTransfer.id && [self transferIsCompleted:newTransfer oldTransfer:currentTransfer]) {
+                        [self dispatchDownloadNotification:newTransfer];
                     }
                 }
             }
@@ -190,6 +124,8 @@ static PutioHelper *sharedHelper = nil;
             }
         }
         
+        percentDone = percentDone / totalTransfers;
+        
         id badgeText = nil;
         
         if (pendingDownloads == 0) {
@@ -211,7 +147,67 @@ static PutioHelper *sharedHelper = nil;
     }];
 }
 
-- (void)handleURLEvent:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)replyEvent
+-(bool)transferIsCompleted:(PKTransfer*)transfer oldTransfer:(PKTransfer*)oldTransfer
+{
+    return (![oldTransfer.status isEqualToString:@"COMPLETED"] && ![oldTransfer.status isEqualToString:@"SEEDING"]) &&
+            ([transfer.status isEqualToString:@"COMPLETED"] || [transfer.status isEqualToString:@"SEEDING"]);
+
+}
+
+-(void)dispatchDownloadNotification:(PKTransfer*)transfer
+{
+    NSUserNotification *notification = [[NSUserNotification alloc] init];
+    notification.title = NSLocalizedString(@"NOTIFICATION_TITLE", nil);
+    notification.informativeText = [NSString stringWithFormat:NSLocalizedString(@"NOTIFICATION_MSG", nil), transfer.name];
+    notification.soundName = NSUserNotificationDefaultSoundName;
+    notification.userInfo = @{@"fileID": transfer.fileID};
+    
+    NSUserNotificationCenter *notificationCenter = [NSUserNotificationCenter defaultUserNotificationCenter];
+    [notificationCenter setDelegate:self.putioController];
+    
+    // NS_AVAILABLE(10_9, NA)
+    if ([notification respondsToSelector:@selector(setContentImage:)]) {
+        // PutioKit failed me at getting additional file info.
+        // Maybe I failed
+        // Using this until I know how to fix it.
+        NSString *baseurl = @"https://api.put.io/";
+        NSString *path = [NSString stringWithFormat:@"/v2/files/%@", transfer.fileID];
+        
+        AFHTTPClient *client = [[AFHTTPClient alloc] initWithBaseURL:[NSURL URLWithString:baseurl]];
+        [client registerHTTPOperationClass:[AFJSONRequestOperation class]];
+        [client setDefaultHeader:@"Accept" value:@"application/json"];
+        [client setParameterEncoding:AFJSONParameterEncoding];
+        
+        [client
+         getPath:path
+         parameters:@{@"oauth_token": sharedHelper.putioAPI.apiToken}
+         success: ^(AFHTTPRequestOperation *operation, id JSON) {
+             NSDictionary *file = [JSON valueForKey:@"file"];
+             NSString *contentImage;
+             
+             if (file) {
+                 if ([file valueForKey:@"screenshot"] != nil) {
+                     contentImage = [file valueForKey:@"screenshot"];
+                 } else {
+                     contentImage = [file valueForKey:@"icon"];
+                 }
+                 
+                 @try {
+                     notification.contentImage = [[NSImage alloc] initWithContentsOfURL:[NSURL URLWithString:contentImage]];
+                 } @catch (NSException *e) {
+                 } @finally {
+                     [notificationCenter deliverNotification:notification];
+                 }
+             }
+         } failure:^(AFHTTPRequestOperation *operation, NSError *error) {
+             // NSLog("Failed to fetch screenshot/icon");
+         }];
+    } else {
+        [notificationCenter deliverNotification:notification];
+    }
+}
+
+- (void)handleURLEvent:(NSAppleEventDescriptor*)event withReplyEvent:(NSAppleEventDescriptor*)replyEvent
 {
     NSString *url = [[event paramDescriptorForKeyword:keyDirectObject] stringValue];
     
@@ -233,6 +229,7 @@ static PutioHelper *sharedHelper = nil;
     
     if ([matches count] > 0) {
         displayName = [[magnetURL substringWithRange:[[matches objectAtIndex:0] rangeAtIndex:1]] displayNameString];
+        displayName = [displayName urlDecode];
     } else {
         displayName = magnetURL;
     }
@@ -360,6 +357,10 @@ static PutioHelper *sharedHelper = nil;
     }
 }
 
+- (void)startUserinfoTimer
+{
+    userInfoTimer = [NSTimer scheduledTimerWithTimeInterval:20.0  target:self selector:@selector(updateUserInfo) userInfo:nil repeats:YES];
+}
 
 /**
  * transformedValue method by "Parag Bafna", from: http://stackoverflow.com/questions/7846495/

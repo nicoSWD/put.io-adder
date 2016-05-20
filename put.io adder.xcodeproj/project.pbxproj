@@ -372,10 +372,10 @@
 				037D6F5C1A06CD99000121B2 /* PutioSearchField.m */,
 				037D6F5E1A0808C6000121B2 /* PutioSearchResultsTableView.h */,
 				037D6F5F1A0808C6000121B2 /* PutioSearchResultsTableView.m */,
-				03F630DC16D6B5D400D33848 /* MainMenu.xib */,
-				037D6F541A06BF89000121B2 /* Images.xcassets */,
 				039AB6191A0ACBA200ACABC0 /* PutioResultsViewController.h */,
 				039AB61A1A0ACBA200ACABC0 /* PutioResultsViewController.m */,
+				03F630DC16D6B5D400D33848 /* MainMenu.xib */,
+				037D6F541A06BF89000121B2 /* Images.xcassets */,
 			);
 			path = "put.io adder";
 			sourceTree = "<group>";

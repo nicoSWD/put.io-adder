@@ -9,7 +9,6 @@
 #import "PutioMainController.h"
 #import "PutioHelper.h"
 #import "PutioSearchResultsTableView.h"
-//#import <QTKit/QTKit.h>
 
 @implementation PutioMainController
 
@@ -26,7 +25,8 @@
     toggleTransfers,
     avatar,
     searchResults,
-    popResults;
+    popResults,
+    scrollView;
 
 - (id)init
 {
@@ -92,7 +92,10 @@
 - (void)toggleShowTransfers
 {
     CGRect newFrame;
+    CGRect scrollViewFrame;
     int extraMargin = 106;
+    int tableHeight;
+    int tableWidth;
     
     if ([self transfersAreVisible]) {
         newFrame = CGRectMake(
@@ -101,6 +104,8 @@
             self.putiowindow.minSize.width,
             self.putiowindow.minSize.height
         );
+        tableHeight = 0;
+        tableWidth = 0;
     } else {
         newFrame = CGRectMake(
             self.putiowindow.frame.origin.x,
@@ -109,8 +114,22 @@
             self.putiowindow.maxSize.height
         );
         
-        [self.putiowindow setShowsResizeIndicator:YES];
+        tableHeight = 203;
+        tableWidth = 526;
     }
+    
+    scrollViewFrame = CGRectMake(12, 11, tableWidth, tableHeight);
+
+//    [NSAnimationContext runAnimationGroup:^(NSAnimationContext * _Nonnull context) {
+//        [context setDuration:5.0f];
+//        [self.putiowindow setFrame:newFrame display:YES animate:YES];
+//    } completionHandler:^{
+//        [self.scrollView setFrame:tableFrame];
+//    }];
+
+    [[NSAnimationContext currentContext] setCompletionHandler:^{
+        [self.scrollView setFrame:scrollViewFrame];
+    }];
     
     [self.putiowindow setFrame:newFrame display:YES animate:YES];
 }
@@ -135,7 +154,11 @@
     } else if ([tableColumn.identifier isEqualToString:@"eta"]) {
         int numberOfSeconds = (int)[trans.estimatedTime integerValue];
         
-        if (![trans.status isEqualToString:@"DOWNLOADING"] || numberOfSeconds <= 0) {
+        if ([trans.status isEqualToString:@"COMPLETING"]) {
+            return @"Finishing";
+        }
+        
+        if ([trans.status isEqualToString:@"COMPLETED"] || [trans.status isEqualToString:@"SEEDING"]) {
             return @"Done";
         }
         
@@ -150,6 +173,10 @@
         if (minutes) {
             return [NSString stringWithFormat:@"%dm %02ds", minutes, seconds];
         }
+        
+        if (seconds <= 0) {
+            return @"Waiting...";
+        }
 
         return [NSString stringWithFormat:@"%ds", seconds];
     } else if ([tableColumn.identifier isEqualToString:@"size"]) {
@@ -161,7 +188,6 @@
     return nil;
 }
 
-
 - (void)tableView:(NSTableView *)_tableView sortDescriptorsDidChange: (NSArray *)oldDescriptors
 {
     NSArray *newDescriptors = [_tableView sortDescriptors];
@@ -169,44 +195,8 @@
     [self.tableView reloadData];
 }
 
-
-- (void)tableView:(NSTableView *)aTableView willDisplayCell:(id)aCell forTableColumn:(NSTableColumn *)aTableColumn row:(NSInteger)rowIndex
+- (void)cancelTransfer:(NSMenuItem*)sender
 {
-//    if ([aCell respondsToSelector:@selector(setBackgroundColor:)]) {
-//        if ([[aTableView selectedRowIndexes] containsIndex:rowIndex])
-//        {
-//            [aCell setBackgroundColor: [NSColor yellowColor]];
-//        }
-//        else
-//        {
-//            [aCell setBackgroundColor: [NSColor yellowColor]];
-//        }
-//        
-//        [aCell setDrawsBackground:YES];
-//    }
-}
-
-
-- (void)tableViewSelectionDidChange:(NSNotification *)aNotification {
-    
-//    NSInteger selectedRow = [self.tableView selectedRow];
-//    NSTableRowView *aCell = [self.tableView rowViewAtRow:selectedRow makeIfNecessary:NO];
-//    
-//    if ([[self.tableView selectedRowIndexes] containsIndex:selectedRow])
-//    {
-//        [aCell setBackgroundColor: [NSColor yellowColor]];
-//    }
-//    else
-//    {
-//        [aCell setBackgroundColor: [NSColor yellowColor]];
-//    }
-    
-//    [aCell setDrawsBackground:YES];
-//    [myRowView setEmphasized:NO];
-}
-
-
-- (void)cancelTransfer:(NSMenuItem*)sender {
     PKTransfer *transfer;
  
     @try {

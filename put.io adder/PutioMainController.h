@@ -22,6 +22,7 @@
     IBOutlet NSTextField *usageMsg;
     IBOutlet NSImageView *toggleTransfers;
     IBOutlet NSImageView *avatar;
+    IBOutlet NSScrollView *scrollView;
     IBOutlet PutioSearchResultsTableView *searchResults;
     
     NSMutableArray *transfers;
@@ -50,6 +51,7 @@
 @property (strong, nonatomic) IBOutlet NSImageView *avatar;
 @property (strong, nonatomic) PutioSearchResultsTableView *searchResults;
 @property (strong, nonatomic) IBOutlet NSPopover *popResults;
+@property (strong, nonatomic) IBOutlet NSScrollView *scrollView;
 @property (strong) NSMutableArray *transfers;
 
 @end
