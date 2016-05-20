@@ -40,7 +40,7 @@
             
             NSString *deleteString = [NSString stringWithFormat:@"Cancel \"%@\"", transfer.name];
             NSMenuItem *deleteItem = [[NSMenuItem alloc] initWithTitle:deleteString action:@selector(cancelTransfer:) keyEquivalent:@""];
-            deleteItem.image = [NSImage imageNamed:@"arrow"];
+            deleteItem.image = [NSImage imageNamed:@"cancel"];
             NSAttributedString *attributedTitle = [[NSAttributedString alloc] initWithString:[deleteItem title] attributes:attributes];
             
             [deleteItem setAttributedTitle:attributedTitle];
@@ -49,6 +49,7 @@
             
             NSString *streamString = [NSString stringWithFormat:@"Stream \"%@\"", transfer.name];
             NSMenuItem *streamItem = [[NSMenuItem alloc] initWithTitle:streamString action:@selector(streamVideo:) keyEquivalent:@""];
+            streamItem.image = [NSImage imageNamed:@"vlc"];
             attributedTitle = [[NSAttributedString alloc] initWithString:[streamItem title] attributes:attributes];
             
             [streamItem setAttributedTitle:attributedTitle];

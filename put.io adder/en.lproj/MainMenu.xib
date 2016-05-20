@@ -170,14 +170,14 @@
                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                             <subviews>
                                 <tableView autoresizesSubviews="NO" focusRingType="none" verticalHuggingPriority="750" allowsExpansionToolTips="YES" columnAutoresizingStyle="lastColumnOnly" alternatingRowBackgroundColors="YES" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" headerView="1381" id="1379" customClass="PutioTableView">
-                                    <rect key="frame" x="0.0" y="107" width="525" height="179"/>
+                                    <rect key="frame" x="0.0" y="107" width="525" height="19"/>
                                     <autoresizingMask key="autoresizingMask" flexibleMinY="YES"/>
                                     <size key="intercellSpacing" width="0.0" height="2"/>
                                     <color key="backgroundColor" name="controlBackgroundColor" catalog="System" colorSpace="catalog"/>
                                     <tableViewGridLines key="gridStyleMask" vertical="YES"/>
                                     <color key="gridColor" red="0.90588235289999997" green="0.91764705879999997" blue="0.93725490199999995" alpha="1" colorSpace="calibratedRGB"/>
                                     <tableColumns>
-                                        <tableColumn identifier="name" width="250" minWidth="10" maxWidth="3.4028234663852886e+38" id="0k2-HA-Ygv">
+                                        <tableColumn identifier="name" editable="NO" width="250" minWidth="10" maxWidth="3.4028234663852886e+38" id="0k2-HA-Ygv">
                                             <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="Name">
                                                 <font key="font" metaFont="smallSystem"/>
                                                 <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
@@ -227,7 +227,7 @@
                                             </textFieldCell>
                                             <tableColumnResizingMask key="resizingMask" resizeWithTable="YES" userResizable="YES"/>
                                         </tableColumn>
-                                        <tableColumn identifier="size" editable="NO" width="70" minWidth="10" maxWidth="70" id="2296">
+                                        <tableColumn identifier="size" editable="NO" width="69" minWidth="10" maxWidth="70" id="2296">
                                             <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="Size">
                                                 <font key="font" metaFont="smallSystem"/>
                                                 <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
@@ -250,7 +250,7 @@
                             <color key="backgroundColor" name="controlBackgroundColor" catalog="System" colorSpace="catalog"/>
                         </clipView>
                         <edgeInsets key="contentInsets" left="0.0" right="0.0" top="0.0" bottom="0.0"/>
-                        <scroller key="horizontalScroller" verticalHuggingPriority="750" horizontal="YES" id="1380">
+                        <scroller key="horizontalScroller" hidden="YES" verticalHuggingPriority="750" horizontal="YES" id="1380">
                             <rect key="frame" x="1" y="186" width="524" height="16"/>
                             <autoresizingMask key="autoresizingMask"/>
                         </scroller>
