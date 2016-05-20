@@ -12,7 +12,9 @@
 #import "V2PutIOAPIClient.h"
 #import "NSString+DisplayName.h"
 #import "AFPropertyListRequestOperation.h"
+#import "PutioTransfersButton.h"
 #import <AppKit/AppKit.h>
+#import "NSString+md5.h"
 
 @implementation PutioHelper
 
@@ -53,9 +55,7 @@ static PutioHelper *sharedHelper = nil;
     else
     {
         [self.putioAPI setApiToken: token];
-        [self updateUserInfo];
-        [self.putioController.toggleShowTransfers setEnabled:YES];
-        
+        [self updateUserInfo];        
         [self startUserinfoTimer];
     }
 }
@@ -71,11 +71,31 @@ static PutioHelper *sharedHelper = nil;
 {
     [self.putioAPI getAccount:^(PKAccount *account)
     {
-        putioController.userInfo.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_USERINFO_ACCOUNT", nil),
-             [account username],
-             [self transformedValue:[account diskUsed]],
-             [self transformedValue:[account diskSize]]
-        ];
+        float total = [[account diskSize] floatValue];
+        float used  = [[account diskUsed] floatValue];
+        float leftBytes = total - used;
+        float percentage = (used * 100) / total;
+        
+        CGRect newFrame = CGRectMake(
+            putioController.diskusage.frame.origin.x,
+            putioController.diskusage.frame.origin.y,
+            percentage,
+            putioController.diskusage.frame.size.height
+        );
+        
+        [NSAnimationContext beginGrouping];
+        [[NSAnimationContext currentContext] setDuration:2.0f];
+        [[putioController.diskusage animator] setFrame:newFrame];
+        [NSAnimationContext endGrouping];
+        
+        putioController.userInfo.stringValue = [account username];
+        putioController.usageMsg.stringValue = [NSString stringWithFormat:@"%@ left", [self transformedValue:leftBytes]];
+        
+        putioController.usageMsg.font = [NSFont fontWithName:@"Montserrat-Bold" size:12];
+        [putioController.usageMsg setNeedsDisplay: YES];
+        
+        putioController.avatar.image = [[NSImage alloc] initWithContentsOfURL:[NSURL URLWithString:[NSString stringWithFormat:@"http://www.gravatar.com/avatar/%@?s=%d", [[account mail] md5], (int)putioController.avatar.image.size.width]]];
+        putioController.avatar.layer.cornerRadius = 8.0;
     }
     failure:^(NSError *error)
     {
@@ -134,6 +154,7 @@ static PutioHelper *sharedHelper = nil;
                             {
                                 NSDictionary *file = [JSON valueForKey:@"file"];
                                 NSString *contentImage;
+
                                 if (file)
                                 {
                                     if ([file valueForKey:@"screenshot"] != nil)
@@ -144,7 +165,7 @@ static PutioHelper *sharedHelper = nil;
                                     {
                                         contentImage = [file valueForKey:@"icon"];
                                     }
-                                    
+                                
                                     @try
                                     {
                                         notification.contentImage = [[NSImage alloc] initWithContentsOfURL:[NSURL URLWithString:contentImage]];
@@ -157,8 +178,6 @@ static PutioHelper *sharedHelper = nil;
                                         [notificationCenter deliverNotification:notification];
                                     }
                                 }
-
-                                
                             }
                             failure:^(AFHTTPRequestOperation *operation, NSError *error)
                             {
@@ -198,37 +217,31 @@ static PutioHelper *sharedHelper = nil;
             }
         }
         
-        if (putioController.statusItem == nil && pendingDownloads > 0)
-        {
-            putioController.statusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
-            [putioController.statusItem setMenu:[[NSMenu alloc] init]];
-            [putioController.statusItem setImage:[NSImage imageNamed:@"puticon"]];
-        }
+        id badgeText = nil;
         
         if (pendingDownloads == 0)
         {
-            putioController.transferInfo.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_NO_PENDING_TRANSFERS", nil), completedDownloads];
-            
-            [[NSStatusBar systemStatusBar] removeStatusItem: putioController.statusItem];
-            putioController.statusItem = nil;
+            putioController.message.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_NO_PENDING_TRANSFERS", nil), completedDownloads];
         }
         else
         {
-            [putioController.statusItem setTitle:[NSString stringWithFormat:@"%i%%", (percentDone / pendingDownloads)]];
-            
             if (pendingDownloads == 1)
             {
-                putioController.transferInfo.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_PENDING_TRANSFERS_SINGULAR", nil), completedDownloads];
+                putioController.message.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_PENDING_TRANSFERS_SINGULAR", nil), completedDownloads];
             }
             else
             {
-                putioController.transferInfo.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_PENDING_TRANSFERS_PURAL", nil), pendingDownloads, completedDownloads];
+                putioController.message.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_PENDING_TRANSFERS_PURAL", nil), pendingDownloads, completedDownloads];
             }
+            
+            badgeText = [NSString stringWithFormat:@"%d%%", percentDone];
         }
+        
+        [[[NSApplication sharedApplication] dockTile] setBadgeLabel:badgeText];
     }
     failure:^(NSError *error)
     {
-        putioController.userInfo.stringValue = NSLocalizedString(@"HELPER_TRANSFERS_FAILED", nil);
+        putioController.message.stringValue = NSLocalizedString(@"HELPER_TRANSFERS_FAILED", nil);
     }];
 }
 
@@ -279,6 +292,11 @@ static PutioHelper *sharedHelper = nil;
          else
          {
              putioController.message.stringValue = NSLocalizedString(@"HELPER_MAGNET_ADDED", nil);
+             
+             if ([PutioHelper sharedHelper].putioController.transfersAreHidden)
+             {
+                 [putioController.toggleTransfers mouseUp:nil];
+             }
          }
          
          [self updateUserInfo];
@@ -289,7 +307,7 @@ static PutioHelper *sharedHelper = nil;
          putioController.message.stringValue = NSLocalizedString(@"HELPER_MAGNET_ERROR", nil);
          [putioController.activityIndicator stopAnimation:nil];
      }
-                                    networkFailure:^(NSError *error)
+     networkFailure:^(NSError *error)
      {
          // Put.io returns HTTP 400 if you're adding an URL that's already in the queue...
          // ... and thereby causing AFNetworking to throw a network error.
@@ -403,8 +421,6 @@ static PutioHelper *sharedHelper = nil;
             controller.message.stringValue = @"Authenticated and ready to go!";
             helper.putioAPI.apiToken = token;
             [helper updateUserInfo];
-            
-            [controller.toggleShowTransfers setEnabled:YES];
             [controller.window orderFront:self];
         }
         else
@@ -423,12 +439,12 @@ static PutioHelper *sharedHelper = nil;
  * transformedValue method by "Parag Bafna", from: http://stackoverflow.com/questions/7846495/
  *
  **/
-- (NSString*)transformedValue:(id)value
+- (NSString*)transformedValue:(double)value
 {
-    double convertedValue = [value doubleValue];
+    double convertedValue = value; //[value doubleValue];
     int multiplyFactor = 0;
     
-    NSArray *tokens = [NSArray arrayWithObjects:@"bytes",@"KiB",@"MiB",@"GiB",@"TiB",nil];
+    NSArray *tokens = [NSArray arrayWithObjects:@"B",@"KB",@"MB",@"GB",@"TB",nil];
     
     while (convertedValue > 1024)
     {
@@ -436,7 +452,8 @@ static PutioHelper *sharedHelper = nil;
         multiplyFactor++;
     }
     
-    return [NSString stringWithFormat:@"%4.2f %@", convertedValue, [tokens objectAtIndex:multiplyFactor]];
+    NSString *str = [NSString stringWithFormat:@"%4.1f %@", convertedValue, [tokens objectAtIndex:multiplyFactor]];
+    return [str stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
 }
 
 @end

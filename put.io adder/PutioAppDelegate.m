@@ -11,7 +11,6 @@
 
 @implementation PutioAppDelegate
 
-
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender
 {
     return YES;

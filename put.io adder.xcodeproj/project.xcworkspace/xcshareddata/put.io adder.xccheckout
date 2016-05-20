@@ -10,6 +10,10 @@
 	<string>put.io adder</string>
 	<key>IDESourceControlProjectOriginsDictionary</key>
 	<dict>
+		<key>0EFDF2D073A77BC2CB2CF6173E0F3A830E66F8AF</key>
+		<string>git://git.videolan.org/vlc-bindings/VLCKit.git</string>
+		<key>3F5A447ED7276129BCD3AC3D011399160950BEB3</key>
+		<string>https://github.com/kevinrenskers/NSString-UrlEncode.git</string>
 		<key>577FB7CA1C505AE30B8C5B3FBAB741240BD8F4B2</key>
 		<string>github.com:nicoSWD/put.io-adder.git</string>
 		<key>C16576B571172538D95183F9515DC5DB064EAF7F</key>
@@ -23,14 +27,18 @@
 	<string>put.io adder.xcodeproj</string>
 	<key>IDESourceControlProjectRelativeInstallPathDictionary</key>
 	<dict>
+		<key>0EFDF2D073A77BC2CB2CF6173E0F3A830E66F8AF</key>
+		<string>../../VLCKit</string>
+		<key>3F5A447ED7276129BCD3AC3D011399160950BEB3</key>
+		<string>../../put.io%20adder/NSString-UrlEncode</string>
 		<key>577FB7CA1C505AE30B8C5B3FBAB741240BD8F4B2</key>
 		<string>../..</string>
 		<key>C16576B571172538D95183F9515DC5DB064EAF7F</key>
 		<string>../..sskeychain</string>
 		<key>CE7EA561763805DACBC7B43AEC9128B8D4A24DF1</key>
-		<string>../../PutioKit/</string>
+		<string>../../PutioKit</string>
 		<key>DD20A1A48C66B5213E0FEBB87A95EF51D6C6F3E8</key>
-		<string>../../AFNetworking/</string>
+		<string>../../AFNetworking</string>
 	</dict>
 	<key>IDESourceControlProjectURL</key>
 	<string>github.com:nicoSWD/put.io-adder.git</string>
@@ -47,6 +55,14 @@
 			<string>DD20A1A48C66B5213E0FEBB87A95EF51D6C6F3E8</string>
 			<key>IDESourceControlWCCName</key>
 			<string>AFNetworking</string>
+		</dict>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>3F5A447ED7276129BCD3AC3D011399160950BEB3</string>
+			<key>IDESourceControlWCCName</key>
+			<string>NSString-UrlEncode</string>
 		</dict>
 		<dict>
 			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
@@ -71,6 +87,14 @@
 			<string>CE7EA561763805DACBC7B43AEC9128B8D4A24DF1</string>
 			<key>IDESourceControlWCCName</key>
 			<string>PutioKit</string>
+		</dict>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>0EFDF2D073A77BC2CB2CF6173E0F3A830E66F8AF</string>
+			<key>IDESourceControlWCCName</key>
+			<string>VLCKit</string>
 		</dict>
 	</array>
 </dict>

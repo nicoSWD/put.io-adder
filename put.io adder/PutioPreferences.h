@@ -8,8 +8,7 @@
 
 #import <Cocoa/Cocoa.h>
 
-@interface PutioPreferences : NSPanel
-{
+@interface PutioPreferences : NSPanel {
     IBOutlet NSButton *closeWhenFinishedMagnet;
     IBOutlet NSButton *closeWhenFinishedTorrent;
     IBOutlet NSButton *checkForUpdates;
