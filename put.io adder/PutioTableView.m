@@ -40,7 +40,7 @@
             
             NSString *deleteString = [NSString stringWithFormat:@"Cancel \"%@\"", transfer.name];
             NSMenuItem *deleteItem = [[NSMenuItem alloc] initWithTitle:deleteString action:@selector(cancelTransfer:) keyEquivalent:@""];
-            //deleteItem.image = [NSImage imageNamed:@"arrow"];
+            deleteItem.image = [NSImage imageNamed:@"arrow"];
             NSAttributedString *attributedTitle = [[NSAttributedString alloc] initWithString:[deleteItem title] attributes:attributes];
             
             [deleteItem setAttributedTitle:attributedTitle];
@@ -52,7 +52,7 @@
             attributedTitle = [[NSAttributedString alloc] initWithString:[streamItem title] attributes:attributes];
             
             [streamItem setAttributedTitle:attributedTitle];
-            deleteItem.tag = row;
+            streamItem.tag = row;
             [menu addItem:streamItem];
             
             return menu;

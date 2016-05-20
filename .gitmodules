@@ -10,6 +10,3 @@
 [submodule "put.io adder/NSString-UrlEncode"]
 	path = put.io adder/NSString-UrlEncode
 	url = https://github.com/kevinrenskers/NSString-UrlEncode.git
-[submodule "VLCKit"]
-	path = VLCKit
-	url = git://git.videolan.org/vlc-bindings/VLCKit.git

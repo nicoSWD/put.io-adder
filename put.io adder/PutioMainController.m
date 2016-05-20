@@ -92,43 +92,32 @@
 - (void)toggleShowTransfers
 {
     CGRect newFrame;
-    CGRect scrollViewFrame;
     int extraMargin = 106;
     int tableHeight;
     int tableWidth;
     
     if ([self transfersAreVisible]) {
+        tableHeight = 0;
+        tableWidth = 0;
         newFrame = CGRectMake(
             self.putiowindow.frame.origin.x,
             self.putiowindow.frame.origin.y + self.putiowindow.minSize.height + extraMargin,
             self.putiowindow.minSize.width,
             self.putiowindow.minSize.height
         );
-        tableHeight = 0;
-        tableWidth = 0;
     } else {
+        tableHeight = 203;
+        tableWidth = 526;
         newFrame = CGRectMake(
             self.putiowindow.frame.origin.x,
             self.putiowindow.frame.origin.y - self.putiowindow.minSize.height - extraMargin,
             self.putiowindow.maxSize.width,
             self.putiowindow.maxSize.height
         );
-        
-        tableHeight = 203;
-        tableWidth = 526;
     }
     
-    scrollViewFrame = CGRectMake(12, 11, tableWidth, tableHeight);
-
-//    [NSAnimationContext runAnimationGroup:^(NSAnimationContext * _Nonnull context) {
-//        [context setDuration:5.0f];
-//        [self.putiowindow setFrame:newFrame display:YES animate:YES];
-//    } completionHandler:^{
-//        [self.scrollView setFrame:tableFrame];
-//    }];
-
     [[NSAnimationContext currentContext] setCompletionHandler:^{
-        [self.scrollView setFrame:scrollViewFrame];
+        [self.scrollView setFrame:CGRectMake(12, 11, tableWidth, tableHeight)];
     }];
     
     [self.putiowindow setFrame:newFrame display:YES animate:YES];
@@ -221,7 +210,8 @@
     }];
 }
 
-- (void)streamVideo:(NSMenuItem *)sender {
+- (void)streamVideo:(NSMenuItem *)sender
+{
     PKTransfer *transfer;
     
     @try {
@@ -234,35 +224,33 @@
     
     if (bundle == nil) {
         NSAlert *alert = [NSAlert
-                          alertWithMessageText:@"Error"
-                          defaultButton:@"Okay"
-                          alternateButton:nil
-                          otherButton:nil
-                          informativeTextWithFormat:@"Unable to find VLC.app in /Applications"
-                          ];
+            alertWithMessageText:@"Error"
+            defaultButton:@"Okay"
+            alternateButton:nil
+            otherButton:nil
+            informativeTextWithFormat:@"Unable to find VLC.app in /Applications"
+        ];
         [alert runModal];
         return;
     }
     
     self.message.stringValue = @"Streaming video...";
     
-    NSArray *args = [NSArray arrayWithObjects:@"vvv", @"https://put.io/v2/files/312186790/mp4/stream?token=", nil];
+    PutioHelper *helper = [PutioHelper sharedHelper];
+    NSString *url = [NSString stringWithFormat:@"https://put.io/v2/files/%@/stream?oauth_token=%@", [transfer fileID], [helper putioAPI].apiToken];
+    NSArray *args = [NSArray arrayWithObjects:url, nil];
     NSTask *task = [NSTask launchedTaskWithLaunchPath:bundle.executablePath arguments:args];
-    
-    while (task.isRunning) {
-        
-    }
-    
-    self.message.stringValue = @"Finished";
+    [task launch];
 }
 
-- (void)userNotificationCenter:(NSUserNotificationCenter *)center didActivateNotification:(NSUserNotification *)notification {
+- (void)userNotificationCenter:(NSUserNotificationCenter *)center didActivateNotification:(NSUserNotification *)notification
+{
     NSString *url = [NSString stringWithFormat:@"https://put.io/file/%@", [notification.userInfo valueForKey:@"fileID"]];
     [[NSWorkspace sharedWorkspace] openURL: [NSURL URLWithString: url]];
 }
 
-
-- (void)openFileOnPutIO {
+- (void)openFileOnPutIO
+{
     if (self.tableView.clickedRow == -1) {
         // Table header was clicked
         return;

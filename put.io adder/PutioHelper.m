@@ -124,7 +124,9 @@ static PutioHelper *sharedHelper = nil;
             }
         }
         
-        percentDone = percentDone / totalTransfers;
+        if (pendingDownloads > 0) {
+            percentDone /= pendingDownloads;
+        }
         
         id badgeText = nil;
         

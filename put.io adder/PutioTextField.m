@@ -15,19 +15,15 @@
     NSString *fontFilePath = [[NSBundle mainBundle] resourcePath];
     NSURL *fontsURL = [NSURL fileURLWithPath:fontFilePath];
     
-    if (fontsURL != nil)
-    {
+    if (fontsURL != nil) {
         FSRef fsRef;
         CFURLGetFSRef((CFURLRef)fontsURL, &fsRef);
         
         OSStatus status = ATSFontActivateFromFileReference(&fsRef, kATSFontContextLocal, kATSFontFormatUnspecified, NULL, kATSOptionFlagsDefault, NULL);
         
-        if (status != noErr)
-        {
+        if (status != noErr) {
             NSLog(@"Unable to load fonts");
-        }
-        else
-        {
+        } else {
             self.font = [NSFont fontWithName:@"Montserrat-Bold" size:12];
         }
     }    

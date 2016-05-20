@@ -24,8 +24,6 @@
     IBOutlet NSImageView *avatar;
     IBOutlet NSScrollView *scrollView;
     IBOutlet PutioSearchResultsTableView *searchResults;
-    
-    NSMutableArray *transfers;
 }
 
 - (id)init;
