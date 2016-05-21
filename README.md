@@ -17,7 +17,7 @@ Follow me on Twitter: [@nicoSWD](https://twitter.com/nicoSWD)!
 
 | Version | Downloads |
 |:----------:|:---------------:|
-| [put.io adder v3.0.1](https://github.com/nicoSWD/put.io-adder/releases/tag/v3.0.1)  | ![downloads](https://img.shields.io/github/downloads/nicoSWD/put.io-adder/v3.0.1/total.svg)
+| **[put.io adder v3.0.1](https://github.com/nicoSWD/put.io-adder/releases/download/v3.0.1/put.io-adder-v3.0.1.zip)** | ![downloads](https://img.shields.io/github/downloads/nicoSWD/put.io-adder/v3.0.1/total.svg)
 
   (Older releases can be found [here](https://github.com/nicoSWD/put.io-adder/releases/))
 
