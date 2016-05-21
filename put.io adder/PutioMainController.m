@@ -162,10 +162,6 @@
         if (minutes) {
             return [NSString stringWithFormat:@"%dm %02ds", minutes, seconds];
         }
-        
-        //if (seconds <= 0) {
-        //    return @"Waiting...";
-        //}
 
         return [NSString stringWithFormat:@"%ds", seconds];
     } else if ([tableColumn.identifier isEqualToString:@"size"]) {
@@ -220,7 +216,8 @@
         return;
     } @finally {}
     
-    NSBundle *bundle = [NSBundle bundleWithPath:@"/Applications/VLC.app"];
+     NSBundle *bundle = [NSBundle bundleWithPath:@"/Applications/VLC.app"];
+//    NSBundle *bundle = [NSBundle bundleWithIdentifier:@"org.videolan.vlc"];
     
     if (bundle == nil) {
         NSAlert *alert = [NSAlert
