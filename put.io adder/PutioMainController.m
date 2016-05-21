@@ -237,7 +237,7 @@
     self.message.stringValue = @"Streaming video...";
     
     PutioHelper *helper = [PutioHelper sharedHelper];
-    NSString *url = [NSString stringWithFormat:@"https://put.io/v2/files/%@/stream?oauth_token=%@", [transfer fileID], [helper putioAPI].apiToken];
+    NSString *url = [NSString stringWithFormat:@"https://put.io/v2/files/%@/xspf?oauth_token=%@", [transfer fileID], [helper putioAPI].apiToken];
     NSArray *args = [NSArray arrayWithObjects:url, nil];
     NSTask *task = [NSTask launchedTaskWithLaunchPath:bundle.executablePath arguments:args];
     [task launch];

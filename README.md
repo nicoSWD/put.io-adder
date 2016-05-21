@@ -17,7 +17,7 @@ Follow me on Twitter: [@nicoSWD](https://twitter.com/nicoSWD)!
 
 | Version | Downloads |
 |:----------:|:---------------:|
-| [put.io adder v3.0](https://github.com/nicoSWD/put.io-adder/releases/tag/v3.0)  | ![downloads](https://img.shields.io/github/downloads/nicoSWD/put.io-adder/v3.0/total.svg)
+| [put.io adder v3.0.1](https://github.com/nicoSWD/put.io-adder/releases/tag/v3.0.1)  | ![downloads](https://img.shields.io/github/downloads/nicoSWD/put.io-adder/v3.0.1/total.svg)
 
   (Older releases can be found [here](https://github.com/nicoSWD/put.io-adder/releases/))
 
@@ -25,7 +25,6 @@ Follow me on Twitter: [@nicoSWD](https://twitter.com/nicoSWD)!
 - The app requires you to have a [put.io](http://put.io/) account. They're ~~probably~~ not free anymore.
 - The app requires KeyChain Access to store put.io's OAuth Token. Denying access will prevent the app from working.
 - To disable NotificationCenter, go to System Preferences -> Notifications -> Scroll to Put.IO Adder, and make your changes.
-- As of now, only movies can be streamed that are not inside any folders. The app is not yet smart enough to find files inside folders.
 - There are three ways to upload `.torrent` files to your account:
     - Drag the .torrent file onto the app icon
     - Make *put.io adder* your default handler for .torrent files
