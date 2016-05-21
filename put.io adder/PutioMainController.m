@@ -163,9 +163,9 @@
             return [NSString stringWithFormat:@"%dm %02ds", minutes, seconds];
         }
         
-        if (seconds <= 0) {
-            return @"Waiting...";
-        }
+        //if (seconds <= 0) {
+        //    return @"Waiting...";
+        //}
 
         return [NSString stringWithFormat:@"%ds", seconds];
     } else if ([tableColumn.identifier isEqualToString:@"size"]) {
