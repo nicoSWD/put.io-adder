@@ -1,0 +1,58 @@
+{
+  "DVTSourceControlWorkspaceBlueprintPrimaryRemoteRepositoryKey" : "577FB7CA1C505AE30B8C5B3FBAB741240BD8F4B2",
+  "DVTSourceControlWorkspaceBlueprintWorkingCopyRepositoryLocationsKey" : {
+
+  },
+  "DVTSourceControlWorkspaceBlueprintWorkingCopyStatesKey" : {
+    "C16576B571172538D95183F9515DC5DB064EAF7F" : 0,
+    "3F5A447ED7276129BCD3AC3D011399160950BEB3" : 0,
+    "577FB7CA1C505AE30B8C5B3FBAB741240BD8F4B2" : 0,
+    "CE7EA561763805DACBC7B43AEC9128B8D4A24DF1" : 0,
+    "DD20A1A48C66B5213E0FEBB87A95EF51D6C6F3E8" : 0,
+    "0EFDF2D073A77BC2CB2CF6173E0F3A830E66F8AF" : 0
+  },
+  "DVTSourceControlWorkspaceBlueprintIdentifierKey" : "8767BC30-9248-44B0-A98F-FF985280EF50",
+  "DVTSourceControlWorkspaceBlueprintWorkingCopyPathsKey" : {
+    "C16576B571172538D95183F9515DC5DB064EAF7F" : "put.io-addersskeychain",
+    "3F5A447ED7276129BCD3AC3D011399160950BEB3" : "put.io-adder\/put.io%20adder\/NSString-UrlEncode",
+    "577FB7CA1C505AE30B8C5B3FBAB741240BD8F4B2" : "put.io-adder",
+    "CE7EA561763805DACBC7B43AEC9128B8D4A24DF1" : "put.io-adder\/PutioKit",
+    "DD20A1A48C66B5213E0FEBB87A95EF51D6C6F3E8" : "put.io-adder\/AFNetworking",
+    "0EFDF2D073A77BC2CB2CF6173E0F3A830E66F8AF" : "put.io-adder\/VLCKit"
+  },
+  "DVTSourceControlWorkspaceBlueprintNameKey" : "put.io adder",
+  "DVTSourceControlWorkspaceBlueprintVersion" : 204,
+  "DVTSourceControlWorkspaceBlueprintRelativePathToProjectKey" : "put.io adder.xcodeproj",
+  "DVTSourceControlWorkspaceBlueprintRemoteRepositoriesKey" : [
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "git:\/\/git.videolan.org\/vlc-bindings\/VLCKit.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "0EFDF2D073A77BC2CB2CF6173E0F3A830E66F8AF"
+    },
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "https:\/\/github.com\/kevinrenskers\/NSString-UrlEncode.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "3F5A447ED7276129BCD3AC3D011399160950BEB3"
+    },
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "github.com:nicoSWD\/put.io-adder.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "577FB7CA1C505AE30B8C5B3FBAB741240BD8F4B2"
+    },
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "https:\/\/github.com\/samsoffes\/sskeychain.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "C16576B571172538D95183F9515DC5DB064EAF7F"
+    },
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "github.com:PutioKit\/PutioKit.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "CE7EA561763805DACBC7B43AEC9128B8D4A24DF1"
+    },
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "https:\/\/github.com\/AFNetworking\/AFNetworking.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "DD20A1A48C66B5213E0FEBB87A95EF51D6C6F3E8"
+    }
+  ]
+}

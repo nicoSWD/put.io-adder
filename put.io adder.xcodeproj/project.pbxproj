@@ -72,6 +72,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0300D3841CF099C70092DFFA /* put.io adder.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = "put.io adder.entitlements"; sourceTree = "<group>"; };
 		0307180D1A054D8F0099847C /* Quartz.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Quartz.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.10.sdk/System/Library/Frameworks/Quartz.framework; sourceTree = DEVELOPER_DIR; };
 		0307180F1A0551810099847C /* arrow.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = arrow.png; sourceTree = "<group>"; };
 		030718111A0552F60099847C /* arrow-white.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "arrow-white.png"; sourceTree = "<group>"; };
@@ -353,6 +354,7 @@
 		03F630CD16D6B5D400D33848 /* put.io adder */ = {
 			isa = PBXGroup;
 			children = (
+				0300D3841CF099C70092DFFA /* put.io adder.entitlements */,
 				037D6F501A06749C000121B2 /* Categories */,
 				03F630D916D6B5D400D33848 /* PutioAppDelegate.h */,
 				03F630DA16D6B5D400D33848 /* PutioAppDelegate.m */,
@@ -444,6 +446,14 @@
 				TargetAttributes = {
 					03F630C316D6B5D400D33848 = {
 						DevelopmentTeam = 8JR6HMQNDE;
+						SystemCapabilities = {
+							com.apple.Keychain = {
+								enabled = 1;
+							};
+							com.apple.Sandbox = {
+								enabled = 1;
+							};
+						};
 					};
 				};
 			};
@@ -639,6 +649,8 @@
 				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_ENTITLEMENTS = "put.io adder/put.io adder.entitlements";
+				CODE_SIGN_IDENTITY = "Mac Developer";
 				COMBINE_HIDPI_IMAGES = YES;
 				GCC_OPTIMIZATION_LEVEL = s;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
@@ -661,6 +673,8 @@
 				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_ENTITLEMENTS = "put.io adder/put.io adder.entitlements";
+				CODE_SIGN_IDENTITY = "Mac Developer";
 				COMBINE_HIDPI_IMAGES = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "put.io adder/put.io adder-Prefix.pch";

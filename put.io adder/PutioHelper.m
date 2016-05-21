@@ -63,6 +63,10 @@ static PutioHelper *sharedHelper = nil;
         float leftBytes = total - used;
         float percentage = (used * 100) / total;
         
+        if (percentage != percentage) {
+            percentage = 0;
+        }
+        
         CGRect newFrame = CGRectMake(
             putioController.diskusage.frame.origin.x,
             putioController.diskusage.frame.origin.y,
