@@ -23,8 +23,8 @@ Follow me on Twitter: [@nicoSWD](https://twitter.com/nicoSWD)!
 
 **NOTES**
 - The app requires you to have a [put.io](http://put.io/) account. They're ~~probably~~ not free anymore.
-- The app requires KeyChain Access to store put.io's OAuth Token. Denying access will prevent the app from working.
-- To disable NotificationCenter, go to System Preferences -> Notifications -> Scroll to Put.IO Adder, and make your changes.
+- The app requires Keychain Access to store put.io's OAuth Token. Denying access will prevent the app from working.
+- To disable Notification Center, go to System Preferences -> Notifications -> Scroll to Put.IO Adder, and make your changes.
 - There are three ways to upload `.torrent` files to your account:
     - Drag the .torrent file onto the app icon
     - Make *put.io adder* your default handler for .torrent files
