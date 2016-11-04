@@ -242,7 +242,7 @@
 
 - (void)userNotificationCenter:(NSUserNotificationCenter *)center didActivateNotification:(NSUserNotification *)notification
 {
-    NSString *url = [NSString stringWithFormat:@"https://put.io/file/%@", [notification.userInfo valueForKey:@"fileID"]];
+    NSString *url = [NSString stringWithFormat:@"https://put.io/files/%@", [notification.userInfo valueForKey:@"fileID"]];
     [[NSWorkspace sharedWorkspace] openURL: [NSURL URLWithString: url]];
 }
 
@@ -258,7 +258,7 @@
     NSString *url;
     
     if (![[trans fileID] isEqualTo:[NSNull alloc]] && fileID != nil) {
-        url = [NSString stringWithFormat:@"https://put.io/file/%@", fileID];
+        url = [NSString stringWithFormat:@"https://put.io/files/%@", fileID];
     } else {
         url = @"https://put.io/transfers";
     }
