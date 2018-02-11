@@ -340,7 +340,7 @@ static PutioHelper *sharedHelper = nil;
 - (void)saveAccessToken:(NSString *)url
 {
     NSError *error = nil;
-    NSString *pattern = @"^putio://callback\\?#access_token=(.*)";
+    NSString *pattern = @"^putio://callback#access_token=(.*)";
     NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:&error];
     NSArray *matches = [regex matchesInString:url options:0 range:NSMakeRange(0, [url length])];
     
