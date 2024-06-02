@@ -70,7 +70,9 @@
 
 - (IBAction)openPrefefrences:(id)sender
 {
-    [NSApp beginSheet:prefSheet modalForWindow:(NSWindow *)putiowindow modalDelegate:self didEndSelector:nil contextInfo:nil];
+    [putiowindow beginSheet:prefSheet completionHandler:^(NSModalResponse returnCode) {
+        // Handle the response if needed
+    }];
 }
 
 - (IBAction)closePreferences:(id)sender
@@ -220,13 +222,10 @@
 //    NSBundle *bundle = [NSBundle bundleWithIdentifier:@"org.videolan.vlc"];
     
     if (bundle == nil) {
-        NSAlert *alert = [NSAlert
-            alertWithMessageText:@"Error"
-            defaultButton:@"Okay"
-            alternateButton:nil
-            otherButton:nil
-            informativeTextWithFormat:@"Unable to find VLC.app in /Applications"
-        ];
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Error";
+        alert.informativeText = @"Unable to find VLC.app in /Applications";
+        [alert addButtonWithTitle:@"Okay"];
         [alert runModal];
         return;
     }

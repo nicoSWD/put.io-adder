@@ -30,15 +30,15 @@
 	<key>CFBundleExecutable</key>
 	<string>put.io adder</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.nicoswd.put-io-adder</string>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Put.IO Adder</string>
+	<string>put.io adder</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>3.0.4</string>
+	<string>3.0.5</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>CFBundleURLTypes</key>
@@ -65,7 +65,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>604</string>
+	<string>605</string>
 	<key>DTCompiler</key>
 	<string></string>
 	<key>DTPlatformBuild</key>
@@ -75,7 +75,7 @@
 	<key>DTSDKBuild</key>
 	<string>12D75</string>
 	<key>DTSDKName</key>
-	<string>macosx10.8</string>
+	<string>macosx14.5</string>
 	<key>DTXcode</key>
 	<string>0462</string>
 	<key>DTXcodeBuild</key>
@@ -83,9 +83,9 @@
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.utilities</string>
 	<key>LSMinimumSystemVersion</key>
-	<string>10.8</string>
+	<string>14.5</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>Copyright © 2014-2016 Nicolas Oelgart (nicoswd.com). All rights reserved. </string>
+	<string>Copyright © 2014-2024 Nicolas Oelgart (nicoswd.com). All rights reserved. </string>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>

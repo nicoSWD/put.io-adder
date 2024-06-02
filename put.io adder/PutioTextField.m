@@ -12,21 +12,21 @@
 
 - (void)awakeFromNib
 {
-    NSString *fontFilePath = [[NSBundle mainBundle] resourcePath];
-    NSURL *fontsURL = [NSURL fileURLWithPath:fontFilePath];
+    NSString *fontFilePath = [[NSBundle mainBundle] pathForResource:@"Montserrat-Bold" ofType:@"ttf"];
+    NSURL *fontURL = [NSURL fileURLWithPath:fontFilePath];
     
-    if (fontsURL != nil) {
-        FSRef fsRef;
-        CFURLGetFSRef((CFURLRef)fontsURL, &fsRef);
+    if (fontURL != nil) {
+        CFErrorRef error;
+        bool success = CTFontManagerRegisterFontsForURL((CFURLRef)fontURL, kCTFontManagerScopeProcess, &error);
         
-        OSStatus status = ATSFontActivateFromFileReference(&fsRef, kATSFontContextLocal, kATSFontFormatUnspecified, NULL, kATSOptionFlagsDefault, NULL);
-        
-        if (status != noErr) {
-            NSLog(@"Unable to load fonts");
+        if (!success) {
+            CFStringRef errorDescription = CFErrorCopyDescription(error);
+            NSLog(@"Unable to load fonts: %@", errorDescription);
+            CFRelease(errorDescription);
         } else {
             self.font = [NSFont fontWithName:@"Montserrat-Bold" size:12];
         }
-    }    
+    }
 }
 
 @end

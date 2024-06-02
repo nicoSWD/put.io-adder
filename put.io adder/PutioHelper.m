@@ -68,35 +68,35 @@ static PutioHelper *sharedHelper = nil;
         }
         
         CGRect newFrame = CGRectMake(
-            putioController.diskusage.frame.origin.x,
-            putioController.diskusage.frame.origin.y,
+            self.putioController.diskusage.frame.origin.x,
+            self.putioController.diskusage.frame.origin.y,
             percentage,
-            putioController.diskusage.frame.size.height
+            self.putioController.diskusage.frame.size.height
         );
         
-        putioController.userInfo.stringValue = [account username];
-        putioController.usageMsg.stringValue = [NSString stringWithFormat:@"%@ left", [self transformedValue:leftBytes]];
-        putioController.usageMsg.font = [NSFont fontWithName:@"Montserrat-Bold" size:12];
-        putioController.usageMsg.layer.zPosition = 5;
+        self.putioController.userInfo.stringValue = [account username];
+        self.putioController.usageMsg.stringValue = [NSString stringWithFormat:@"%@ left", [self transformedValue:leftBytes]];
+        self.putioController.usageMsg.font = [NSFont fontWithName:@"Montserrat-Bold" size:12];
+        self.putioController.usageMsg.layer.zPosition = 5;
         
-        putioController.avatar.image = [[NSImage alloc] initWithContentsOfURL:[NSURL URLWithString:[NSString stringWithFormat:@"https://www.gravatar.com/avatar/%@?s=%d", [[account mail] md5], (int)putioController.avatar.image.size.width]]];
-        putioController.avatar.layer.cornerRadius = 8.0;
+        self.putioController.avatar.image = [[NSImage alloc] initWithContentsOfURL:[NSURL URLWithString:[NSString stringWithFormat:@"https://www.gravatar.com/avatar/%@?s=%d", [[account mail] md5], (int)self.putioController.avatar.image.size.width]]];
+        self.putioController.avatar.layer.cornerRadius = 8.0;
         
         [NSAnimationContext beginGrouping];
         [[NSAnimationContext currentContext] setDuration:2.0f];
-        [[putioController.diskusage animator] setFrame:newFrame];
+        [[self.putioController.diskusage animator] setFrame:newFrame];
         [NSAnimationContext endGrouping];
     } failure:^(NSError *error) {
-        putioController.userInfo.stringValue = NSLocalizedString(@"HELPER_USERINFO_FAILED", nil);
+        self.putioController.userInfo.stringValue = NSLocalizedString(@"HELPER_USERINFO_FAILED", nil);
     }];
     
     [self.putioAPI getTransfers:^(NSArray *putioTransfers) {
-        if (putioController.transfers.count > 0) {
+        if (self.putioController.transfers.count > 0) {
             PKTransfer *currentTransfer;
             PKTransfer *newTransfer;
              
-            for (unsigned i = 0; i < putioController.transfers.count; i++) {
-                currentTransfer = (PKTransfer*)[putioController.transfers objectAtIndex:i];
+            for (unsigned i = 0; i < self.putioController.transfers.count; i++) {
+                currentTransfer = (PKTransfer*)[self.putioController.transfers objectAtIndex:i];
                  
                 for (unsigned j = 0; j < putioTransfers.count; j++) {
                     newTransfer = (PKTransfer*)[putioTransfers objectAtIndex:j];
@@ -135,12 +135,12 @@ static PutioHelper *sharedHelper = nil;
         id badgeText = nil;
         
         if (pendingDownloads == 0) {
-            putioController.message.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_NO_PENDING_TRANSFERS", nil), completedDownloads];
+            self.putioController.message.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_NO_PENDING_TRANSFERS", nil), completedDownloads];
         } else {
             if (pendingDownloads == 1) {
-                putioController.message.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_PENDING_TRANSFERS_SINGULAR", nil), completedDownloads];
+                self.putioController.message.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_PENDING_TRANSFERS_SINGULAR", nil), completedDownloads];
             } else {
-                putioController.message.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_PENDING_TRANSFERS_PURAL", nil), pendingDownloads, completedDownloads];
+                self.putioController.message.stringValue = [NSString stringWithFormat:NSLocalizedString(@"HELPER_PENDING_TRANSFERS_PURAL", nil), pendingDownloads, completedDownloads];
             }
             
             badgeText = [NSString stringWithFormat:@"%d%%", percentDone];
@@ -149,7 +149,7 @@ static PutioHelper *sharedHelper = nil;
         [[[NSApplication sharedApplication] dockTile] setBadgeLabel:badgeText];
     }
     failure:^(NSError *error) {
-        putioController.message.stringValue = NSLocalizedString(@"HELPER_TRANSFERS_FAILED", nil);
+        self.putioController.message.stringValue = NSLocalizedString(@"HELPER_TRANSFERS_FAILED", nil);
     }];
 }
 
@@ -245,10 +245,10 @@ static PutioHelper *sharedHelper = nil;
     
     [self.putioAPI requestTorrentOrMagnetURLAtPath:magnetURL :^(id userInfoObject) {
          if ([[NSUserDefaults standardUserDefaults] boolForKey:@"close.magnet"]) {
-             putioController.message.stringValue = NSLocalizedString(@"HELPER_MAGNET_ADDED_CLOSING", nil);
+             self.putioController.message.stringValue = NSLocalizedString(@"HELPER_MAGNET_ADDED_CLOSING", nil);
              closeTimer = [NSTimer scheduledTimerWithTimeInterval:5.0  target:[NSApplication sharedApplication] selector:@selector(terminate:) userInfo:nil repeats:NO];
          } else {
-             putioController.message.stringValue = NSLocalizedString(@"HELPER_MAGNET_ADDED", nil);
+             self.putioController.message.stringValue = NSLocalizedString(@"HELPER_MAGNET_ADDED", nil);
              
 //             if ([PutioHelper sharedHelper].putioController.transfersAreHidden) {
 //                 [putioController.toggleTransfers mouseUp:nil];
@@ -256,15 +256,15 @@ static PutioHelper *sharedHelper = nil;
          }
          
          [self updateUserInfo];
-         [putioController.activityIndicator stopAnimation:nil];
+         [self.putioController.activityIndicator stopAnimation:nil];
      } addFailure:^ {
-         putioController.message.stringValue = NSLocalizedString(@"HELPER_MAGNET_ERROR", nil);
-         [putioController.activityIndicator stopAnimation:nil];
+         self.putioController.message.stringValue = NSLocalizedString(@"HELPER_MAGNET_ERROR", nil);
+         [self.putioController.activityIndicator stopAnimation:nil];
      } networkFailure:^(NSError *error) {
          // Put.io returns HTTP 400 if you're adding an URL that's already in the queue...
          // ... and thereby causing AFNetworking to throw a network error.
-         putioController.message.stringValue = NSLocalizedString(@"HELPER_MAGNET_DUPLICATE", nil);
-         [putioController.activityIndicator stopAnimation:nil];
+         self.putioController.message.stringValue = NSLocalizedString(@"HELPER_MAGNET_DUPLICATE", nil);
+         [self.putioController.activityIndicator stopAnimation:nil];
      }];
 }
 
@@ -278,22 +278,22 @@ static PutioHelper *sharedHelper = nil;
     
     [self.putioAPI uploadFile:filePath :^(id userInfoObject) {
          if ([[NSUserDefaults standardUserDefaults] boolForKey:@"close.torrent"]) {
-             putioController.message.stringValue = NSLocalizedString(@"HELPER_TORRENT_ADDED_CLOSING", nil);
+             self.putioController.message.stringValue = NSLocalizedString(@"HELPER_TORRENT_ADDED_CLOSING", nil);
              closeTimer = [NSTimer scheduledTimerWithTimeInterval:5.0  target:[NSApplication sharedApplication] selector:@selector(terminate:) userInfo:nil repeats:NO];
          } else {
-             putioController.message.stringValue = NSLocalizedString(@"HELPER_TORRENT_ADDED", nil);
+             self.putioController.message.stringValue = NSLocalizedString(@"HELPER_TORRENT_ADDED", nil);
          }
          
          [self updateUserInfo];
-         [putioController.activityIndicator stopAnimation:nil];
+         [self.putioController.activityIndicator stopAnimation:nil];
      } addFailure: ^{
-         putioController.message.stringValue = NSLocalizedString(@"HELPER_MAGNET_ERROR", nil);
-         [putioController.activityIndicator stopAnimation:nil];
+         self.putioController.message.stringValue = NSLocalizedString(@"HELPER_MAGNET_ERROR", nil);
+         [self.putioController.activityIndicator stopAnimation:nil];
      } networkFailure:^(NSError *error) {
          // Put.io returns HTTP 400 if you're adding an URL that's already in the queue...
          // ... and thereby causing AFNetworking to throw a network error.
-         putioController.message.stringValue = NSLocalizedString(@"HELPER_TORRENT_DUPLICATE", nil);
-         [putioController.activityIndicator stopAnimation:nil];
+         self.putioController.message.stringValue = NSLocalizedString(@"HELPER_TORRENT_DUPLICATE", nil);
+         [self.putioController.activityIndicator stopAnimation:nil];
      }];
 }
 
