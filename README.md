@@ -1,11 +1,11 @@
 ## Put.io magnet: and .torrent Handler for macOS
 ![screenshot](https://s3.amazonaws.com/f.cl.ly/items/362l1z432n3O2w1X2C2B/Screen%20Shot%202016-05-21%20at%2000.48.37.png)
 
-*Put.IO Adder* is a small open source app for macOS, that registers as new handler for `magnet:` URI schemes, so that every time you click on a magnet link, it will automatically add it to your [put.io](http://put.io/) download queue.
+*put.io adder* is a small open source app for macOS, that registers as new handler for `magnet:` URI schemes, so that every time you click on a magnet link, it will automatically add it to your [put.io](http://put.io/) download queue.
 
 Follow me on Twitter: [@nicoSWD](https://twitter.com/nicoSWD)!
 
-**FEATURES**
+**Features**
 - Automatically add `magnet:` links and `.torrent` files to your download queue by clicking on them
 - Stream finished movies directly from the app (requires [VLC](https://www.videolan.org/vlc/index.html) to be installed in /Applications)
 - View current transfers and their download status
@@ -13,15 +13,18 @@ Follow me on Twitter: [@nicoSWD](https://twitter.com/nicoSWD)!
 - `Notification Center` notifications on finished downloads
 - etc...
 
-**DOWNLOADS**
+**Downloads**
 
-| Version | Downloads |
+| Version | Chip |
 |:----------:|:---------------:|
-| **[put.io adder v3.0.5](https://github.com/nicoSWD/put.io-adder/releases/download/v3.0.5/put.io-adder-v3.0.5.zip)** | ![total](https://img.shields.io/github/downloads/nicoSWD/put.io-adder/total.svg?maxAge=25920)
+| **[put.io adder v3.0.5](https://github.com/nicoSWD/put.io-adder/releases/download/v3.0.5/put.io-adder-v3.0.5.zip)** | Apple Silicon
+| **[put.io adder v3.0.4](https://github.com/nicoSWD/put.io-adder/releases/download/v3.0.4/put.io-adder-v3.0.4.zip)** | Intel
+
+![total](https://img.shields.io/github/downloads/nicoSWD/put.io-adder/total.svg?maxAge=25920)
 
   (Older releases can be found [here](https://github.com/nicoSWD/put.io-adder/releases/))
 
-**NOTES**
+**Notes**
 - The app requires you to have a [put.io](http://put.io/) account. They're ~~probably~~ not free anymore.
 - The app requires Keychain Access to store put.io's OAuth Token. Denying access will prevent the app from working.
 - To disable Notification Center, go to System Preferences -> Notifications -> Scroll to Put.IO Adder, and make your changes.
@@ -32,7 +35,7 @@ Follow me on Twitter: [@nicoSWD](https://twitter.com/nicoSWD)!
 
 Please [report issues](https://github.com/nicoSWD/put.io-adder/issues) you may encounter. Pull requests are also very welcome!
 
-**CONTRIBUTE**
+**Contributing**
 
 [AFNetworking](https://github.com/AFNetworking/AFNetworking), [PutioKit](https://github.com/PutioKit/PutioKit), and [SSKeyChain](https://github.com/samsoffes/sskeychain) have been added as submodules. To clone the repo in its entirety, use:
 
