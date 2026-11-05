@@ -65,7 +65,7 @@ pub enum TransferKind {
     Unknown,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
 pub struct Transfer {
     pub id: i64,
     #[serde(default, deserialize_with = "null_default")]
@@ -91,6 +91,9 @@ pub struct Transfer {
     pub file_id: Option<i64>,
     #[serde(default)]
     pub error_message: Option<String>,
+    /// What the transfer was added from: a magnet link or a URL. Untrusted text.
+    #[serde(default)]
+    pub source: Option<String>,
 }
 
 impl Transfer {

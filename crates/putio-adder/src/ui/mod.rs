@@ -31,6 +31,8 @@ pub(crate) const TOP_HEIGHT: f32 = 56.0;
 pub(crate) enum Overlay {
     Menu,
     Sort,
+    /// The "⋯" menu of the transfer with this id.
+    Card(i64),
 }
 
 /// State that only the UI cares about.

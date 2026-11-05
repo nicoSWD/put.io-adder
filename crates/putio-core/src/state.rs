@@ -72,6 +72,8 @@ enum Op {
     AddMagnet,
     UploadTorrent,
     Cancel,
+    Retry,
+    Clear,
     Stream,
 }
 
@@ -132,6 +134,21 @@ pub enum Event {
         op: OpId,
         result: Result<(), ApiError>,
     },
+    RetryRequested(i64),
+    RetryFinished {
+        op: OpId,
+        result: Result<(), ApiError>,
+    },
+    /// Remove every finished transfer from the list (the files stay in the account).
+    ClearRequested,
+    ClearFinished {
+        op: OpId,
+        result: Result<(), ApiError>,
+    },
+    /// Copy the put.io page of the transfer's file to the clipboard.
+    CopyLinkRequested(i64),
+    /// Copy the magnet link or URL the transfer was added from.
+    CopySourceRequested(i64),
     StreamRequested(i64),
     StreamFinished {
         op: OpId,
@@ -187,6 +204,16 @@ pub enum Effect {
         op: OpId,
         id: i64,
     },
+    RetryTransfer {
+        op: OpId,
+        id: i64,
+    },
+    CleanTransfers {
+        op: OpId,
+        ids: Vec<i64>,
+    },
+    /// Put text on the system clipboard. Only ever built here, from validated data.
+    CopyText(String),
     /// Resolve a playable URL for the file (or the videos inside a folder) and hand it to the player.
     Stream {
         op: OpId,
@@ -464,6 +491,70 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
                     Err(ApiError::Unauthorized) => session_expired(state, &mut fx),
                     Err(_) => state.say(Msg::CancelFailed, now, ERROR_NOTICE_TIME),
                 }
+            }
+        }
+        Event::RetryRequested(id) => {
+            if state.is_signed_in() && state.transfers.iter().any(|t| t.id == id) {
+                state.close_at = None;
+                let op = state.op(Op::Retry);
+                state.say_until_replaced(Msg::Retrying);
+                fx.push(Effect::RetryTransfer { op, id });
+            }
+        }
+        Event::RetryFinished { op, result } => {
+            if state.finish(op, &[Op::Retry]) {
+                match result {
+                    Ok(()) => {
+                        state.say(Msg::Retried, now, NOTICE_TIME);
+                        state.schedule_poll(now);
+                    }
+                    Err(ApiError::Unauthorized) => session_expired(state, &mut fx),
+                    Err(_) => state.say(Msg::RetryFailed, now, ERROR_NOTICE_TIME),
+                }
+            }
+        }
+        Event::ClearRequested => {
+            let ids = transfers::clearable_ids(&state.transfers);
+            if state.is_signed_in() && !ids.is_empty() {
+                state.close_at = None;
+                let op = state.op(Op::Clear);
+                state.say_until_replaced(Msg::Clearing);
+                fx.push(Effect::CleanTransfers { op, ids });
+            }
+        }
+        Event::ClearFinished { op, result } => {
+            if state.finish(op, &[Op::Clear]) {
+                match result {
+                    Ok(()) => {
+                        state.say(Msg::Cleared, now, NOTICE_TIME);
+                        state.schedule_poll(now);
+                    }
+                    Err(ApiError::Unauthorized) => session_expired(state, &mut fx),
+                    Err(_) => state.say(Msg::ClearFailed, now, ERROR_NOTICE_TIME),
+                }
+            }
+        }
+        Event::CopyLinkRequested(id) => {
+            let file_id = state
+                .transfers
+                .iter()
+                .find(|t| t.id == id)
+                .and_then(|t| t.file_id);
+            if let Some(file_id) = file_id.filter(|id| *id >= 0) {
+                fx.push(Effect::CopyText(open_file_url(Some(file_id))));
+                state.say(Msg::Copied, now, NOTICE_TIME);
+            }
+        }
+        Event::CopySourceRequested(id) => {
+            let text = state
+                .transfers
+                .iter()
+                .find(|t| t.id == id)
+                .and_then(transfers::copyable_source)
+                .map(|source| source.text.to_owned());
+            if let Some(text) = text {
+                fx.push(Effect::CopyText(text));
+                state.say(Msg::Copied, now, NOTICE_TIME);
             }
         }
         Event::StreamRequested(id) => {
@@ -882,6 +973,8 @@ mod tests {
                 Effect::AddMagnet { op, .. }
                 | Effect::UploadTorrent { op, .. }
                 | Effect::CancelTransfer { op, .. }
+                | Effect::RetryTransfer { op, .. }
+                | Effect::CleanTransfers { op, .. }
                 | Effect::Stream { op, .. } => Some(*op),
                 _ => None,
             })
@@ -1620,6 +1713,126 @@ mod tests {
             },
         );
         assert_eq!(*state.status(4), Msg::CancelFailed);
+    }
+
+    #[test]
+    fn retry_targets_a_known_transfer_and_refreshes_on_success() {
+        let (mut state, _) = signed_in(no_updates());
+        poll_ok(
+            &mut state,
+            0,
+            vec![transfer(7, "a", TransferStatus::Error, 0, None)],
+        );
+        assert!(update(&mut state, 1, Event::RetryRequested(404)).is_empty());
+        let fx = update(&mut state, 1, Event::RetryRequested(7));
+        assert!(matches!(&fx[..], [Effect::RetryTransfer { id: 7, .. }]));
+        assert_eq!(*state.status(1), Msg::Retrying);
+        assert!(state.is_busy());
+        let op = op_of(&fx);
+        let fx = update(&mut state, 2, Event::RetryFinished { op, result: Ok(()) });
+        assert_eq!(fx, [Effect::Poll]);
+        assert_eq!(*state.status(2), Msg::Retried);
+        assert!(!state.is_busy());
+        let op = op_of(&update(&mut state, 3, Event::RetryRequested(7)));
+        update(
+            &mut state,
+            4,
+            Event::RetryFinished {
+                op,
+                result: Err(api_error(400, "no")),
+            },
+        );
+        assert_eq!(*state.status(4), Msg::RetryFailed);
+        let op = op_of(&update(&mut state, 5, Event::RetryRequested(7)));
+        let fx = update(
+            &mut state,
+            6,
+            Event::RetryFinished {
+                op,
+                result: Err(ApiError::Unauthorized),
+            },
+        );
+        assert!(fx.contains(&Effect::DeleteToken));
+    }
+
+    #[test]
+    fn clearing_sends_only_the_finished_transfers() {
+        let (mut state, _) = signed_in(no_updates());
+        poll_ok(
+            &mut state,
+            0,
+            vec![
+                transfer(1, "done", TransferStatus::Completed, 100, Some(5)),
+                transfer(2, "seeding", TransferStatus::Seeding, 100, Some(6)),
+                transfer(3, "running", TransferStatus::Downloading, 10, None),
+                transfer(4, "done too", TransferStatus::Completed, 100, Some(8)),
+            ],
+        );
+        let fx = update(&mut state, 1, Event::ClearRequested);
+        let [Effect::CleanTransfers { ids, .. }] = &fx[..] else {
+            panic!("expected one clean effect, got {fx:?}");
+        };
+        let mut ids = ids.clone();
+        ids.sort_unstable();
+        assert_eq!(ids, [1, 4]);
+        assert_eq!(*state.status(1), Msg::Clearing);
+        let op = op_of(&fx);
+        let fx = update(&mut state, 2, Event::ClearFinished { op, result: Ok(()) });
+        assert_eq!(fx, [Effect::Poll]);
+        assert_eq!(*state.status(2), Msg::Cleared);
+        let op = op_of(&update(&mut state, 3, Event::ClearRequested));
+        update(
+            &mut state,
+            4,
+            Event::ClearFinished {
+                op,
+                result: Err(api_error(500, "x")),
+            },
+        );
+        assert_eq!(*state.status(4), Msg::ClearFailed);
+    }
+
+    #[test]
+    fn clearing_with_nothing_finished_does_nothing() {
+        let (mut state, _) = signed_in(no_updates());
+        poll_ok(
+            &mut state,
+            0,
+            vec![transfer(
+                3,
+                "running",
+                TransferStatus::Downloading,
+                10,
+                None,
+            )],
+        );
+        assert!(update(&mut state, 1, Event::ClearRequested).is_empty());
+        assert!(!state.is_busy());
+    }
+
+    #[test]
+    fn copying_offers_only_validated_text() {
+        let (mut state, _) = signed_in(no_updates());
+        let mut with_source = transfer(1, "a", TransferStatus::Completed, 100, Some(55));
+        with_source.source = Some("magnet:?xt=urn:btih:abc".into());
+        let mut unsafe_source = transfer(2, "b", TransferStatus::Completed, 100, None);
+        unsafe_source.source = Some("magnet:?x\u{1b}[31m".into());
+        poll_ok(&mut state, 0, vec![with_source, unsafe_source]);
+
+        assert_eq!(
+            update(&mut state, 1, Event::CopyLinkRequested(1)),
+            [Effect::CopyText("https://put.io/files/55".into())]
+        );
+        assert_eq!(*state.status(1), Msg::Copied);
+        assert_eq!(
+            update(&mut state, 2, Event::CopySourceRequested(1)),
+            [Effect::CopyText("magnet:?xt=urn:btih:abc".into())]
+        );
+        // No file yet, unsafe source, unknown id: nothing is copied.
+        assert!(update(&mut state, 3, Event::CopyLinkRequested(2)).is_empty());
+        assert!(update(&mut state, 3, Event::CopySourceRequested(2)).is_empty());
+        assert!(update(&mut state, 3, Event::CopySourceRequested(404)).is_empty());
+        assert!(update(&mut state, 3, Event::CopyLinkRequested(404)).is_empty());
     }
 
     #[test]

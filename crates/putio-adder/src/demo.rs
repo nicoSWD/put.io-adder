@@ -25,6 +25,7 @@ fn transfer(
         file_id: matches!(status, TransferStatus::Completed | TransferStatus::Seeding)
             .then_some(1000 + id),
         error_message: None,
+        source: None,
     }
 }
 
@@ -41,7 +42,8 @@ pub(crate) fn transfers() -> Vec<Transfer> {
         4_200 * MB,
     );
     failed.error_message = Some("Tracker unreachable".into());
-    vec![
+    failed.source = Some("https://example.com/releases/corrupted.torrent".into());
+    let mut list = vec![
         transfer(
             1,
             "Big.Buck.Bunny.2008.2160p.BluRay.x265-GROUP",
@@ -89,7 +91,13 @@ pub(crate) fn transfers() -> Vec<Transfer> {
             4_800 * MB,
         ),
         failed,
-    ]
+    ];
+    for item in &mut list {
+        if item.source.is_none() && item.id != 4 {
+            item.source = Some(format!("magnet:?xt=urn:btih:{:040x}", item.id));
+        }
+    }
+    list
 }
 
 pub(crate) fn account() -> Account {

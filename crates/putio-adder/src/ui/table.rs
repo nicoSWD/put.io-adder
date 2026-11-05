@@ -5,12 +5,14 @@ use eframe::egui::{
 };
 use putio_api::{Transfer, TransferStatus};
 use putio_core::format;
-use putio_core::i18n::Msg;
+use putio_core::i18n::{Locale, Msg};
 use putio_core::state::Event;
 use putio_core::transfers::{self, SortKey};
 use putio_core::update::UpdateStatus;
 
-use super::{icons, theme};
+use super::icons::MenuIcon;
+use super::menu::{self, Tint};
+use super::{icons, theme, widgets};
 use crate::app::App;
 
 const ROW_HEIGHT: f32 = 56.0;
@@ -20,8 +22,15 @@ const ROW_GAP: f32 = 6.0;
 const TOOLBAR_HEIGHT: f32 = 28.0;
 /// Space kept free at the right of the cards for the scroll bar.
 const SCROLLBAR_ROOM: f32 = 8.0;
-/// Room kept free on the right of a row for the size and percentage.
-const RIGHT_COLUMN: f32 = 84.0;
+/// Room kept free on the right of a row for the size, percentage and the "⋯" button.
+const RIGHT_COLUMN: f32 = 122.0;
+/// Where the size and percentage end, counted from the right edge of the card.
+const SIZE_INSET: f32 = 46.0;
+/// The "⋯" button: its centre counted from the right edge, and its size.
+const MORE_INSET: f32 = 24.0;
+const MORE_SIZE: f32 = 28.0;
+/// Width of the card context menu.
+const MENU_WIDTH: f32 = 252.0;
 
 pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
     let ctx = ui.ctx().clone();
@@ -42,8 +51,9 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
         .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded)
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = ROW_GAP;
+            let clearable = transfers::clearable_ids(&rows).len();
             for transfer in &rows {
-                if let Some(event) = card(ui, app, transfer) {
+                if let Some(event) = card(ui, app, transfer, clearable) {
                     action = Some(event);
                 }
             }
@@ -131,7 +141,7 @@ fn sort_menu(ui: &mut egui::Ui, app: &mut App) {
         .align(egui::RectAlign::BOTTOM_END)
         .gap(6.0)
         .width(SORT_MENU_WIDTH)
-        .frame(super::widgets::popup_frame())
+        .frame(widgets::popup_frame())
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside);
     if app.ui.open_once == Some(super::Overlay::Sort) {
         app.ui.open_once = None;
@@ -243,36 +253,181 @@ fn empty(ui: &mut egui::Ui, app: &App) {
     ui.painter().galley(pos, hint, theme::pal().muted);
 }
 
-/// One transfer. Returns the action the user asked for, if any. Everything is keyed by the transfer
-/// *id*, never by row position: the list can change between opening a menu and clicking an item.
+/// What a context-menu entry does. Mapped to a core event with the transfer's *id*, never its row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Act {
+    Open,
+    Stream,
+    CopyLink,
+    CopySource,
+    Retry,
+    Cancel,
+    Clear,
+}
+
+impl Act {
+    fn event(self, id: i64) -> Event {
+        match self {
+            Self::Open => Event::OpenTransferOnPutio(id),
+            Self::Stream => Event::StreamRequested(id),
+            Self::CopyLink => Event::CopyLinkRequested(id),
+            Self::CopySource => Event::CopySourceRequested(id),
+            Self::Retry => Event::RetryRequested(id),
+            Self::Cancel => Event::CancelRequested(id),
+            Self::Clear => Event::ClearRequested,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Entry {
+    icon: MenuIcon,
+    label: Msg,
+    tint: Tint,
+    act: Act,
+}
+
+fn entry(icon: MenuIcon, label: Msg, act: Act) -> Entry {
+    Entry {
+        icon,
+        label,
+        tint: Tint::Normal,
+        act,
+    }
+}
+
+/// The context menu of a transfer, in groups (drawn with hairlines between them). Only what makes
+/// sense for this transfer in its current state is offered.
+fn entries(transfer: &Transfer, clearable: usize) -> Vec<Vec<Entry>> {
+    let mut groups = Vec::new();
+
+    let mut open = vec![entry(MenuIcon::External, Msg::MenuOpenOnPutio, Act::Open)];
+    if transfer.file_id.is_some() {
+        open.push(entry(MenuIcon::Play, Msg::MenuStream, Act::Stream));
+    }
+    groups.push(open);
+
+    let mut copy = Vec::new();
+    if transfer.file_id.is_some() {
+        copy.push(entry(MenuIcon::Link, Msg::MenuCopyLink, Act::CopyLink));
+    }
+    if let Some(source) = transfers::copyable_source(transfer) {
+        let label = if source.is_magnet {
+            Msg::MenuCopyMagnet
+        } else {
+            Msg::MenuCopySource
+        };
+        copy.push(entry(MenuIcon::Copy, label, Act::CopySource));
+    }
+    if !copy.is_empty() {
+        groups.push(copy);
+    }
+
+    let mut manage = Vec::new();
+    if transfer.status == TransferStatus::Error {
+        manage.push(entry(MenuIcon::Refresh, Msg::MenuRetry, Act::Retry));
+    }
+    let (icon, label) = match transfer.status {
+        TransferStatus::Seeding => (MenuIcon::Cancel, Msg::MenuStopSeeding),
+        status if status.is_pending() => (MenuIcon::Cancel, Msg::MenuCancelTransfer),
+        _ => (MenuIcon::Trash, Msg::MenuRemoveFromList),
+    };
+    manage.push(Entry {
+        tint: Tint::Danger,
+        ..entry(icon, label, Act::Cancel)
+    });
+    if clearable > 0 {
+        manage.push(Entry {
+            tint: Tint::Danger,
+            ..entry(
+                MenuIcon::Trash,
+                Msg::MenuClearFinished { count: clearable },
+                Act::Clear,
+            )
+        });
+    }
+    groups.push(manage);
+    groups
+}
+
+/// The content of the card's menu (right-click, or the "⋯" button). Returns the entry that was chosen.
+fn menu_body(
+    ui: &mut egui::Ui,
+    locale: Locale,
+    transfer: &Transfer,
+    clearable: usize,
+) -> Option<Act> {
+    ui.spacing_mut().item_spacing.y = 0.0;
+    let mut chosen = None;
+    let name = if transfer.name.is_empty() {
+        "…"
+    } else {
+        transfer.name.as_str()
+    };
+    menu::caption(ui, name);
+    for group in entries(transfer, clearable) {
+        menu::divider(ui);
+        for entry in group {
+            if menu::item(ui, entry.icon, &entry.label.text(locale), None, entry.tint) {
+                chosen = Some(entry.act);
+                ui.close();
+            }
+        }
+    }
+    chosen
+}
+
+/// The parts of a drawn card that react to the pointer.
+struct Card {
+    #[cfg_attr(not(test), allow(dead_code))] // the tests use it to find the card
+    rect: Rect,
+    body: egui::Response,
+    more: egui::Response,
+}
+
+/// Draw one card at fixed positions: text and controls never move when the pointer arrives, only
+/// colours change.
 #[allow(clippy::too_many_lines)] // one card is drawn top to bottom, left to right
-fn card(ui: &mut egui::Ui, app: &mut App, transfer: &Transfer) -> Option<Event> {
-    let locale = app.state.locale;
-    let (rect, response) = ui.allocate_exact_size(
+fn draw_card(ui: &mut egui::Ui, transfer: &Transfer, selected: bool, locale: Locale) -> Card {
+    let p = theme::pal();
+    let (rect, body) = ui.allocate_exact_size(
         Vec2::new(ui.available_width() - SCROLLBAR_ROOM, ROW_HEIGHT),
         Sense::click(),
     );
-    let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
-    let selected = app.ui.selected == Some(transfer.id);
-    let hover =
-        ui.ctx()
-            .animate_bool_with_time(response.id.with("hover"), response.hovered(), 0.12);
-    let fill = if selected {
-        theme::pal().card_selected
+    let more_rect = Rect::from_center_size(
+        Pos2::new(rect.right() - MORE_INSET, rect.center().y),
+        Vec2::splat(MORE_SIZE),
+    );
+    // Added after the body, so it wins where they overlap.
+    let more = ui.interact(more_rect, body.id.with("more"), Sense::click());
+    let more = more.on_hover_cursor(egui::CursorIcon::PointingHand);
+    let body = if more.hovered() {
+        body
     } else {
-        mix(theme::pal().card, theme::pal().card_hover, hover)
+        body.on_hover_cursor(egui::CursorIcon::PointingHand)
+    };
+
+    let over = body.hovered() || more.hovered();
+    let hover = ui
+        .ctx()
+        .animate_bool_with_time(body.id.with("hover"), over, 0.12);
+    let failed = transfer.status == TransferStatus::Error;
+    let fill = if selected {
+        p.card_selected
+    } else {
+        mix(p.card, p.card_hover, hover)
     };
 
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, CornerRadius::same(10), fill);
-    if selected {
+    if selected || failed {
         painter.rect_filled(
             Rect::from_min_size(
                 rect.min + Vec2::new(0.0, 12.0),
                 Vec2::new(3.0, rect.height() - 24.0),
             ),
             CornerRadius::same(2),
-            theme::YELLOW,
+            if selected { theme::YELLOW } else { p.error },
         );
     }
     icons::status_badge(
@@ -283,50 +438,49 @@ fn card(ui: &mut egui::Ui, app: &mut App, transfer: &Transfer) -> Option<Event> 
 
     let text_left = rect.left() + 52.0;
     let text_right = rect.right() - RIGHT_COLUMN;
-    let name_area = Rect::from_min_max(
-        Pos2::new(text_left, rect.top()),
-        Pos2::new(text_right, rect.bottom()),
-    );
+    let text_width = text_right - text_left;
     let name = if transfer.name.is_empty() {
         "…"
     } else {
         transfer.name.as_str()
     };
-    painter.with_clip_rect(name_area).text(
+    let name_font = theme::bold(12.5);
+    let shown_name = widgets::fit_to_width(&painter, name, &name_font, text_width);
+    painter.text(
         Pos2::new(text_left, rect.top() + 11.0),
         Align2::LEFT_TOP,
-        name,
-        theme::bold(12.5),
-        theme::pal().text,
+        shown_name,
+        name_font,
+        p.text,
     );
 
-    let failed = transfer.status == TransferStatus::Error;
-    let detail_color = if failed {
-        theme::pal().error
-    } else {
-        theme::pal().muted
-    };
-    painter.with_clip_rect(name_area).text(
+    let detail_font = theme::text(10.5);
+    let detail = widgets::fit_to_width(
+        &painter,
+        &format::detail(transfer, locale),
+        &detail_font,
+        text_width,
+    );
+    painter.text(
         Pos2::new(text_left, rect.top() + 30.0),
         Align2::LEFT_TOP,
-        format::detail(transfer, locale),
-        theme::text(10.5),
-        detail_color,
+        detail,
+        detail_font,
+        if failed { p.error } else { p.muted },
     );
 
     // Right column: size, and the percentage while the transfer is running.
-    let right = rect.right() - 16.0;
+    let right = rect.right() - SIZE_INSET;
     painter.text(
         Pos2::new(right, rect.top() + 11.0),
         Align2::RIGHT_TOP,
         format::bytes(transfer.size),
         theme::text(11.0),
-        theme::pal().muted,
+        p.muted,
     );
-    let running = transfer.status.is_pending();
-    if running {
+    if transfer.status.is_pending() {
         let percent = ui.ctx().animate_value_with_time(
-            response.id.with("percent"),
+            body.id.with("percent"),
             f32::from(transfer.percent()),
             0.4,
         );
@@ -341,7 +495,7 @@ fn card(ui: &mut egui::Ui, app: &mut App, transfer: &Transfer) -> Option<Event> 
                 Align2::RIGHT_TOP,
                 format!("{percent:.0}%"),
                 theme::bold(12.0),
-                theme::pal().accent_text,
+                p.accent_text,
             );
         }
         let bar = Rect::from_min_max(
@@ -351,55 +505,54 @@ fn card(ui: &mut egui::Ui, app: &mut App, transfer: &Transfer) -> Option<Event> 
         icons::progress_bar(&painter, bar, percent / 100.0, theme::YELLOW);
     }
 
-    if response.clicked() {
-        app.ui.selected = Some(transfer.id);
+    // The "⋯" button: fades in with the pointer, so a quiet list stays quiet.
+    let visible = hover.max(if selected { 1.0 } else { 0.0 });
+    if visible > 0.0 {
+        if more.hovered() {
+            painter.rect_filled(more_rect, CornerRadius::same(8), p.divider);
+        }
+        let color = if more.hovered() { p.text } else { p.muted };
+        icons::dots(&painter, more_rect.center(), color.gamma_multiply(visible));
     }
-    let mut action = response
-        .double_clicked()
-        .then_some(Event::OpenTransferOnPutio(transfer.id));
-    response.context_menu(|ui| {
-        if ui.button(Msg::MenuOpenOnPutio.text(locale)).clicked() {
-            action = Some(Event::OpenTransferOnPutio(transfer.id));
-            ui.close();
-        }
-        if transfer.file_id.is_some()
-            && ui
-                .button(
-                    Msg::MenuStream {
-                        name: shorten(&transfer.name),
-                    }
-                    .text(locale),
-                )
-                .clicked()
-        {
-            action = Some(Event::StreamRequested(transfer.id));
-            ui.close();
-        }
-        if !transfer.status.is_finished()
-            && ui
-                .button(
-                    Msg::MenuCancelTransfer {
-                        name: shorten(&transfer.name),
-                    }
-                    .text(locale),
-                )
-                .clicked()
-        {
-            action = Some(Event::CancelRequested(transfer.id));
-            ui.close();
-        }
-    });
-    action
+
+    Card { rect, body, more }
 }
 
-/// Keeps menu entries a sensible width.
-fn shorten(name: &str) -> String {
-    const MAX: usize = 32;
-    if name.chars().count() <= MAX {
-        return name.to_owned();
+/// One transfer. Returns the action the user asked for, if any. Everything is keyed by the transfer
+/// *id*, never by row position: the list can change between opening a menu and clicking an item.
+fn card(ui: &mut egui::Ui, app: &mut App, transfer: &Transfer, clearable: usize) -> Option<Event> {
+    let locale = app.state.locale;
+    let selected = app.ui.selected == Some(transfer.id);
+    let Card { body, more, .. } = draw_card(ui, transfer, selected, locale);
+
+    if body.clicked() || more.clicked() {
+        app.ui.selected = Some(transfer.id);
     }
-    let head: String = name.chars().take(MAX - 1).collect();
-    format!("{head}…")
+    let mut action = body
+        .double_clicked()
+        .then_some(Event::OpenTransferOnPutio(transfer.id));
+
+    let mut chosen = None;
+    egui::Popup::context_menu(&body)
+        .frame(widgets::popup_frame())
+        .width(MENU_WIDTH)
+        .show(|ui| chosen = menu_body(ui, locale, transfer, clearable));
+
+    let mut popup = egui::Popup::menu(&more)
+        .align(egui::RectAlign::BOTTOM_END)
+        .gap(4.0)
+        .width(MENU_WIDTH)
+        .frame(widgets::popup_frame());
+    if app.ui.open_once == Some(super::Overlay::Card(transfer.id)) {
+        app.ui.open_once = None;
+        popup = popup.open_memory(Some(true.into()));
+    }
+    popup.show(|ui| chosen = chosen.or(menu_body(ui, locale, transfer, clearable)));
+
+    if let Some(act) = chosen {
+        action = Some(act.event(transfer.id));
+    }
+    action
 }
 
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // each channel stays within 0..=255
@@ -417,14 +570,6 @@ fn mix(from: Color32, to: Color32, amount: f32) -> Color32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn long_names_are_shortened_for_menus() {
-        assert_eq!(shorten("short"), "short");
-        let long = shorten(&"a".repeat(80));
-        assert_eq!(long.chars().count(), 32);
-        assert!(long.ends_with('…'));
-    }
 
     #[test]
     fn mixing_colours_stays_between_the_ends() {
@@ -449,5 +594,152 @@ mod tests {
                 "the sort label moved on hover (ascending: {ascending})"
             );
         }
+    }
+
+    fn sample(status: TransferStatus, file_id: Option<i64>, source: Option<&str>) -> Transfer {
+        let mut t = Transfer {
+            id: 9,
+            name: "Some.Movie.2024".into(),
+            percent_done: 40,
+            ..Transfer::default()
+        };
+        t.status = status;
+        t.file_id = file_id;
+        t.source = source.map(str::to_owned);
+        t
+    }
+
+    fn acts(transfer: &Transfer, clearable: usize) -> Vec<Vec<Act>> {
+        entries(transfer, clearable)
+            .into_iter()
+            .map(|group| group.into_iter().map(|e| e.act).collect())
+            .collect()
+    }
+
+    #[test]
+    fn a_running_transfer_can_be_opened_and_cancelled_but_not_streamed() {
+        let t = sample(TransferStatus::Downloading, None, None);
+        assert_eq!(acts(&t, 0), [vec![Act::Open], vec![Act::Cancel]]);
+        let cancel = &entries(&t, 0)[1][0];
+        assert_eq!(cancel.label, Msg::MenuCancelTransfer);
+        assert_eq!(cancel.tint, Tint::Danger);
+    }
+
+    #[test]
+    fn a_completed_transfer_offers_stream_copy_and_removal() {
+        let t = sample(
+            TransferStatus::Completed,
+            Some(5),
+            Some("https://x.test/a.torrent"),
+        );
+        assert_eq!(
+            acts(&t, 3),
+            [
+                vec![Act::Open, Act::Stream],
+                vec![Act::CopyLink, Act::CopySource],
+                vec![Act::Cancel, Act::Clear],
+            ]
+        );
+        let groups = entries(&t, 3);
+        assert_eq!(groups[1][1].label, Msg::MenuCopySource);
+        assert_eq!(groups[2][0].label, Msg::MenuRemoveFromList);
+        assert_eq!(groups[2][1].label, Msg::MenuClearFinished { count: 3 });
+    }
+
+    #[test]
+    fn a_magnet_source_is_labelled_as_a_magnet_link() {
+        let t = sample(
+            TransferStatus::Downloading,
+            None,
+            Some("magnet:?xt=urn:btih:abc"),
+        );
+        assert_eq!(entries(&t, 0)[1][0].label, Msg::MenuCopyMagnet);
+    }
+
+    #[test]
+    fn a_seeding_transfer_stops_seeding_instead_of_being_cancelled() {
+        let t = sample(TransferStatus::Seeding, Some(5), None);
+        let manage = entries(&t, 0).pop().unwrap();
+        assert_eq!(manage[0].label, Msg::MenuStopSeeding);
+        assert_eq!(manage[0].act, Act::Cancel);
+    }
+
+    #[test]
+    fn a_failed_transfer_can_be_retried_before_it_is_removed() {
+        let t = sample(TransferStatus::Error, None, None);
+        let manage = entries(&t, 0).pop().unwrap();
+        assert_eq!(
+            manage.iter().map(|e| e.act).collect::<Vec<_>>(),
+            [Act::Retry, Act::Cancel]
+        );
+        assert_eq!(manage[1].label, Msg::MenuRemoveFromList);
+        assert_eq!(manage[0].tint, Tint::Normal);
+    }
+
+    #[test]
+    fn clearing_is_only_offered_when_something_can_be_cleared() {
+        let t = sample(TransferStatus::Downloading, None, None);
+        assert!(!acts(&t, 0).concat().contains(&Act::Clear));
+        assert!(acts(&t, 1).concat().contains(&Act::Clear));
+    }
+
+    #[test]
+    fn unsafe_sources_are_not_offered_for_copying() {
+        let t = sample(TransferStatus::Downloading, None, Some("magnet:?x\ny"));
+        assert!(!acts(&t, 0).concat().contains(&Act::CopySource));
+    }
+
+    #[test]
+    fn every_action_targets_the_transfer_it_was_opened_for() {
+        assert!(matches!(Act::Open.event(9), Event::OpenTransferOnPutio(9)));
+        assert!(matches!(Act::Stream.event(9), Event::StreamRequested(9)));
+        assert!(matches!(
+            Act::CopyLink.event(9),
+            Event::CopyLinkRequested(9)
+        ));
+        assert!(matches!(
+            Act::CopySource.event(9),
+            Event::CopySourceRequested(9)
+        ));
+        assert!(matches!(Act::Retry.event(9), Event::RetryRequested(9)));
+        assert!(matches!(Act::Cancel.event(9), Event::CancelRequested(9)));
+        assert!(matches!(Act::Clear.event(9), Event::ClearRequested));
+    }
+
+    #[test]
+    fn a_card_does_not_move_its_text_when_hovered() {
+        use crate::ui::test_support::text_with_and_without_hover;
+        for status in [
+            TransferStatus::Downloading,
+            TransferStatus::Completed,
+            TransferStatus::Error,
+        ] {
+            for selected in [false, true] {
+                let t = sample(status, Some(5), None);
+                let (resting, hovered) = text_with_and_without_hover(|ui| {
+                    let card = draw_card(ui, &t, selected, Locale::En);
+                    (card.rect, card.body.hovered())
+                });
+                assert_eq!(
+                    resting, hovered,
+                    "card text moved ({status:?}, selected {selected})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_more_button_does_not_move_anything_when_hovered() {
+        use crate::ui::test_support::text_with_and_without_hover;
+        let t = sample(TransferStatus::Downloading, Some(5), None);
+        let (resting, hovered) = text_with_and_without_hover(|ui| {
+            let card = draw_card(ui, &t, false, Locale::En);
+            let more = Rect::from_center_size(
+                Pos2::new(card.rect.right() - MORE_INSET, card.rect.center().y),
+                Vec2::splat(MORE_SIZE),
+            );
+            (more, card.more.hovered())
+        });
+        assert_eq!(resting, hovered);
     }
 }

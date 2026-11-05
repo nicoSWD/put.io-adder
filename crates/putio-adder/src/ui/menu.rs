@@ -30,13 +30,21 @@ pub(crate) fn preferences_shortcut() -> egui::KeyboardShortcut {
 
 /// An item that deserves attention (a new version) is drawn in the accent colour.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Tint {
+pub(crate) enum Tint {
     Normal,
     Accent,
+    /// Removes or stops something.
+    Danger,
 }
 
 /// One row. Returns whether it was clicked.
-fn item(ui: &mut egui::Ui, icon: MenuIcon, label: &str, hint: Option<&str>, tint: Tint) -> bool {
+pub(crate) fn item(
+    ui: &mut egui::Ui,
+    icon: MenuIcon,
+    label: &str,
+    hint: Option<&str>,
+    tint: Tint,
+) -> bool {
     let p = theme::pal();
     let (rect, response) =
         ui.allocate_exact_size(Vec2::new(ui.available_width(), ROW_HEIGHT), Sense::click());
@@ -47,6 +55,7 @@ fn item(ui: &mut egui::Ui, icon: MenuIcon, label: &str, hint: Option<&str>, tint
     }
     let icon_color = match (tint, response.hovered()) {
         (Tint::Accent, _) => p.accent_text,
+        (Tint::Danger, _) => p.error,
         (Tint::Normal, true) => p.text,
         (Tint::Normal, false) => p.muted,
     };
@@ -59,6 +68,7 @@ fn item(ui: &mut egui::Ui, icon: MenuIcon, label: &str, hint: Option<&str>, tint
     let (font, color) = match tint {
         Tint::Accent => (theme::bold(12.5), p.accent_text),
         Tint::Normal => (theme::text(12.5), p.text),
+        Tint::Danger => (theme::text(12.5), p.error),
     };
     ui.painter().text(
         Pos2::new(rect.left() + TEXT_X, rect.center().y),
@@ -80,12 +90,26 @@ fn item(ui: &mut egui::Ui, icon: MenuIcon, label: &str, hint: Option<&str>, tint
 }
 
 /// A hairline between groups.
-fn divider(ui: &mut egui::Ui) {
+pub(crate) fn divider(ui: &mut egui::Ui) {
     ui.add_space(4.0);
     let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 1.0), Sense::hover());
     ui.painter()
         .rect_filled(rect.shrink2(Vec2::new(8.0, 0.0)), 0.0, theme::pal().divider);
     ui.add_space(4.0);
+}
+
+/// A quiet title row above the first group (the name of what the menu is about). Not clickable.
+pub(crate) fn caption(ui: &mut egui::Ui, text: &str) {
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 30.0), Sense::hover());
+    let font = theme::bold(11.5);
+    let shown = super::widgets::fit_to_width(ui.painter(), text, &font, rect.width() - 28.0);
+    ui.painter().text(
+        Pos2::new(rect.left() + 14.0, rect.center().y),
+        Align2::LEFT_CENTER,
+        shown,
+        font,
+        theme::pal().muted,
+    );
 }
 
 /// The menu opened from `button`.

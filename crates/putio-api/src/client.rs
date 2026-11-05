@@ -249,6 +249,29 @@ impl<T: Transport> Client<T> {
         self.ack(&self.post_form("/transfers/cancel", &[("transfer_ids", &joined)]))
     }
 
+    /// Retry a transfer that failed.
+    pub fn retry_transfer(&self, id: i64) -> Result<(), ApiError> {
+        // The id is a query parameter in the spec (`POST /transfers/retry?id=`), with no body.
+        let request = self.request(
+            Method::Post,
+            Host::Api,
+            format!("/transfers/retry?id={id}"),
+            Body::None,
+            JSON,
+            true,
+        );
+        self.ack(&request)
+    }
+
+    /// Remove finished transfers from the list. Only the entries go: the files stay on put.io.
+    pub fn clean_transfers(&self, ids: &[i64]) -> Result<(), ApiError> {
+        if ids.is_empty() {
+            return Err(ApiError::InvalidInput("no transfer ids"));
+        }
+        let joined = ids.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
+        self.ack(&self.post_form("/transfers/clean", &[("transfer_ids", &joined)]))
+    }
+
     // ---- files ----------------------------------------------------------------------------
 
     /// Upload a `.torrent`. `filename` is only a label; `parent_id` is the destination folder.
@@ -547,6 +570,64 @@ mod tests {
             c.cancel_transfers(&[1]).unwrap_err().error_type(),
             Some("NotFound")
         );
+    }
+
+    #[test]
+    fn retry_posts_the_id_as_a_query_parameter_without_a_body() {
+        let fake = FakeTransport::new();
+        fake.push_json(200, "");
+        fake.push_json(
+            404,
+            r#"{"error_type":"NotFound","error_message":"no such transfer"}"#,
+        );
+        let c = client(&fake);
+        c.retry_transfer(42).unwrap();
+        let request = fake.last_request().unwrap();
+        assert_eq!(request.describe(), "POST /transfers/retry?id=42");
+        assert_eq!(request.body, Body::None);
+        assert_eq!(
+            c.retry_transfer(1).unwrap_err().error_type(),
+            Some("NotFound")
+        );
+    }
+
+    #[test]
+    fn clean_sends_the_ids_and_refuses_an_empty_list() {
+        let fake = FakeTransport::new();
+        fake.push_json(200, r#"{"status":"OK"}"#);
+        let c = client(&fake);
+        c.clean_transfers(&[3, 9, 12]).unwrap();
+        assert_eq!(
+            fake.last_request().unwrap().describe(),
+            "POST /transfers/clean"
+        );
+        assert_eq!(
+            fake.last_request().unwrap().body,
+            Body::Form("transfer_ids=3%2C9%2C12".into())
+        );
+        assert_eq!(
+            c.clean_transfers(&[]).unwrap_err(),
+            ApiError::InvalidInput("no transfer ids")
+        );
+        assert_eq!(
+            fake.requests().len(),
+            1,
+            "an empty list must not reach the network"
+        );
+    }
+
+    #[test]
+    fn transfer_source_is_read_when_present() {
+        let fake = FakeTransport::new();
+        fake.push_json(200, include_str!("../tests/fixtures/transfers_list.json"));
+        let transfers = client(&fake).transfers().unwrap();
+        assert!(
+            transfers[0]
+                .source
+                .as_deref()
+                .is_some_and(|s| s.starts_with("magnet:?xt=urn:btih:"))
+        );
+        assert_eq!(transfers[1].source, None);
     }
 
     #[test]

@@ -182,6 +182,7 @@ fn query_fields(path: &str) -> BTreeSet<String> {
 
 /// Run every API call the app makes and compare each request with the spec.
 #[test]
+#[allow(clippy::too_many_lines)] // one flat list of calls reads best next to the spec
 fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_parameters() {
     let spec = spec();
     let fake = FakeTransport::new();
@@ -195,6 +196,8 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     ok(r#"{"transfers":[]}"#); // transfers
     ok(&format!(r#"{{"transfer":{transfer}}}"#)); // add_transfer
     ok(""); // cancel
+    ok(""); // retry
+    ok(""); // clean
     ok(&format!(r#"{{"transfer":{transfer}}}"#)); // upload
     ok(r#"{"files":[],"cursor":"c"}"#); // list_files page 1
     ok(r#"{"files":[]}"#); // list_files continue
@@ -212,6 +215,8 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
         )
         .unwrap();
     client.cancel_transfers(&[1]).unwrap();
+    client.retry_transfer(1).unwrap();
+    client.clean_transfers(&[1, 2]).unwrap();
     client
         .upload_torrent("a.torrent", b"d4:infod4:name1:aee", Some(1))
         .unwrap();
@@ -219,7 +224,7 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     client.file_url(1).unwrap();
 
     let requests: Vec<Request> = fake.requests();
-    assert_eq!(requests.len(), 10);
+    assert_eq!(requests.len(), 12);
     for request in &requests {
         let path = template(&request.path);
         let method = match request.method {

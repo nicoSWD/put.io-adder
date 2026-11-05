@@ -129,12 +129,24 @@ pub enum Msg {
     EmptyTitle,
     EmptyHint,
     // Menus & context menu
-    MenuCancelTransfer {
-        name: String,
+    MenuCancelTransfer,
+    MenuStopSeeding,
+    MenuRemoveFromList,
+    MenuStream,
+    MenuCopyLink,
+    MenuCopyMagnet,
+    MenuCopySource,
+    MenuRetry,
+    MenuClearFinished {
+        count: usize,
     },
-    MenuStream {
-        name: String,
-    },
+    Copied,
+    Retrying,
+    Retried,
+    RetryFailed,
+    Clearing,
+    Cleared,
+    ClearFailed,
     MenuOpenOnPutio,
     MenuPreferences,
     MenuCheckUpdates,
@@ -378,23 +390,23 @@ impl Msg {
             .into(),
             Self::Canceling => tr!(
                 l,
-                "Canceling transfer…",
-                "Breche Übertragung ab…",
-                "Cancelando transferencia…"
+                "Removing transfer…",
+                "Entferne Übertragung…",
+                "Quitando transferencia…"
             )
             .into(),
             Self::Canceled => tr!(
                 l,
-                "Transfer canceled",
-                "Übertragung abgebrochen",
-                "Transferencia cancelada"
+                "Transfer removed",
+                "Übertragung entfernt",
+                "Transferencia quitada"
             )
             .into(),
             Self::CancelFailed => tr!(
                 l,
-                "Couldn't cancel the transfer",
-                "Übertragung konnte nicht abgebrochen werden",
-                "No se pudo cancelar la transferencia"
+                "Couldn't remove the transfer",
+                "Übertragung konnte nicht entfernt werden",
+                "No se pudo quitar la transferencia"
             )
             .into(),
             Self::Streaming => {
@@ -498,18 +510,97 @@ impl Msg {
             )
             .into(),
             Self::EtaFinishing => tr!(l, "Finishing", "Schließe ab", "Terminando").into(),
-            Self::MenuCancelTransfer { name } => tr!(
+            Self::MenuCancelTransfer => tr!(
                 l,
-                format!("Cancel “{name}”"),
-                format!("„{name}“ abbrechen"),
-                format!("Cancelar «{name}»")
-            ),
-            Self::MenuStream { name } => tr!(
+                "Cancel transfer",
+                "Übertragung abbrechen",
+                "Cancelar transferencia"
+            )
+            .into(),
+            Self::MenuStopSeeding => {
+                tr!(l, "Stop seeding", "Seeden beenden", "Dejar de compartir").into()
+            }
+            Self::MenuRemoveFromList => tr!(
                 l,
-                format!("Stream “{name}”"),
-                format!("„{name}“ streamen"),
-                format!("Reproducir «{name}»")
+                "Remove from list",
+                "Aus der Liste entfernen",
+                "Quitar de la lista"
+            )
+            .into(),
+            Self::MenuStream => {
+                tr!(l, "Stream in VLC", "In VLC streamen", "Reproducir en VLC").into()
+            }
+            Self::MenuCopyLink => tr!(
+                l,
+                "Copy put.io link",
+                "put.io-Link kopieren",
+                "Copiar enlace de put.io"
+            )
+            .into(),
+            Self::MenuCopyMagnet => tr!(
+                l,
+                "Copy magnet link",
+                "Magnet-Link kopieren",
+                "Copiar enlace magnet"
+            )
+            .into(),
+            Self::MenuCopySource => tr!(
+                l,
+                "Copy source link",
+                "Quell-Link kopieren",
+                "Copiar enlace de origen"
+            )
+            .into(),
+            Self::MenuRetry => tr!(l, "Retry", "Erneut versuchen", "Reintentar").into(),
+            Self::MenuClearFinished { count } => tr!(
+                l,
+                format!("Clear finished ({count})"),
+                format!("Fertige entfernen ({count})"),
+                format!("Quitar terminadas ({count})")
             ),
+            Self::Copied => tr!(
+                l,
+                "Copied to the clipboard",
+                "In die Zwischenablage kopiert",
+                "Copiado al portapapeles"
+            )
+            .into(),
+            Self::Retrying => tr!(l, "Retrying…", "Versuche erneut…", "Reintentando…").into(),
+            Self::Retried => tr!(
+                l,
+                "Transfer restarted",
+                "Übertragung neu gestartet",
+                "Transferencia reiniciada"
+            )
+            .into(),
+            Self::RetryFailed => tr!(
+                l,
+                "Couldn't retry the transfer",
+                "Erneuter Versuch fehlgeschlagen",
+                "No se pudo reintentar"
+            )
+            .into(),
+            Self::Clearing => tr!(
+                l,
+                "Clearing finished transfers…",
+                "Entferne fertige Übertragungen…",
+                "Quitando transferencias terminadas…"
+            )
+            .into(),
+            Self::Cleared => tr!(
+                l,
+                "Finished transfers cleared",
+                "Fertige Übertragungen entfernt",
+                "Transferencias terminadas quitadas"
+            )
+            .into(),
+            Self::ClearFailed => tr!(
+                l,
+                "Couldn't clear the list",
+                "Liste konnte nicht geleert werden",
+                "No se pudo vaciar la lista"
+            )
+            .into(),
             Self::MenuOpenOnPutio => {
                 tr!(l, "Open on put.io", "Auf put.io öffnen", "Abrir en put.io").into()
             }

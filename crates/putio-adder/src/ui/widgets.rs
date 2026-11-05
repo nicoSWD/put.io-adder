@@ -253,6 +253,47 @@ pub(crate) fn popup_frame() -> egui::Frame {
         })
 }
 
+/// Fit `text` into `max_width` by cutting it and adding an ellipsis. `measure` gives the width of a
+/// string. Returns the text to draw and whether it was cut.
+pub(crate) fn fit(text: &str, max_width: f32, measure: impl Fn(&str) -> f32) -> (String, bool) {
+    if measure(text) <= max_width {
+        return (text.to_owned(), false);
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let with_ellipsis = |count: usize| {
+        let mut cut: String = chars.iter().take(count).collect();
+        cut.push('…');
+        cut
+    };
+    // Longest prefix that still fits with the ellipsis (width grows with the prefix).
+    let (mut low, mut high) = (0, chars.len());
+    while low < high {
+        let middle = (low + high).div_ceil(2);
+        if measure(&with_ellipsis(middle)) <= max_width {
+            low = middle;
+        } else {
+            high = middle - 1;
+        }
+    }
+    (with_ellipsis(low), true)
+}
+
+/// `text` cut with an ellipsis so that it fits `max_width` when drawn with `font`.
+pub(crate) fn fit_to_width(
+    painter: &egui::Painter,
+    text: &str,
+    font: &egui::FontId,
+    max_width: f32,
+) -> String {
+    fit(text, max_width, |candidate| {
+        painter
+            .layout_no_wrap(candidate.to_owned(), font.clone(), Color32::PLACEHOLDER)
+            .size()
+            .x
+    })
+    .0
+}
+
 /// A radio-style row for a drop-down: a dot, then the label. Everything is painted at fixed positions,
 /// so nothing moves when the pointer is over it (egui's stock buttons grow slightly on hover, which
 /// makes their text shift). Returns whether it was clicked.
@@ -305,5 +346,25 @@ mod tests {
                 "text position changed on hover (selected: {selected})"
             );
         }
+    }
+
+    #[test]
+    fn text_is_cut_with_an_ellipsis_only_when_it_does_not_fit() {
+        #[allow(clippy::cast_precision_loss)] // tiny test strings
+        let measure = |text: &str| text.chars().count() as f32 * 10.0;
+        assert_eq!(fit("short", 100.0, measure), ("short".to_owned(), false));
+        assert_eq!(
+            fit("exactly10c", 100.0, measure),
+            ("exactly10c".to_owned(), false)
+        );
+        let (cut, was_cut) = fit("this is far too long", 100.0, measure);
+        assert!(was_cut);
+        assert_eq!(cut, "this is f…");
+        assert!(measure(&cut) <= 100.0);
+        assert_eq!(fit("anything", 5.0, measure), ("…".to_owned(), true));
+        assert_eq!(fit("", 0.0, measure), (String::new(), false));
+        // Multibyte characters are cut on character boundaries.
+        let (cut, _) = fit("日本語日本語日本語日本語", 50.0, measure);
+        assert_eq!(cut.chars().count(), 5);
     }
 }

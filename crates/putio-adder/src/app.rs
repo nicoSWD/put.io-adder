@@ -212,6 +212,10 @@ impl App {
         self.ui.open_once = match view {
             "menu" | "menu-update" => Some(crate::ui::Overlay::Menu),
             "sort" => Some(crate::ui::Overlay::Sort),
+            "card-menu" => Some(crate::ui::Overlay::Card(1)),
+            "card-menu-seeding" => Some(crate::ui::Overlay::Card(6)),
+            "card-menu-failed" => Some(crate::ui::Overlay::Card(7)),
+            "card-menu-done" => Some(crate::ui::Overlay::Card(5)),
             _ => None,
         };
         if view == "menu-update" {
@@ -296,6 +300,9 @@ impl App {
                 self.send(Job::UploadTorrent { op, path, parent });
             }
             Effect::CancelTransfer { op, id } => self.send(Job::Cancel { op, id }),
+            Effect::RetryTransfer { op, id } => self.send(Job::Retry { op, id }),
+            Effect::CleanTransfers { op, ids } => self.send(Job::Clean { op, ids }),
+            Effect::CopyText(text) => ctx.copy_text(text),
             Effect::Stream { op, file_id } => self.send(Job::Stream { op, file_id }),
             Effect::FetchLatestRelease => self.send(Job::LatestRelease),
             Effect::Notify(notification) => self.notifier.notify(&notification),

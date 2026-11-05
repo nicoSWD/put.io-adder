@@ -50,6 +50,14 @@ pub(crate) enum Job {
         op: OpId,
         id: i64,
     },
+    Retry {
+        op: OpId,
+        id: i64,
+    },
+    Clean {
+        op: OpId,
+        ids: Vec<i64>,
+    },
     Stream {
         op: OpId,
         file_id: i64,
@@ -190,6 +198,14 @@ fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
         Job::Cancel { op, id } => WorkerMsg::Core(Event::CancelFinished {
             op,
             result: client.cancel_transfers(&[id]),
+        }),
+        Job::Retry { op, id } => WorkerMsg::Core(Event::RetryFinished {
+            op,
+            result: client.retry_transfer(id),
+        }),
+        Job::Clean { op, ids } => WorkerMsg::Core(Event::ClearFinished {
+            op,
+            result: client.clean_transfers(&ids),
         }),
         Job::Stream { op, file_id } => WorkerMsg::Core(Event::StreamFinished {
             op,

@@ -1,6 +1,6 @@
 //! Small icons drawn with the painter, so there is no icon font to ship or to be missing.
 
-use eframe::egui::{Color32, Painter, Pos2, Rect, Stroke, Vec2};
+use eframe::egui::{self, Color32, CornerRadius, Painter, Pos2, Rect, Stroke, StrokeKind, Vec2};
 use putio_api::TransferStatus;
 
 use super::theme;
@@ -62,6 +62,11 @@ pub(crate) enum MenuIcon {
     External,
     SignOut,
     Power,
+    Play,
+    Cancel,
+    Copy,
+    Link,
+    Trash,
 }
 
 /// A circular arc as a polyline (angles in degrees, 0 = right, increasing counter-clockwise on screen).
@@ -91,6 +96,7 @@ fn arc(
     (previous, direction)
 }
 
+#[allow(clippy::too_many_lines)] // one flat match: each icon is a handful of strokes
 pub(crate) fn menu_icon(painter: &Painter, center: Pos2, icon: MenuIcon, color: Color32) {
     let stroke = Stroke::new(1.6, color);
     let at = |x: f32, y: f32| center + Vec2::new(x, y);
@@ -152,6 +158,62 @@ pub(crate) fn menu_icon(painter: &Painter, center: Pos2, icon: MenuIcon, color: 
                 stroke,
             );
             painter.line_segment([at(0.0, -7.5), at(0.0, -0.5)], Stroke::new(1.8, color));
+        }
+        MenuIcon::Play => {
+            // A triangle pointing right, nudged so that its weight sits in the middle.
+            painter.add(egui::Shape::closed_line(
+                vec![at(-3.5, -6.0), at(-3.5, 6.0), at(6.0, 0.0)],
+                stroke,
+            ));
+        }
+        MenuIcon::Cancel => {
+            painter.circle_stroke(center, 7.0, stroke);
+            painter.line_segment([at(-2.6, -2.6), at(2.6, 2.6)], stroke);
+            painter.line_segment([at(-2.6, 2.6), at(2.6, -2.6)], stroke);
+        }
+        MenuIcon::Copy => {
+            // Two sheets, the front one over the back one.
+            let rounding = CornerRadius::same(2);
+            painter.rect_stroke(
+                Rect::from_min_max(at(-2.0, -7.0), at(7.0, 2.0)),
+                rounding,
+                stroke,
+                StrokeKind::Middle,
+            );
+            painter.rect_stroke(
+                Rect::from_min_max(at(-7.0, -2.0), at(2.0, 7.0)),
+                rounding,
+                stroke,
+                StrokeKind::Middle,
+            );
+        }
+        MenuIcon::Link => {
+            // Two chain links side by side.
+            let rounding = CornerRadius::same(4);
+            painter.rect_stroke(
+                Rect::from_min_max(at(-7.5, -3.8), at(1.5, 3.8)),
+                rounding,
+                stroke,
+                StrokeKind::Middle,
+            );
+            painter.rect_stroke(
+                Rect::from_min_max(at(-1.5, -3.8), at(7.5, 3.8)),
+                rounding,
+                stroke,
+                StrokeKind::Middle,
+            );
+        }
+        MenuIcon::Trash => {
+            painter.line_segment([at(-6.5, -4.0), at(6.5, -4.0)], stroke);
+            painter.line_segment([at(-2.2, -4.0), at(-2.2, -6.5)], stroke);
+            painter.line_segment([at(-2.2, -6.5), at(2.2, -6.5)], stroke);
+            painter.line_segment([at(2.2, -6.5), at(2.2, -4.0)], stroke);
+            painter.add(egui::Shape::line(
+                vec![at(-4.8, -4.0), at(-4.0, 6.5), at(4.0, 6.5), at(4.8, -4.0)],
+                stroke,
+            ));
+            painter.line_segment([at(-1.6, -1.0), at(-1.6, 3.5)], stroke);
+            painter.line_segment([at(1.6, -1.0), at(1.6, 3.5)], stroke);
         }
     }
 }

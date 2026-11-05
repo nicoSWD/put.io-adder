@@ -104,6 +104,42 @@ impl Tracker {
     }
 }
 
+/// Longest source text that may be offered for copying (a magnet link with many trackers is a few KiB).
+pub const MAX_SOURCE_LEN: usize = 8192;
+
+/// What a transfer was added from, when it is safe to put on the clipboard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Source<'a> {
+    pub text: &'a str,
+    /// A `magnet:` link (as opposed to a plain URL), which decides the wording of the menu entry.
+    pub is_magnet: bool,
+}
+
+/// The source of `transfer`, if there is one worth copying. The text comes from the server, so it is
+/// bounded, must be a single line and must not contain control characters.
+#[must_use]
+pub fn copyable_source(transfer: &Transfer) -> Option<Source<'_>> {
+    let text = transfer.source.as_deref()?.trim();
+    if text.is_empty() || text.len() > MAX_SOURCE_LEN || text.chars().any(char::is_control) {
+        return None;
+    }
+    let is_magnet = text
+        .get(..7)
+        .is_some_and(|scheme| scheme.eq_ignore_ascii_case("magnet:"));
+    Some(Source { text, is_magnet })
+}
+
+/// Ids of the transfers that are finished and can be cleared from the list (seeding ones are still
+/// doing something, so they stay).
+#[must_use]
+pub fn clearable_ids(transfers: &[Transfer]) -> Vec<i64> {
+    transfers
+        .iter()
+        .filter(|t| t.status == TransferStatus::Completed)
+        .map(|t| t.id)
+        .collect()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SortKey {
     /// Running transfers first, then finished, then failed; newest first within a group.
@@ -181,6 +217,71 @@ mod tests {
     }
 
     use TransferStatus::*;
+
+    fn with_source(source: Option<&str>) -> Transfer {
+        let mut t = transfer(1, "x", Completed, 100);
+        t.source = source.map(str::to_owned);
+        t
+    }
+
+    #[test]
+    fn a_magnet_source_is_offered_as_a_magnet() {
+        let t = with_source(Some("magnet:?xt=urn:btih:abc&dn=x"));
+        assert_eq!(
+            copyable_source(&t),
+            Some(Source {
+                text: "magnet:?xt=urn:btih:abc&dn=x",
+                is_magnet: true
+            })
+        );
+        let upper = with_source(Some("MAGNET:?xt=1"));
+        assert!(copyable_source(&upper).unwrap().is_magnet);
+    }
+
+    #[test]
+    fn a_url_source_is_offered_as_a_plain_link() {
+        let t = with_source(Some("  https://example.com/file.zip \n"));
+        assert_eq!(
+            copyable_source(&t),
+            Some(Source {
+                text: "https://example.com/file.zip",
+                is_magnet: false
+            })
+        );
+    }
+
+    #[test]
+    fn missing_empty_oversized_and_unsafe_sources_are_not_offered() {
+        assert_eq!(copyable_source(&with_source(None)), None);
+        assert_eq!(copyable_source(&with_source(Some("   "))), None);
+        assert_eq!(
+            copyable_source(&with_source(Some(&"a".repeat(MAX_SOURCE_LEN + 1)))),
+            None
+        );
+        assert!(copyable_source(&with_source(Some(&"a".repeat(MAX_SOURCE_LEN)))).is_some());
+        for bad in ["magnet:?x\ny", "https://a\u{1b}[31m", "a\u{0}b", "a\tb"] {
+            assert_eq!(copyable_source(&with_source(Some(bad))), None, "{bad:?}");
+        }
+        // Multibyte text must not trip the scheme check.
+        assert!(
+            !copyable_source(&with_source(Some("日本語日本語")))
+                .unwrap()
+                .is_magnet
+        );
+    }
+
+    #[test]
+    fn only_completed_transfers_can_be_cleared() {
+        let list = [
+            transfer(1, "a", Completed, 100),
+            transfer(2, "b", Seeding, 100),
+            transfer(3, "c", Downloading, 5),
+            transfer(4, "d", Error, 0),
+            transfer(5, "e", Completed, 100),
+        ];
+        assert_eq!(clearable_ids(&list), [1, 5]);
+        assert!(clearable_ids(&[]).is_empty());
+    }
 
     #[test]
     fn summary_counts_and_averages() {
