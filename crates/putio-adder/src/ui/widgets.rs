@@ -5,6 +5,7 @@ use eframe::egui::{
     Stroke, Vec2,
 };
 
+use super::icons::{self, MenuIcon};
 use super::theme;
 
 const SWITCH_SIZE: Vec2 = Vec2::new(40.0, 24.0);
@@ -237,6 +238,63 @@ pub(crate) fn centered_text(ui: &egui::Ui, rect: Rect, text: &str, size: f32, co
     );
 }
 
+/// A button with an icon: solid yellow for the main action, a quiet inset pill for the others.
+///
+/// Painted at fixed positions like the menu rows: when the pointer arrives only the background changes,
+/// the icon and the text stay exactly where they were. Returns the click response.
+pub(crate) fn action_button(
+    ui: &mut egui::Ui,
+    icon: MenuIcon,
+    label: &str,
+    primary: bool,
+) -> Response {
+    let p = theme::pal();
+    let font = theme::bold(12.0);
+    let galley = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), font, Color32::PLACEHOLDER);
+    let size = Vec2::new(14.0 + 16.0 + 8.0 + galley.size().x + 16.0, ACTION_HEIGHT);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+    let (fill, hover_fill, ink, quiet_ink) = if primary {
+        (theme::YELLOW, p.yellow_pressed, p.on_yellow, p.on_yellow)
+    } else {
+        (p.inset, p.card_hover, p.text, p.muted)
+    };
+    let ink_now = if response.hovered() { ink } else { quiet_ink };
+    ui.painter().rect_filled(
+        rect,
+        CornerRadius::same(10),
+        if response.hovered() { hover_fill } else { fill },
+    );
+    if !primary {
+        ui.painter().rect_stroke(
+            rect,
+            CornerRadius::same(10),
+            Stroke::new(1.0, p.divider),
+            egui::StrokeKind::Inside,
+        );
+    }
+    icons::menu_icon(
+        ui.painter(),
+        Pos2::new(rect.left() + 14.0 + 8.0, rect.center().y),
+        icon,
+        ink_now,
+    );
+    ui.painter().galley(
+        Pos2::new(
+            rect.left() + 14.0 + 16.0 + 8.0,
+            rect.center().y - galley.size().y / 2.0,
+        ),
+        galley,
+        ink,
+    );
+    response
+}
+
+/// Height of [`action_button`].
+pub(crate) const ACTION_HEIGHT: f32 = 36.0;
+
 /// The card of a dialog (Preferences, Details) and the dimmed backdrop behind it.
 pub(crate) fn dialog_frame() -> (egui::Frame, Color32) {
     let p = theme::pal();
@@ -386,5 +444,16 @@ mod tests {
         // Multibyte characters are cut on character boundaries.
         let (cut, _) = fit("日本語日本語日本語日本語", 50.0, measure);
         assert_eq!(cut.chars().count(), 5);
+    }
+
+    #[test]
+    fn an_action_button_does_not_move_its_icon_or_text_when_hovered() {
+        for primary in [true, false] {
+            let (resting, hovered) = text_with_and_without_hover(|ui| {
+                let response = action_button(ui, MenuIcon::Download, "Download", primary);
+                (response.rect, response.hovered())
+            });
+            assert_eq!(resting, hovered, "moved on hover (primary: {primary})");
+        }
     }
 }

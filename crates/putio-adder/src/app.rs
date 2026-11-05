@@ -222,6 +222,7 @@ impl App {
             "details" => Some(6),
             "details-failed" => Some(7),
             "details-downloading" => Some(1),
+            "details-long" => Some(2),
             _ => None,
         };
         if view == "menu-update" {
@@ -238,6 +239,12 @@ impl App {
         } else {
             crate::demo::transfers()
         };
+        let mut transfers = transfers;
+        if view == "details-long"
+            && let Some(item) = transfers.iter_mut().find(|t| t.id == 2)
+        {
+            item.name = "Some.Extremely.Long.Release.Name.With.No.Spaces.2160p.UHD.BluRay.REMUX.HDR10Plus.DV.TrueHD.7.1.Atmos.x265-GROUP".into();
+        }
         let account = crate::demo::account();
         self.dispatch(
             ctx,

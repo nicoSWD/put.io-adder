@@ -112,29 +112,51 @@ pub fn detail(transfer: &Transfer, locale: Locale) -> String {
     }
 }
 
+/// Where a detail is shown in the panel: related facts sit together under one title.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DetailGroup {
+    Transfer,
+    Sharing,
+    Dates,
+    /// Free text from put.io or the tracker. Drawn as callouts, not as label/value rows.
+    Messages,
+}
+
 /// One line of the details panel.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DetailRow {
+    pub group: DetailGroup,
     pub label: Msg,
     pub value: String,
-    /// Free text that needs the full width (drawn under its label) rather than a short value.
-    pub long: bool,
 }
 
-/// The facts about a transfer worth showing in the details panel, in display order. Anything the
-/// server did not send (or sent as nonsense) is left out rather than shown as `0` or `–`.
+/// One line under the transfer's name in the panel: what it is doing right now. (A failed transfer says
+/// so here; its reason is a separate message.)
+#[must_use]
+pub fn headline(transfer: &Transfer, locale: Locale) -> String {
+    if transfer.status == TransferStatus::Error {
+        Msg::StatusFailed.text(locale)
+    } else {
+        detail(transfer, locale)
+    }
+}
+
+/// The facts about a transfer worth showing in the details panel, grouped, in display order. Anything the
+/// server did not send (or sent as nonsense) is left out rather than shown as `0` or `–`. The status is not
+/// a row: the panel shows it as [`headline`].
 #[must_use]
 pub fn details(transfer: &Transfer, locale: Locale) -> Vec<DetailRow> {
     let mut rows = Vec::new();
-    let mut short = |label: Msg, value: String| {
+    let mut add = |group: DetailGroup, label: Msg, value: String| {
         rows.push(DetailRow {
+            group,
             label,
             value,
-            long: false,
         });
     };
+    let transfer_group = DetailGroup::Transfer;
+    let sharing = DetailGroup::Sharing;
 
-    short(Msg::DetailStatus, status_label(transfer.status, locale));
     let kind = match transfer.kind {
         TransferKind::Torrent => Some(Msg::KindTorrent),
         TransferKind::Url => Some(Msg::KindUrl),
@@ -143,31 +165,32 @@ pub fn details(transfer: &Transfer, locale: Locale) -> Vec<DetailRow> {
         TransferKind::Unknown => None,
     };
     if let Some(kind) = kind {
-        short(Msg::DetailType, kind.text(locale));
+        add(transfer_group, Msg::DetailType, kind.text(locale));
     }
     if transfer.size > 0 {
-        short(Msg::ColSize, bytes(transfer.size));
+        add(transfer_group, Msg::ColSize, bytes(transfer.size));
     }
     if let Some(value) = transfer.downloaded.filter(|v| *v > 0) {
-        short(Msg::DetailDownloaded, bytes(value));
+        add(transfer_group, Msg::DetailDownloaded, bytes(value));
     }
+
     if let Some(value) = transfer.uploaded.filter(|v| *v > 0) {
-        short(Msg::DetailUploaded, bytes(value));
+        add(sharing, Msg::DetailUploaded, bytes(value));
     }
     if let Some(ratio) = transfer
         .current_ratio
         .filter(|r| r.is_finite() && *r >= 0.0)
     {
-        short(Msg::DetailRatio, format!("{ratio:.2}"));
+        add(sharing, Msg::DetailRatio, format!("{ratio:.2}"));
     }
     if let Some(seconds) = transfer.seconds_seeding.filter(|s| *s > 0) {
-        short(Msg::DetailSeedingFor, duration(seconds));
+        add(sharing, Msg::DetailSeedingFor, duration(seconds));
     }
     if let Some(peers) = transfer.peers.filter(|p| *p >= 0) {
-        short(Msg::DetailPeers, peers.to_string());
+        add(sharing, Msg::DetailPeers, peers.to_string());
     }
     if let Some(percent) = transfer.availability.filter(|a| (0..=100).contains(a)) {
-        short(Msg::DetailAvailability, format!("{percent}%"));
+        add(sharing, Msg::DetailAvailability, format!("{percent}%"));
     }
     if let Some(private) = transfer.is_private {
         let answer = if private {
@@ -175,49 +198,41 @@ pub fn details(transfer: &Transfer, locale: Locale) -> Vec<DetailRow> {
         } else {
             Msg::DetailNo
         };
-        short(Msg::DetailPrivate, answer.text(locale));
+        add(sharing, Msg::DetailPrivate, answer.text(locale));
     }
+
     for (label, stamp) in [
         (Msg::DetailAdded, &transfer.created_at),
         (Msg::DetailFinished, &transfer.finished_at),
     ] {
         if let Some(text) = stamp.as_deref().and_then(timestamp) {
-            short(label, text);
+            add(DetailGroup::Dates, label, text);
         }
     }
 
-    let mut long = |label: Msg, text: Option<&str>| {
-        if let Some(text) = text.map(clean_error).filter(|t| !t.is_empty()) {
-            rows.push(DetailRow {
-                label,
-                value: text,
-                long: true,
-            });
-        }
-    };
     if transfer.status == TransferStatus::Error {
-        long(Msg::DetailError, transfer.error_message.as_deref());
+        add_message(
+            &mut rows,
+            Msg::DetailError,
+            transfer.error_message.as_deref(),
+        );
     }
-    long(
+    add_message(
+        &mut rows,
         Msg::DetailTrackerMessage,
         transfer.tracker_message.as_deref(),
     );
     rows
 }
 
-fn status_label(status: TransferStatus, locale: Locale) -> String {
-    match status {
-        TransferStatus::InQueue => Msg::StatusQueued,
-        TransferStatus::Waiting => Msg::StatusWaiting,
-        TransferStatus::PreparingDownload => Msg::StatusPreparing,
-        TransferStatus::Downloading => Msg::StatusDownloading,
-        TransferStatus::Completing => Msg::EtaFinishing,
-        TransferStatus::Seeding => Msg::StatusSeeding,
-        TransferStatus::Completed => Msg::EtaDone,
-        TransferStatus::Error => Msg::StatusFailed,
-        TransferStatus::Unknown => return "–".into(),
+fn add_message(rows: &mut Vec<DetailRow>, label: Msg, text: Option<&str>) {
+    if let Some(text) = text.map(clean_error).filter(|t| !t.is_empty()) {
+        rows.push(DetailRow {
+            group: DetailGroup::Messages,
+            label,
+            value: text,
+        });
     }
-    .text(locale)
 }
 
 /// `2024-05-01T12:34:56` (optionally with fraction and zone) as `2024-05-01 12:34 UTC`.
@@ -301,20 +316,39 @@ mod tests {
         transfer
     }
 
-    fn labelled(rows: &[DetailRow]) -> Vec<(Msg, &str)> {
+    fn labelled(rows: &[DetailRow]) -> Vec<(DetailGroup, Msg, &str)> {
         rows.iter()
-            .map(|r| (r.label.clone(), r.value.as_str()))
+            .map(|r| (r.group, r.label.clone(), r.value.as_str()))
             .collect()
     }
 
     #[test]
-    fn details_of_a_bare_transfer_are_just_its_status() {
-        let rows = details(&transfer(TransferStatus::Waiting), Locale::En);
-        assert_eq!(labelled(&rows), [(Msg::DetailStatus, "Waiting…")]);
+    fn a_bare_transfer_has_no_details_and_a_status_headline() {
+        let t = transfer(TransferStatus::Waiting);
+        assert!(details(&t, Locale::En).is_empty());
+        assert_eq!(headline(&t, Locale::En), "Waiting…");
     }
 
     #[test]
-    fn details_of_a_seeding_torrent_show_the_swarm_and_the_ratio() {
+    fn a_failed_transfers_headline_is_short_and_its_reason_is_a_message() {
+        let mut t = transfer(TransferStatus::Error);
+        t.error_message = Some("Tracker unreachable".into());
+        assert_eq!(headline(&t, Locale::En), "Failed");
+        assert_eq!(headline(&t, Locale::De), "Fehlgeschlagen");
+        let rows = details(&t, Locale::En);
+        assert_eq!(
+            labelled(&rows),
+            [(
+                DetailGroup::Messages,
+                Msg::DetailError,
+                "Tracker unreachable"
+            )]
+        );
+    }
+
+    #[test]
+    fn details_of_a_seeding_torrent_are_grouped_in_display_order() {
+        use DetailGroup::{Dates, Messages, Sharing, Transfer as Facts};
         let mut t = transfer(TransferStatus::Seeding);
         t.kind = putio_api::TransferKind::Torrent;
         t.size = 1024 * 1024;
@@ -328,46 +362,36 @@ mod tests {
         t.tracker_message = Some("Announce OK".into());
         t.created_at = Some("2024-05-01T12:34:56".into());
         t.finished_at = Some("2024-05-01T13:00:00Z".into());
-        let rows = details(&t, Locale::En);
         assert_eq!(
-            labelled(&rows),
+            labelled(&details(&t, Locale::En)),
             [
-                (Msg::DetailStatus, "Done · seeding"),
-                (Msg::DetailType, "Torrent"),
-                (Msg::ColSize, "1.0 MB"),
-                (Msg::DetailDownloaded, "1.0 MB"),
-                (Msg::DetailUploaded, "3.0 MB"),
-                (Msg::DetailRatio, "3.00"),
-                (Msg::DetailSeedingFor, "1h 01m"),
-                (Msg::DetailPeers, "8"),
-                (Msg::DetailAvailability, "100%"),
-                (Msg::DetailPrivate, "Yes"),
-                (Msg::DetailAdded, "2024-05-01 12:34 UTC"),
-                (Msg::DetailFinished, "2024-05-01 13:00 UTC"),
-                (Msg::DetailTrackerMessage, "Announce OK"),
+                (Facts, Msg::DetailType, "Torrent"),
+                (Facts, Msg::ColSize, "1.0 MB"),
+                (Facts, Msg::DetailDownloaded, "1.0 MB"),
+                (Sharing, Msg::DetailUploaded, "3.0 MB"),
+                (Sharing, Msg::DetailRatio, "3.00"),
+                (Sharing, Msg::DetailSeedingFor, "1h 01m"),
+                (Sharing, Msg::DetailPeers, "8"),
+                (Sharing, Msg::DetailAvailability, "100%"),
+                (Sharing, Msg::DetailPrivate, "Yes"),
+                (Dates, Msg::DetailAdded, "2024-05-01 12:34 UTC"),
+                (Dates, Msg::DetailFinished, "2024-05-01 13:00 UTC"),
+                (Messages, Msg::DetailTrackerMessage, "Announce OK"),
             ]
         );
-        assert!(rows.last().unwrap().long);
-        assert!(rows.iter().rev().skip(1).all(|r| !r.long));
     }
 
     #[test]
-    fn a_failed_transfer_shows_its_error_and_only_for_a_failed_transfer() {
+    fn the_error_is_only_shown_for_a_failed_transfer_and_is_cleaned() {
         let mut t = transfer(TransferStatus::Error);
         t.error_message = Some("Tracker\nunreachable\u{1b}[31m".into());
         t.tracker_message = Some("  ".into());
         let rows = details(&t, Locale::En);
-        assert_eq!(
-            labelled(&rows),
-            [
-                (Msg::DetailStatus, "Failed"),
-                (Msg::DetailError, "Trackerunreachable[31m"),
-            ]
-        );
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].value, "Trackerunreachable[31m");
         let mut fine = transfer(TransferStatus::Downloading);
         fine.error_message = Some("old".into());
-        let rows = details(&fine, Locale::En);
-        assert!(!rows.iter().any(|r| r.label == Msg::DetailError));
+        assert!(details(&fine, Locale::En).is_empty());
     }
 
     #[test]
@@ -378,13 +402,13 @@ mod tests {
         t.current_ratio = Some(f64::NAN);
         t.uploaded = Some(0);
         t.seconds_seeding = Some(-5);
-        assert_eq!(details(&t, Locale::En).len(), 1);
+        assert!(details(&t, Locale::En).is_empty());
         t.current_ratio = Some(f64::INFINITY);
-        assert_eq!(details(&t, Locale::En).len(), 1);
+        assert!(details(&t, Locale::En).is_empty());
         t.current_ratio = Some(-1.0);
-        assert_eq!(details(&t, Locale::En).len(), 1);
+        assert!(details(&t, Locale::En).is_empty());
         t.current_ratio = Some(0.0);
-        assert_eq!(details(&t, Locale::En).len(), 2);
+        assert_eq!(details(&t, Locale::En).len(), 1);
     }
 
     #[test]
@@ -434,6 +458,9 @@ mod tests {
         for locale in [Locale::En, Locale::De, Locale::Es] {
             for msg in [
                 Msg::MenuDetails,
+                Msg::DetailGroupTransfer,
+                Msg::DetailGroupSharing,
+                Msg::DetailGroupDates,
                 Msg::DetailsTitle,
                 Msg::DetailStatus,
                 Msg::DetailType,

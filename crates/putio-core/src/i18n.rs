@@ -134,6 +134,9 @@ pub enum Msg {
     MenuRemoveFromList,
     MenuStream,
     MenuCopyLink,
+    DetailGroupTransfer,
+    DetailGroupSharing,
+    DetailGroupDates,
     MenuDownload,
     DownloadPreparing,
     DownloadStarted,
@@ -661,6 +664,9 @@ impl Msg {
                 format!("Download gestartet · put.io hat {missing} Datei(en) ausgelassen"),
                 format!("Descarga iniciada · put.io omitió {missing} archivo(s)")
             ),
+            Self::DetailGroupTransfer => tr!(l, "Transfer", "Übertragung", "Transferencia").into(),
+            Self::DetailGroupSharing => tr!(l, "Sharing", "Teilen", "Compartir").into(),
+            Self::DetailGroupDates => tr!(l, "Dates", "Daten", "Fechas").into(),
             Self::MenuCopyLink => tr!(
                 l,
                 "Copy put.io link",
