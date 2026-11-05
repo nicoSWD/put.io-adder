@@ -75,3 +75,10 @@ pub trait Transport: Send + Sync {
     /// Perform one request. HTTP error statuses are *not* errors here; the client maps them.
     fn execute(&self, request: &Request) -> Result<Response, TransportError>;
 }
+
+/// Lets several threads share one transport (and its connection pool).
+impl<T: Transport + ?Sized> Transport for std::sync::Arc<T> {
+    fn execute(&self, request: &Request) -> Result<Response, TransportError> {
+        (**self).execute(request)
+    }
+}

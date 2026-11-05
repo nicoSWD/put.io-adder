@@ -105,12 +105,16 @@ fn main() -> eframe::Result {
         version: VERSION,
     };
     let height = app::window_height(startup.settings.transfers_expanded, false);
+    let mut viewport = eframe::egui::ViewportBuilder::default()
+        .with_inner_size([ui::WIDTH, height])
+        .with_resizable(false)
+        .with_maximize_button(false)
+        .with_title(app::title(VERSION, None));
+    if let Some(icon) = window_icon() {
+        viewport = viewport.with_icon(icon);
+    }
     let options = eframe::NativeOptions {
-        viewport: eframe::egui::ViewportBuilder::default()
-            .with_inner_size([ui::WIDTH, height])
-            .with_resizable(false)
-            .with_maximize_button(false)
-            .with_title(app::title(VERSION, None)),
+        viewport,
         ..Default::default()
     };
     eframe::run_native(
@@ -118,4 +122,18 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |cc| Ok(Box::new(app::App::new(cc, startup)))),
     )
+}
+
+/// The app icon for the window (Windows/Linux title bar, and the Dock while running unbundled on macOS).
+fn window_icon() -> Option<eframe::egui::IconData> {
+    const ICON_PNG: &[u8] = include_bytes!("../../../assets/icon/icon-256.png");
+    let image = image::load_from_memory_with_format(ICON_PNG, image::ImageFormat::Png)
+        .ok()?
+        .into_rgba8();
+    let (width, height) = image.dimensions();
+    Some(eframe::egui::IconData {
+        rgba: image.into_raw(),
+        width,
+        height,
+    })
 }

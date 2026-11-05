@@ -1103,6 +1103,7 @@ dependencies = [
  "ahash",
  "egui",
  "enum-map",
+ "image",
  "itertools",
  "log",
  "profiling",
@@ -2948,6 +2949,7 @@ version = "0.1.0"
 dependencies = [
  "eframe",
  "egui_extras",
+ "image",
  "putio-api",
  "putio-core",
  "putio-platform",

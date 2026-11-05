@@ -10,7 +10,7 @@ use super::{STRIP_HEIGHT, TOP_HEIGHT, WIDTH, theme};
 use crate::app::App;
 
 const BAR_X: f32 = 35.0;
-const BAR_WIDTH: f32 = 100.0;
+const BAR_WIDTH: f32 = 150.0;
 
 #[allow(clippy::too_many_lines)] // immediate-mode drawing reads best as one top-to-bottom function
 pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
@@ -19,22 +19,27 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
     let now = app.now();
     let locale = app.state.locale;
 
-    // ---- top row: wordmark on the left, account and menu on the right ----
-    ui.painter().text(
-        origin + Vec2::new(14.0, 9.0),
-        Align2::LEFT_TOP,
-        "put.io",
-        FontId::proportional(20.0),
-        theme::INK,
-    );
+    // ---- top row: logo on the left, account and menu on the right (dark: the logo is white and gold) ----
     let top = Rect::from_min_size(origin, Vec2::new(WIDTH, TOP_HEIGHT));
+    ui.painter()
+        .rect_filled(top, CornerRadius::ZERO, theme::TOP);
+    let logo_height = 22.0;
+    let logo = Rect::from_min_size(
+        origin + Vec2::new(14.0, (TOP_HEIGHT - logo_height) / 2.0),
+        Vec2::new(logo_height * theme::LOGO_ASPECT, logo_height),
+    );
+    egui::Image::from_bytes("bytes://putio-logo.png", theme::LOGO_PNG)
+        .fit_to_exact_size(logo.size())
+        .paint_at(ui, logo);
     ui.scope_builder(
         egui::UiBuilder::new().max_rect(top.shrink2(Vec2::new(10.0, 6.0))),
         |ui| {
+            ui.visuals_mut().override_text_color = Some(Color32::WHITE);
+            ui.visuals_mut().widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 menu(ui, app);
                 if let Some(account) = &app.state.account {
-                    ui.label(egui::RichText::new(&account.username).strong());
+                    ui.label(egui::RichText::new(&account.username).font(theme::bold(13.0)));
                 }
             });
         },

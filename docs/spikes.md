@@ -29,12 +29,12 @@ egui painter. Still to verify on Windows and Linux in CI/manual runs.
 
 Phase 0 spike 1 is open. Everything the client assumes about behaviour the spec does not state:
 
-1. `GET /account/info`: is `disk` (`size`/`used`/`avail`) still returned? (2.8.14 does not list it.)
+1. ~~`GET /account/info`: is `disk` still returned?~~ **Not usable**: after a successful sign-in the app showed the bandwidth fallback ("7.2 GB this month"), i.e. `disk` was absent or had no size (observed 2026-11-05). The bar therefore shows monthly bandwidth. Keep `disk` optional.
 2. ~~`GET /oauth2/oob/code?app_id=711`: does OOB work for the old implicit-grant app id?~~ **Yes**: the app got a device code with app id 711 on its first launch (observed 2026-11-05; the sign-in itself is still to be completed).
-3. **What does `GET /oauth2/oob/code/{code}` return before the user has linked the code?** The client
+3. ~~**What does `GET /oauth2/oob/code/{code}` return before the user has linked the code?**~~ Sign-in completed end to end (observed 2026-11-05), so the pending state does not abort it. The exact pending body is still unrecorded; capture it as a fixture. Original question: The client
    assumes `200 {"oauth_token": null}` (or no field). If put.io answers with a 4xx instead, sign-in would be
    aborted on the first poll (`link_polled` treats a non-transient error as "code expired").
-4. Does put.io accept `Authorization: Bearer <token>`? (The spec does not say.)
+4. ~~Does put.io accept `Authorization: Bearer <token>`?~~ **Yes**: account info and the transfer list were fetched with it (observed 2026-11-05).
 5. The error body for adding a duplicate transfer (`error_type`).
 6. `GET /files/{id}/url` on a folder.
 7. Does `POST /transfers/cancel` return an empty body or `{"status":"OK"}`? (The spec shows no content; the client accepts both.)

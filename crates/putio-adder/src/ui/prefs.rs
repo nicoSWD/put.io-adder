@@ -9,7 +9,7 @@ use putio_core::state::{Event, SettingsChange};
 
 use super::theme;
 use crate::app::App;
-use crate::worker::Job;
+use crate::worker::{Job, Workers};
 
 /// Browsing put.io folders to choose the destination of new transfers.
 #[derive(Debug, Default)]
@@ -40,10 +40,10 @@ impl FolderPicker {
         }
     }
 
-    fn enter(&mut self, jobs: &impl Fn(Job), id: i64, name: String) {
+    fn enter(&mut self, workers: &Workers, id: i64, name: String) {
         self.trail.push((id, name));
         self.loading = true;
-        jobs(Job::ListFolders { parent: id });
+        workers.send(Job::ListFolders { parent: id });
     }
 }
 
@@ -111,13 +111,13 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
                 if app.state.is_signed_in()
                     && ui.button(Msg::PrefsChooseFolder.text(locale)).clicked()
                 {
-                    let jobs = app.jobs_sender();
+                    let workers = app.workers();
                     let picker = &mut app.ui.folders;
                     picker.open = true;
                     picker.trail.clear();
                     picker.folders.clear();
                     picker.failed = false;
-                    picker.enter(&|job| jobs.send_job(job), 0, "Your Files".into());
+                    picker.enter(&workers, 0, "Your Files".into());
                 }
                 if settings.default_folder.is_some()
                     && ui.button(Msg::PrefsClearFolder.text(locale)).clicked()
@@ -188,17 +188,16 @@ fn folder_window(ctx: &egui::Context, app: &mut App) {
             }
         });
 
-    let jobs = app.jobs_sender();
-    let send = |job: Job| jobs.send_job(job);
+    let workers = app.workers();
     if let Some((id, name)) = enter {
-        app.ui.folders.enter(&send, id, name);
+        app.ui.folders.enter(&workers, id, name);
     }
     if up {
         let picker = &mut app.ui.folders;
         picker.trail.pop();
         if let Some((id, _)) = picker.trail.last() {
             picker.loading = true;
-            send(Job::ListFolders { parent: *id });
+            workers.send(Job::ListFolders { parent: *id });
         }
     }
     if let Some(folder) = chosen {

@@ -1,24 +1,38 @@
-//! The background thread that talks to put.io.
+//! The background threads that talk to put.io.
 //!
 //! The UI never blocks on the network: it sends [`Job`]s here and gets [`WorkerMsg`]s back, then is
-//! woken with `request_repaint`. One thread, one job at a time, no async runtime.
+//! woken with `request_repaint`. No async runtime, just two small thread pools ("lanes"):
+//!
+//! * **interactive** (3 threads): sign-in, polling, adding a magnet, cancelling, update checks, the
+//!   folder picker. These are quick and must never wait behind a big upload.
+//! * **heavy** (2 threads): `.torrent` uploads (up to two minutes on a slow link) and streaming set-up.
+//!
+//! The token is shared state that the UI sets directly (not a queued job), so a job can never run
+//! with a token older than the one the UI just set. Each job takes a snapshot when it starts.
 
 use std::path::PathBuf;
-use std::sync::mpsc::{Receiver, Sender};
-use std::thread::{self, JoinHandle};
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 use putio_api::client::FileListing;
-use putio_api::{ApiError, Client, FileType, Token, UploadOutcome, UreqTransport};
+use putio_api::{ApiError, Client, FileType, Token, Transport, UploadOutcome, UreqTransport};
 use putio_core::state::{Event, OpId, StreamFailure};
 use putio_platform::player::{PlayError, PlayerLauncher, VlcLauncher};
 use putio_platform::torrent_file;
 
 /// Most videos queued from one folder.
 const MAX_PLAYLIST: usize = 50;
+const INTERACTIVE_THREADS: usize = 3;
+const HEAVY_THREADS: usize = 2;
+
+/// What the app identifies itself as in the put.io "linked apps" list.
+const CLIENT_NAME: &str = "put.io adder";
+/// The put.io application id used for the device (OOB) sign-in. A public identifier, not a secret.
+pub(crate) const APP_ID: u32 = 711;
 
 #[derive(Debug)]
 pub(crate) enum Job {
-    SetToken(Option<Token>),
     DeviceCode,
     PollCode(String),
     Poll,
@@ -47,6 +61,12 @@ pub(crate) enum Job {
     },
 }
 
+impl Job {
+    fn is_heavy(&self) -> bool {
+        matches!(self, Self::UploadTorrent { .. } | Self::Stream { .. })
+    }
+}
+
 #[derive(Debug)]
 pub(crate) enum WorkerMsg {
     Core(Event),
@@ -56,91 +76,138 @@ pub(crate) enum WorkerMsg {
     },
 }
 
-/// What the app identifies itself as in the put.io "linked apps" list.
-const CLIENT_NAME: &str = "put.io adder";
-/// The put.io application id used for the device (OOB) sign-in. A public identifier, not a secret.
-pub(crate) const APP_ID: u32 = 711;
+/// Handle for sending work. Cheap to clone.
+#[derive(Debug, Clone)]
+pub(crate) struct Workers {
+    interactive: Sender<Job>,
+    heavy: Sender<Job>,
+    token: Arc<Mutex<Option<Token>>>,
+}
 
-pub(crate) fn spawn(
-    ctx: eframe::egui::Context,
-    jobs: Receiver<Job>,
-    out: Sender<WorkerMsg>,
-    user_agent: String,
-) -> std::io::Result<JoinHandle<()>> {
-    thread::Builder::new()
-        .name("putio-worker".into())
-        .spawn(move || {
-            let mut client = Client::new(UreqTransport::new(&user_agent));
-            let launcher = VlcLauncher;
-            while let Ok(job) = jobs.recv() {
-                let msg = match job {
-                    Job::SetToken(token) => {
-                        client.set_token(token);
-                        continue;
-                    }
-                    Job::DeviceCode => WorkerMsg::Core(Event::DeviceCodeReceived(
-                        client.oob_code(APP_ID, CLIENT_NAME),
-                    )),
-                    Job::PollCode(code) => {
-                        WorkerMsg::Core(Event::LinkPolled(client.oob_poll(&code)))
-                    }
-                    Job::Poll => {
-                        let account = client.account();
-                        let transfers = client.transfers();
-                        WorkerMsg::Core(Event::Polled { account, transfers })
-                    }
-                    Job::AddMagnet { op, uri, parent } => {
-                        let result = client
-                            .add_transfer(&uri, parent)
-                            .map(|transfer| Some(transfer.id));
-                        WorkerMsg::Core(Event::AddFinished { op, result })
-                    }
-                    Job::UploadTorrent { op, path, parent } => {
-                        match torrent_file::read_torrent(&path) {
-                            Err(error) => WorkerMsg::Core(Event::TorrentUnusable {
-                                op,
-                                reason: error.to_string(),
-                            }),
-                            Ok(file) => {
-                                let result = client
-                                    .upload_torrent(&file.name, &file.bytes, parent)
-                                    .map(|outcome| match outcome {
-                                        UploadOutcome::Transfer(transfer) => Some(transfer.id),
-                                        UploadOutcome::File(_) => None,
-                                    });
-                                WorkerMsg::Core(Event::AddFinished { op, result })
-                            }
-                        }
-                    }
-                    Job::Cancel { op, id } => WorkerMsg::Core(Event::CancelFinished {
-                        op,
-                        result: client.cancel_transfers(&[id]),
-                    }),
-                    Job::Stream { op, file_id } => WorkerMsg::Core(Event::StreamFinished {
-                        op,
-                        result: stream(&client, &launcher, file_id),
-                    }),
-                    Job::LatestRelease => {
-                        WorkerMsg::Core(Event::ReleaseFetched(client.latest_release()))
-                    }
-                    Job::ListFolders { parent } => WorkerMsg::Folders {
-                        parent,
-                        result: client.list_files(parent, Some(FileType::Folder)),
-                    },
-                };
-                if out.send(msg).is_err() {
-                    break; // the UI is gone
-                }
-                ctx.request_repaint();
+impl Workers {
+    pub(crate) fn spawn(
+        ctx: &eframe::egui::Context,
+        out: &Sender<WorkerMsg>,
+        user_agent: &str,
+    ) -> std::io::Result<Self> {
+        let transport = Arc::new(UreqTransport::new(user_agent));
+        let token = Arc::new(Mutex::new(None));
+        let lane = |name: &str, threads: usize| -> std::io::Result<Sender<Job>> {
+            let (tx, rx) = mpsc::channel::<Job>();
+            let rx = Arc::new(Mutex::new(rx));
+            for index in 0..threads {
+                let (rx, out, ctx) = (Arc::clone(&rx), out.clone(), ctx.clone());
+                let (transport, token) = (Arc::clone(&transport), Arc::clone(&token));
+                thread::Builder::new()
+                    .name(format!("putio-{name}-{index}"))
+                    .spawn(move || run(&rx, &out, &ctx, &transport, &token))?;
             }
+            Ok(tx)
+        };
+        Ok(Self {
+            interactive: lane("interactive", INTERACTIVE_THREADS)?,
+            heavy: lane("heavy", HEAVY_THREADS)?,
+            token,
         })
+    }
+
+    /// Set (or clear) the token used by every job that starts from now on.
+    pub(crate) fn set_token(&self, token: Option<Token>) {
+        if let Ok(mut slot) = self.token.lock() {
+            *slot = token;
+        }
+    }
+
+    pub(crate) fn send(&self, job: Job) {
+        let lane = if job.is_heavy() {
+            &self.heavy
+        } else {
+            &self.interactive
+        };
+        let _ = lane.send(job);
+    }
+}
+
+fn run(
+    jobs: &Mutex<Receiver<Job>>,
+    out: &Sender<WorkerMsg>,
+    ctx: &eframe::egui::Context,
+    transport: &Arc<UreqTransport>,
+    token: &Mutex<Option<Token>>,
+) {
+    loop {
+        // Hold the queue lock only while waiting for the next job, never while working on it.
+        let job = match jobs.lock() {
+            Ok(queue) => queue.recv(),
+            Err(_) => return,
+        };
+        let Ok(job) = job else { return };
+        let snapshot = token.lock().ok().and_then(|slot| slot.clone());
+        let client = match snapshot {
+            Some(token) => Client::with_token(Arc::clone(transport), token),
+            None => Client::new(Arc::clone(transport)),
+        };
+        if out.send(execute(&client, job)).is_err() {
+            return; // the UI is gone
+        }
+        ctx.request_repaint();
+    }
+}
+
+fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
+    match job {
+        Job::DeviceCode => WorkerMsg::Core(Event::DeviceCodeReceived(
+            client.oob_code(APP_ID, CLIENT_NAME),
+        )),
+        Job::PollCode(code) => WorkerMsg::Core(Event::LinkPolled(client.oob_poll(&code))),
+        Job::Poll => {
+            let account = client.account();
+            let transfers = client.transfers();
+            WorkerMsg::Core(Event::Polled { account, transfers })
+        }
+        Job::AddMagnet { op, uri, parent } => {
+            let result = client
+                .add_transfer(&uri, parent)
+                .map(|transfer| Some(transfer.id));
+            WorkerMsg::Core(Event::AddFinished { op, result })
+        }
+        Job::UploadTorrent { op, path, parent } => match torrent_file::read_torrent(&path) {
+            Err(error) => WorkerMsg::Core(Event::TorrentUnusable {
+                op,
+                reason: error.to_string(),
+            }),
+            Ok(file) => {
+                let result =
+                    client
+                        .upload_torrent(&file.name, &file.bytes, parent)
+                        .map(|outcome| match outcome {
+                            UploadOutcome::Transfer(transfer) => Some(transfer.id),
+                            UploadOutcome::File(_) => None,
+                        });
+                WorkerMsg::Core(Event::AddFinished { op, result })
+            }
+        },
+        Job::Cancel { op, id } => WorkerMsg::Core(Event::CancelFinished {
+            op,
+            result: client.cancel_transfers(&[id]),
+        }),
+        Job::Stream { op, file_id } => WorkerMsg::Core(Event::StreamFinished {
+            op,
+            result: stream(client, &VlcLauncher, file_id),
+        }),
+        Job::LatestRelease => WorkerMsg::Core(Event::ReleaseFetched(client.latest_release())),
+        Job::ListFolders { parent } => WorkerMsg::Folders {
+            parent,
+            result: client.list_files(parent, Some(FileType::Folder)),
+        },
+    }
 }
 
 /// Resolve playable URLs and hand them to the player. A folder becomes a playlist of its videos in
 /// name order; a single file is played directly. Only signed, IP-bound URLs reach the player's command
 /// line, never the account token.
-fn stream(
-    client: &Client<UreqTransport>,
+fn stream<T: Transport>(
+    client: &Client<T>,
     launcher: &dyn PlayerLauncher,
     file_id: i64,
 ) -> Result<(), StreamFailure> {
@@ -179,4 +246,143 @@ fn stream(
         PlayError::NothingToPlay => StreamFailure::NothingToPlay,
         PlayError::BadUrl | PlayError::Spawn(_) => StreamFailure::LaunchFailed,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use putio_api::testing::FakeTransport;
+    use putio_platform::player::PlayError;
+
+    use super::*;
+
+    #[derive(Default)]
+    struct FakeLauncher {
+        played: Mutex<Vec<Vec<String>>>,
+        missing: bool,
+    }
+
+    impl PlayerLauncher for FakeLauncher {
+        fn play(&self, urls: &[String]) -> Result<(), PlayError> {
+            if self.missing {
+                return Err(PlayError::NoPlayer);
+            }
+            self.played.lock().unwrap().push(urls.to_vec());
+            Ok(())
+        }
+    }
+
+    fn client(fake: &FakeTransport) -> Client<&FakeTransport> {
+        Client::with_token(fake, Token::new("SECRETTOKEN123").unwrap())
+    }
+
+    #[test]
+    fn a_single_file_is_played_through_its_signed_url() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            404,
+            r#"{"error_type":"NotFound","error_message":"not a folder"}"#,
+        ); // list: not listable
+        fake.push_json(200, r#"{"url":"https://signed.invalid/f?sig=1"}"#);
+        let launcher = FakeLauncher::default();
+        stream(&client(&fake), &launcher, 7).unwrap();
+        assert_eq!(
+            launcher.played.lock().unwrap().as_slice(),
+            [vec!["https://signed.invalid/f?sig=1".to_owned()]]
+        );
+        // The account token never reaches the player's command line.
+        let played = launcher.played.lock().unwrap();
+        assert!(
+            played
+                .iter()
+                .flatten()
+                .all(|url| !url.contains("SECRETTOKEN123"))
+        );
+    }
+
+    #[test]
+    fn a_folder_becomes_a_name_ordered_playlist_of_its_videos() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            200,
+            r#"{"parent":{"id":5,"name":"Show","file_type":"FOLDER"},"files":[
+                {"id":12,"name":"b.mkv","file_type":"VIDEO"},
+                {"id":13,"name":"notes.txt","file_type":"TEXT"},
+                {"id":11,"name":"A.mkv","file_type":"VIDEO"}]}"#,
+        );
+        fake.push_json(200, r#"{"url":"https://signed.invalid/a"}"#);
+        fake.push_json(200, r#"{"url":"https://signed.invalid/b"}"#);
+        let launcher = FakeLauncher::default();
+        stream(&client(&fake), &launcher, 5).unwrap();
+        assert_eq!(
+            launcher.played.lock().unwrap()[0],
+            ["https://signed.invalid/a", "https://signed.invalid/b"]
+        );
+        let paths: Vec<String> = fake.requests().iter().map(|r| r.path.clone()).collect();
+        assert_eq!(paths[1], "/files/11/url");
+        assert_eq!(paths[2], "/files/12/url");
+    }
+
+    #[test]
+    fn a_folder_without_videos_has_nothing_to_play() {
+        let fake = FakeTransport::new();
+        fake.push_json(200, r#"{"parent":{"id":5,"name":"Docs","file_type":"FOLDER"},"files":[{"id":1,"name":"a.txt","file_type":"TEXT"}]}"#);
+        assert_eq!(
+            stream(&client(&fake), &FakeLauncher::default(), 5),
+            Err(StreamFailure::NothingToPlay)
+        );
+    }
+
+    #[test]
+    fn a_missing_player_and_an_expired_session_are_reported() {
+        let fake = FakeTransport::new();
+        fake.push_json(404, "{}");
+        fake.push_json(200, r#"{"url":"https://signed.invalid/f"}"#);
+        let missing = FakeLauncher {
+            missing: true,
+            ..FakeLauncher::default()
+        };
+        assert_eq!(
+            stream(&client(&fake), &missing, 1),
+            Err(StreamFailure::NoPlayer)
+        );
+
+        let fake = FakeTransport::new();
+        fake.push_json(401, "{}");
+        assert_eq!(
+            stream(&client(&fake), &FakeLauncher::default(), 1),
+            Err(StreamFailure::Api(ApiError::Unauthorized))
+        );
+    }
+
+    #[test]
+    fn lanes_keep_uploads_away_from_polling() {
+        assert!(
+            Job::UploadTorrent {
+                op: OpId(1),
+                path: "x".into(),
+                parent: None
+            }
+            .is_heavy()
+        );
+        assert!(
+            Job::Stream {
+                op: OpId(1),
+                file_id: 1
+            }
+            .is_heavy()
+        );
+        for job in [
+            Job::Poll,
+            Job::DeviceCode,
+            Job::LatestRelease,
+            Job::Cancel { op: OpId(1), id: 1 },
+            Job::AddMagnet {
+                op: OpId(1),
+                uri: String::new(),
+                parent: None,
+            },
+        ] {
+            assert!(!job.is_heavy(), "{job:?}");
+        }
+    }
 }

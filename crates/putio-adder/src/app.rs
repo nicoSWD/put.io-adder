@@ -1,6 +1,6 @@
 //! The eframe application: glue between the pure core state machine, the worker thread and the OS.
 
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -18,7 +18,7 @@ use putio_platform::secret::SecretStore;
 use putio_platform::settings_store::SettingsFile;
 
 use crate::ui::{self, UiState};
-use crate::worker::{self, Job, WorkerMsg};
+use crate::worker::{Job, WorkerMsg, Workers};
 
 const COLLAPSED_HEIGHT: f32 = 86.0;
 const EXPANDED_HEIGHT: f32 = 300.0;
@@ -55,21 +55,11 @@ pub(crate) fn title(version: &str, progress: Option<u8>) -> String {
     }
 }
 
-/// Send side of the worker queue.
-#[derive(Debug, Clone)]
-pub(crate) struct JobSender(Sender<Job>);
-
-impl JobSender {
-    pub(crate) fn send_job(&self, job: Job) {
-        let _ = self.0.send(job);
-    }
-}
-
 pub(crate) struct App {
     pub(crate) state: State,
     pub(crate) ui: UiState,
     start: Instant,
-    jobs: Sender<Job>,
+    workers: Workers,
     from_worker: Receiver<WorkerMsg>,
     intake_rx: Receiver<String>,
     click_rx: Receiver<Option<i64>>,
@@ -101,16 +91,16 @@ impl App {
         let _ = wake.set(cc.egui_ctx.clone());
         ui::theme::apply(&cc.egui_ctx);
 
-        let (jobs, job_rx) = mpsc::channel();
         let (out_tx, from_worker) = mpsc::channel();
-        if let Err(error) = worker::spawn(
-            cc.egui_ctx.clone(),
-            job_rx,
-            out_tx,
-            format!("putio-adder/{version}"),
-        ) {
-            eprintln!("could not start the network thread: {error}");
-        }
+        let workers = match Workers::spawn(&cc.egui_ctx, &out_tx, &format!("putio-adder/{version}"))
+        {
+            Ok(workers) => workers,
+            Err(error) => {
+                // Without its threads the app cannot work at all; say so plainly.
+                eprintln!("could not start the network threads: {error}");
+                std::process::exit(1);
+            }
+        };
 
         // Token from the secret store (if any) goes to the worker before the first poll.
         let token = match secrets.load() {
@@ -121,14 +111,14 @@ impl App {
             }
         };
         let has_token = token.is_some();
-        let _ = jobs.send(Job::SetToken(token));
+        workers.set_token(token);
 
         let height = window_height(settings.transfers_expanded, has_token);
         let mut app = Self {
             state: State::new(settings, locale, version),
             ui: UiState::default(),
             start: Instant::now(),
-            jobs,
+            workers,
             from_worker,
             intake_rx,
             click_rx,
@@ -160,12 +150,12 @@ impl App {
     }
 
     pub(crate) fn send(&self, job: Job) {
-        let _ = self.jobs.send(job);
+        self.workers.send(job);
     }
 
-    /// A cloneable handle for sending jobs from UI code that also borrows `self` mutably.
-    pub(crate) fn jobs_sender(&self) -> JobSender {
-        JobSender(self.jobs.clone())
+    /// A handle for sending jobs from UI code that also borrows `self` mutably.
+    pub(crate) fn workers(&self) -> Workers {
+        self.workers.clone()
     }
 
     fn run(&mut self, ctx: &egui::Context, effect: Effect) {
@@ -177,7 +167,7 @@ impl App {
                 if let Err(error) = self.secrets.delete() {
                     eprintln!("could not remove the saved sign-in: {error}");
                 }
-                self.send(Job::SetToken(None));
+                self.workers.set_token(None);
             }
             Effect::SaveSettings(settings) => {
                 if let Some(file) = &self.settings_file
@@ -209,7 +199,7 @@ impl App {
         if let Err(error) = self.secrets.save(&token) {
             eprintln!("could not save the sign-in to the secret store: {error}");
         }
-        self.send(Job::SetToken(Some(token)));
+        self.workers.set_token(Some(token));
     }
 
     /// Handle one string handed over by the OS or another launch.

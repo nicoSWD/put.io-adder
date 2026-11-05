@@ -8,11 +8,15 @@ publish = false
 
 [dependencies]
 eframe = "0.36.2"
-egui_extras = { version = "0.36.2", default-features = false }
+egui_extras = { version = "0.36.2", default-features = false, features = ["image"] }
+image = { version = "0.25.10", default-features = false, features = ["png"] }
 putio-api = { version = "0.1.0", path = "../putio-api" }
 putio-core = { version = "0.1.0", path = "../putio-core" }
 putio-platform = { version = "0.1.0", path = "../putio-platform" }
 sys-locale = "0.3.2"
+
+[dev-dependencies]
+putio-api = { path = "../putio-api", features = ["testing"] }
 
 [lints]
 workspace = true
