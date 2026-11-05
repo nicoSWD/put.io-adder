@@ -37,3 +37,22 @@ instance's socket is not deleted, a stale socket from a crash is replaced, and e
   on a notification that launches the app cold is only delivered if the delegate exists before launch finishes.
 - Read `.torrent` files only through `torrent_file::read_torrent` (regular files only, size-capped, bounded read).
   A path from argv or IPC can be a FIFO or `/dev/zero`.
+
+## Default app for magnet links and `.torrent` files (`handler`)
+
+On start the app asks the system whether it is the default for both (off the UI thread). If not, and the user
+has not said "don't ask again", a dialog asks once per run; "Yes" registers, "Not now" only closes it,
+"Don't ask again" is saved (`ask_default_handler`). Preferences has the same status and a **Make default** button.
+A development build, and on macOS an app outside a `.app` bundle (or one that is translocated), is never offered.
+
+| System | Read | Write | Limits |
+|---|---|---|---|
+| macOS | `LSCopyDefaultHandlerForURLScheme("magnet")` and `LSCopyDefaultRoleHandlerForContentType` for the `.torrent` type | `LSSetDefaultHandlerForURLScheme`, `LSSetDefaultRoleHandlerForContentType` | `.torrent` has no system type, so the dynamic type for the extension is used. The calls are deprecated by Apple but still work; macOS may ask the user to confirm. |
+| Linux | `xdg-mime query default` | writes `~/.local/share/applications/es.nico.putio-adder.desktop` (the packaged entry with an absolute, escaped `Exec`), then `xdg-mime default` | needs `xdg-mime`; otherwise the app says so and offers nothing |
+| Windows | per-user registry via `reg.exe`, including the user's own choice (`UserChoice`) | the same ProgIDs and Capabilities the installer writes, plus the classic `magnet` and `.torrent` keys when the user has made no choice of their own | Windows protects the user's choice: if another app was picked, the app opens *Settings → Default apps* and says so |
+
+Everything is built from the app's own path with strict quoting (`Exec=` escaping, registry commands built as
+arguments, never a shell line); a path with a control character or a quote is refused.
+
+**Run on:** the macOS read path (the real Launch Services, read-only), the pure logic everywhere. **Not run:** any
+write on any system (it changes the user's default apps), and everything on Windows and Linux.

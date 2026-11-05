@@ -6,6 +6,7 @@ Debug builds have a **demo mode**: sample transfers and a sample account, no net
 PUTIO_ADDER_DEMO=list  cargo run -p putio-adder     # a list with running, queued, done and failed transfers
 PUTIO_ADDER_DEMO=empty cargo run -p putio-adder     # signed in, nothing yet
 PUTIO_ADDER_DEMO=collapsed cargo run -p putio-adder # the list closed (header only)
+PUTIO_ADDER_DEMO=default-app cargo run -p putio-adder # the "make this your default app?" question
 PUTIO_ADDER_DEMO=login cargo run -p putio-adder     # the sign-in panel with a fake code
 PUTIO_ADDER_DEMO=prefs cargo run -p putio-adder     # the list with Preferences open
 PUTIO_ADDER_DEMO=folders cargo run -p putio-adder   # Preferences on the folder chooser page

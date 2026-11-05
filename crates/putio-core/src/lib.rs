@@ -9,6 +9,7 @@
 
 pub mod download;
 pub mod format;
+pub mod handler;
 pub mod i18n;
 pub mod intake;
 pub mod magnet;

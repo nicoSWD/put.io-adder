@@ -241,6 +241,21 @@ pub enum Msg {
         version: String,
     },
     UpdateOpenPage,
+    HandlerPromptTitle,
+    HandlerPromptBody,
+    HandlerYes,
+    HandlerNotNow,
+    HandlerNever,
+    HandlerRegistering,
+    HandlerSet,
+    HandlerMakeDefault,
+    PrefsDefaultApp,
+    PrefsDefaultAppIs,
+    PrefsDefaultAppIsNot,
+    PrefsDefaultAppChecking,
+    HandlerFailed {
+        reason: String,
+    },
     UpdateInstallNow,
     UpdateRestartNow,
     UpdateUnpacking,
@@ -963,6 +978,96 @@ impl Msg {
                 format!("Falló la actualización: {reason}")
             ),
             Self::UpdateCannotInstall { reason } => reason.clone(),
+            Self::HandlerPromptTitle => tr!(
+                l,
+                "Open magnet links with put.io adder?",
+                "Magnet-Links mit put.io adder öffnen?",
+                "¿Abrir enlaces magnet con put.io adder?"
+            )
+            .into(),
+            Self::HandlerPromptBody => tr!(
+                l,
+                "Make put.io adder your default app for magnet links and .torrent files, so a click sends them straight to your put.io queue.",
+                "put.io adder zur Standard-App für Magnet-Links und .torrent-Dateien machen, damit ein Klick sie direkt in deine put.io-Warteschlange schickt.",
+                "Haz de put.io adder tu app predeterminada para enlaces magnet y archivos .torrent, y un clic los enviará directamente a tu cola de put.io."
+            )
+            .into(),
+            Self::HandlerYes => tr!(
+                l,
+                "Yes, make it the default",
+                "Ja, als Standard festlegen",
+                "Sí, usarla por defecto"
+            )
+            .into(),
+            Self::HandlerNotNow => tr!(
+                l,
+                "Not now",
+                "Jetzt nicht",
+                "Ahora no"
+            )
+            .into(),
+            Self::HandlerNever => tr!(
+                l,
+                "Don't ask again",
+                "Nicht mehr fragen",
+                "No volver a preguntar"
+            )
+            .into(),
+            Self::HandlerRegistering => tr!(
+                l,
+                "Setting the default app…",
+                "Lege die Standard-App fest…",
+                "Configurando la app predeterminada…"
+            )
+            .into(),
+            Self::HandlerSet => tr!(
+                l,
+                "put.io adder now opens magnet links and .torrent files",
+                "put.io adder öffnet jetzt Magnet-Links und .torrent-Dateien",
+                "put.io adder ahora abre enlaces magnet y archivos .torrent"
+            )
+            .into(),
+            Self::HandlerMakeDefault => tr!(
+                l,
+                "Make default",
+                "Als Standard",
+                "Usar por defecto"
+            )
+            .into(),
+            Self::PrefsDefaultApp => tr!(
+                l,
+                "Default app",
+                "Standard-App",
+                "App predeterminada"
+            )
+            .into(),
+            Self::PrefsDefaultAppIs => tr!(
+                l,
+                "put.io adder opens magnet links and .torrent files.",
+                "put.io adder öffnet Magnet-Links und .torrent-Dateien.",
+                "put.io adder abre enlaces magnet y archivos .torrent."
+            )
+            .into(),
+            Self::PrefsDefaultAppIsNot => tr!(
+                l,
+                "Another app opens magnet links and .torrent files.",
+                "Eine andere App öffnet Magnet-Links und .torrent-Dateien.",
+                "Otra app abre enlaces magnet y archivos .torrent."
+            )
+            .into(),
+            Self::PrefsDefaultAppChecking => tr!(
+                l,
+                "Checking…",
+                "Prüfe…",
+                "Comprobando…"
+            )
+            .into(),
+            Self::HandlerFailed { reason } => tr!(
+                l,
+                format!("Couldn't set the default app: {reason}"),
+                format!("Standard-App konnte nicht festgelegt werden: {reason}"),
+                format!("No se pudo configurar la app predeterminada: {reason}")
+            ),
             Self::UpdateOpenPage => tr!(l, "View release", "Release ansehen", "Ver versión").into(),
             Self::UpToDate => tr!(
                 l,

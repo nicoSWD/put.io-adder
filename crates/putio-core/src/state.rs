@@ -14,6 +14,7 @@ use putio_api::{Account, ApiError, DeviceCode, Release, Token, Transfer, ZipStat
 use crate::update::UpdateAsset;
 
 use crate::download;
+use crate::handler;
 use crate::i18n::{Locale, Msg};
 use crate::intake::{Intake, IntakeError};
 use crate::settings::{Folder, Settings, ThemeChoice, WindowSize};
@@ -225,6 +226,17 @@ pub enum Event {
         op: OpId,
         result: Result<ZipStatus, ApiError>,
     },
+    /// Look at the system: is this app the default for magnet links and `.torrent` files?
+    DefaultHandlerCheckRequested,
+    DefaultHandlerChecked(handler::Check),
+    /// Make this app the default (from the question, or from Preferences).
+    DefaultHandlerRequested,
+    /// The system was asked to change; it says what the defaults are now, or why not.
+    DefaultHandlerRegistered(Result<handler::Status, String>),
+    /// The question was answered "no": `forever` is "don't ask again".
+    DefaultHandlerPromptDismissed {
+        forever: bool,
+    },
     /// Whether this copy of the app can replace itself, as the shell found out at start-up. The text is
     /// the reason when it cannot.
     InstallTargetKnown(Result<(), String>),
@@ -309,6 +321,10 @@ pub enum Effect {
     },
     /// Put text on the system clipboard. Only ever built here, from validated data.
     CopyText(String),
+    /// Ask the system whether this app is the default for magnet links and `.torrent` files.
+    CheckDefaultHandler,
+    /// Make this app the default for both, then report with [`Event::DefaultHandlerRegistered`].
+    RegisterDefaultHandler,
     /// Work out what to download: a file's signed address, or a ZIP for a folder.
     PrepareDownload {
         op: OpId,
@@ -362,6 +378,12 @@ pub struct State {
     pub update: UpdateStatus,
     pub install: Install,
     pub install_target: InstallTarget,
+    /// What the system said about the default app, once asked.
+    pub handler_check: Option<handler::Check>,
+    /// The question "make this the default app?" is showing.
+    pub handler_prompt: bool,
+    /// The system is being asked to change the default.
+    pub handler_busy: bool,
     /// Which release file this computer installs for a tag (set by the shell: it depends on the OS and CPU).
     pub asset_name: fn(&str) -> Option<String>,
     pub current_version: String,
@@ -381,6 +403,8 @@ pub struct State {
     badge: Option<u8>,
     update_user_initiated: bool,
     next_update_check_at: Option<Millis>,
+    /// The question has been shown in this run: one time is enough.
+    handler_asked: bool,
 }
 
 impl State {
@@ -397,6 +421,9 @@ impl State {
             update: UpdateStatus::Unknown,
             install: Install::Idle,
             install_target: InstallTarget::Unknown,
+            handler_check: None,
+            handler_prompt: false,
+            handler_busy: false,
             asset_name: |_| None,
             current_version: current_version.to_owned(),
             base: Msg::FetchingInfo,
@@ -414,6 +441,7 @@ impl State {
             badge: None,
             update_user_initiated: false,
             next_update_check_at: None,
+            handler_asked: false,
         }
     }
 
@@ -795,6 +823,57 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
             start_update_check(state, user_initiated, &mut fx);
         }
         Event::ReleaseFetched(result) => release_fetched(state, now, result),
+        Event::DefaultHandlerCheckRequested => fx.push(Effect::CheckDefaultHandler),
+        Event::DefaultHandlerChecked(check) => {
+            if handler::should_ask(
+                &check,
+                state.settings.ask_default_handler,
+                state.handler_asked,
+            ) {
+                state.handler_prompt = true;
+                state.handler_asked = true;
+            }
+            state.handler_check = Some(check);
+        }
+        Event::DefaultHandlerRequested => {
+            let possible = matches!(state.handler_check, Some(handler::Check::Known(_)));
+            if possible && !state.handler_busy {
+                state.handler_busy = true;
+                state.handler_prompt = false;
+                state.say_until_replaced(Msg::HandlerRegistering);
+                fx.push(Effect::RegisterDefaultHandler);
+            }
+        }
+        Event::DefaultHandlerRegistered(result) => {
+            state.handler_busy = false;
+            state.handler_prompt = false;
+            match result {
+                Ok(status) => {
+                    state.handler_check = Some(handler::Check::Known(status));
+                    if status.is_default() {
+                        state.say(Msg::HandlerSet, now, NOTICE_TIME);
+                    } else {
+                        let reason = "the system kept another app for some of them".to_owned();
+                        state.say(Msg::HandlerFailed { reason }, now, ERROR_NOTICE_TIME);
+                    }
+                }
+                Err(reason) => {
+                    let reason: String = reason
+                        .chars()
+                        .filter(|c| !c.is_control())
+                        .take(240)
+                        .collect();
+                    state.say(Msg::HandlerFailed { reason }, now, ERROR_NOTICE_TIME);
+                }
+            }
+        }
+        Event::DefaultHandlerPromptDismissed { forever } => {
+            state.handler_prompt = false;
+            if forever {
+                state.settings.ask_default_handler = false;
+                fx.push(Effect::SaveSettings(state.settings.clone()));
+            }
+        }
         Event::InstallTargetKnown(result) => {
             state.install_target = match result {
                 Ok(()) => InstallTarget::Ready,
@@ -2744,6 +2823,148 @@ mod tests {
         assert!(
             matches!(&fx[..], [Effect::SaveSettings(saved)] if saved.window_size == Some(size))
         );
+    }
+
+    // ---- default app for magnet links and .torrent files ------------------------------------
+
+    const NOT_DEFAULT: handler::Status = handler::Status {
+        magnet: false,
+        torrent: false,
+    };
+    const IS_DEFAULT: handler::Status = handler::Status {
+        magnet: true,
+        torrent: true,
+    };
+
+    fn checked(state: &mut State, check: handler::Check) {
+        update(state, 1, Event::DefaultHandlerChecked(check));
+    }
+
+    #[test]
+    fn the_shell_asks_the_system_when_told_to() {
+        let (mut state, _) = signed_in(no_updates());
+        assert_eq!(
+            update(&mut state, 0, Event::DefaultHandlerCheckRequested),
+            [Effect::CheckDefaultHandler]
+        );
+    }
+
+    #[test]
+    fn the_question_appears_once_when_the_app_is_not_the_default() {
+        let (mut state, _) = signed_in(Settings::default());
+        checked(&mut state, handler::Check::Known(NOT_DEFAULT));
+        assert!(state.handler_prompt);
+        // Answered "not now"; a later check in the same run does not ask again.
+        update(
+            &mut state,
+            2,
+            Event::DefaultHandlerPromptDismissed { forever: false },
+        );
+        assert!(!state.handler_prompt);
+        assert!(state.settings.ask_default_handler, "not now is not forever");
+        checked(&mut state, handler::Check::Known(NOT_DEFAULT));
+        assert!(!state.handler_prompt);
+    }
+
+    #[test]
+    fn nothing_is_asked_when_the_app_is_the_default_or_cannot_be() {
+        for check in [
+            handler::Check::Known(IS_DEFAULT),
+            handler::Check::Unavailable("a development build".into()),
+        ] {
+            let (mut state, _) = signed_in(Settings::default());
+            checked(&mut state, check.clone());
+            assert!(!state.handler_prompt, "{check:?}");
+            assert_eq!(state.handler_check, Some(check));
+        }
+    }
+
+    #[test]
+    fn dont_ask_again_is_remembered_and_stops_the_question_for_good() {
+        let (mut state, _) = signed_in(Settings::default());
+        checked(&mut state, handler::Check::Known(NOT_DEFAULT));
+        let fx = update(
+            &mut state,
+            2,
+            Event::DefaultHandlerPromptDismissed { forever: true },
+        );
+        assert!(!state.settings.ask_default_handler);
+        assert!(matches!(&fx[..], [Effect::SaveSettings(saved)] if !saved.ask_default_handler));
+        // Even a new run (a fresh state with the saved setting) does not ask.
+        let (mut next, _) = signed_in(state.settings.clone());
+        checked(&mut next, handler::Check::Known(NOT_DEFAULT));
+        assert!(!next.handler_prompt);
+    }
+
+    #[test]
+    fn saying_yes_registers_once_and_reports_the_result() {
+        let (mut state, _) = signed_in(Settings::default());
+        checked(&mut state, handler::Check::Known(NOT_DEFAULT));
+        let fx = update(&mut state, 2, Event::DefaultHandlerRequested);
+        assert_eq!(fx, [Effect::RegisterDefaultHandler]);
+        assert!(state.handler_busy && !state.handler_prompt);
+        assert_eq!(*state.status(2), Msg::HandlerRegistering);
+        // A second click while it is working does nothing.
+        assert!(update(&mut state, 3, Event::DefaultHandlerRequested).is_empty());
+        update(
+            &mut state,
+            4,
+            Event::DefaultHandlerRegistered(Ok(IS_DEFAULT)),
+        );
+        assert!(!state.handler_busy);
+        assert_eq!(state.handler_check, Some(handler::Check::Known(IS_DEFAULT)));
+        assert_eq!(*state.status(4), Msg::HandlerSet);
+    }
+
+    #[test]
+    fn a_failed_or_partial_registration_says_so_and_changes_nothing_else() {
+        let (mut state, _) = signed_in(Settings::default());
+        checked(&mut state, handler::Check::Known(NOT_DEFAULT));
+        update(&mut state, 2, Event::DefaultHandlerRequested);
+        update(
+            &mut state,
+            3,
+            Event::DefaultHandlerRegistered(Err("xdg-mime\nfailed\u{1b}[31m".into())),
+        );
+        assert!(!state.handler_busy);
+        assert_eq!(
+            *state.status(3),
+            Msg::HandlerFailed {
+                reason: "xdg-mimefailed[31m".into()
+            }
+        );
+        assert_eq!(
+            state.handler_check,
+            Some(handler::Check::Known(NOT_DEFAULT)),
+            "still not the default"
+        );
+        // The system took only one of the two.
+        update(&mut state, 4, Event::DefaultHandlerRequested);
+        let half = handler::Status {
+            magnet: true,
+            torrent: false,
+        };
+        update(&mut state, 5, Event::DefaultHandlerRegistered(Ok(half)));
+        assert!(matches!(state.status(5), Msg::HandlerFailed { .. }));
+        assert_eq!(state.handler_check, Some(handler::Check::Known(half)));
+    }
+
+    #[test]
+    fn registering_needs_a_system_that_was_looked_at_and_can_do_it() {
+        let (mut state, _) = signed_in(Settings::default());
+        assert!(
+            update(&mut state, 1, Event::DefaultHandlerRequested).is_empty(),
+            "never checked"
+        );
+        checked(
+            &mut state,
+            handler::Check::Unavailable("a development build".into()),
+        );
+        assert!(
+            update(&mut state, 2, Event::DefaultHandlerRequested).is_empty(),
+            "cannot"
+        );
+        assert!(!state.handler_busy);
     }
 
     #[test]

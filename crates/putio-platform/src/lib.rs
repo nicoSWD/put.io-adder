@@ -5,6 +5,7 @@
 //!
 //! * [`secret`]: the token in the OS secret store (Keychain, Credential Manager, Secret Service)
 //! * [`settings_store`] and [`paths`]: where preferences live, written atomically with private permissions
+//! * [`handler`]: becoming the default app for magnet links and `.torrent` files
 //! * [`opener`]: opens an allow-listed `https` URL in the browser
 //! * [`torrent_file`]: reads a `.torrent` from disk without trusting the path
 //! * [`window_chrome`]: keeps the window content steady while it is resized (macOS)
@@ -20,6 +21,7 @@
 
 pub mod app_icon;
 pub mod badge;
+pub mod handler;
 pub mod ipc;
 pub mod notify;
 pub mod opener;

@@ -63,6 +63,9 @@ pub struct Settings {
     /// Quit 5 s after a `.torrent` was uploaded.
     pub close_after_torrent: bool,
     pub check_for_updates: bool,
+    /// Offer to become the default app for magnet links and `.torrent` files (until the user says
+    /// "don't ask again").
+    pub ask_default_handler: bool,
     /// Off by default: Gravatar needs a hash of the account e-mail.
     pub show_avatar: bool,
     /// `None` means put.io's own default folder.
@@ -81,6 +84,7 @@ impl Default for Settings {
             close_after_magnet: false,
             close_after_torrent: false,
             check_for_updates: true,
+            ask_default_handler: true,
             show_avatar: false,
             default_folder: None,
             transfers_expanded: false,
@@ -211,6 +215,21 @@ mod tests {
             Settings::from_json_or_default(Some(r#"{"window_size": {"width": -5, "height": 10}}"#)),
             Settings::default()
         );
+    }
+
+    #[test]
+    fn the_default_app_question_is_asked_unless_declined_for_good() {
+        assert!(Settings::default().ask_default_handler);
+        // A document from before the question existed: still asked.
+        assert!(
+            Settings::from_json_or_default(Some(r#"{"close_after_magnet": true}"#))
+                .ask_default_handler
+        );
+        let declined = Settings {
+            ask_default_handler: false,
+            ..Settings::default()
+        };
+        assert!(!Settings::from_json_or_default(Some(&declined.to_json())).ask_default_handler);
     }
 
     #[test]

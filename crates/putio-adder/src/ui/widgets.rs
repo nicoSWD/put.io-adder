@@ -248,12 +248,27 @@ pub(crate) fn action_button(
     label: &str,
     primary: bool,
 ) -> Response {
+    button(ui, Some(icon), label, primary)
+}
+
+/// [`action_button`] without the icon: a plain labelled button, painted the same way.
+pub(crate) fn text_button(ui: &mut egui::Ui, label: &str, primary: bool) -> Response {
+    button(ui, None, label, primary)
+}
+
+fn button(ui: &mut egui::Ui, icon: Option<MenuIcon>, label: &str, primary: bool) -> Response {
     let p = theme::pal();
     let font = theme::bold(12.0);
     let galley = ui
         .painter()
         .layout_no_wrap(label.to_owned(), font, Color32::PLACEHOLDER);
-    let size = Vec2::new(14.0 + 16.0 + 8.0 + galley.size().x + 16.0, ACTION_HEIGHT);
+    // Room for the icon (and the gap after it) at the left, or just an even margin.
+    let text_left = if icon.is_some() {
+        14.0 + 16.0 + 8.0
+    } else {
+        18.0
+    };
+    let size = Vec2::new(text_left + galley.size().x + 18.0, ACTION_HEIGHT);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
     let (fill, hover_fill, ink, quiet_ink) = if primary {
@@ -275,15 +290,17 @@ pub(crate) fn action_button(
             egui::StrokeKind::Inside,
         );
     }
-    icons::menu_icon(
-        ui.painter(),
-        Pos2::new(rect.left() + 14.0 + 8.0, rect.center().y),
-        icon,
-        ink_now,
-    );
+    if let Some(icon) = icon {
+        icons::menu_icon(
+            ui.painter(),
+            Pos2::new(rect.left() + 14.0 + 8.0, rect.center().y),
+            icon,
+            ink_now,
+        );
+    }
     ui.painter().galley(
         Pos2::new(
-            rect.left() + 14.0 + 16.0 + 8.0,
+            rect.left() + text_left,
             rect.center().y - galley.size().y / 2.0,
         ),
         galley,
@@ -451,6 +468,17 @@ mod tests {
         for primary in [true, false] {
             let (resting, hovered) = text_with_and_without_hover(|ui| {
                 let response = action_button(ui, MenuIcon::Download, "Download", primary);
+                (response.rect, response.hovered())
+            });
+            assert_eq!(resting, hovered, "moved on hover (primary: {primary})");
+        }
+    }
+
+    #[test]
+    fn a_text_button_does_not_move_its_text_when_hovered() {
+        for primary in [true, false] {
+            let (resting, hovered) = text_with_and_without_hover(|ui| {
+                let response = text_button(ui, "Not now", primary);
                 (response.rect, response.hovered())
             });
             assert_eq!(resting, hovered, "moved on hover (primary: {primary})");

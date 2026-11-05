@@ -1,6 +1,7 @@
 //! Drawing. Reads the core [`State`](putio_core::state::State) and reports user actions as events.
 
 pub(crate) mod details;
+pub(crate) mod handler;
 pub(crate) mod header;
 pub(crate) mod icons;
 pub(crate) mod login;
@@ -100,4 +101,5 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
         });
     prefs::show(&ctx, app);
     details::show(&ctx, app);
+    handler::show(&ctx, app);
 }

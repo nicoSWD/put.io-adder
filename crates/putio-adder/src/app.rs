@@ -207,6 +207,8 @@ impl App {
         // Whether this copy can replace itself (not a development build, a folder it may write to).
         let target = putio_platform::update::install_target().map(drop);
         app.dispatch(&cc.egui_ctx, Event::InstallTargetKnown(target));
+        // Is this app the one the system opens magnet links and .torrent files with? (If not: ask.)
+        app.dispatch(&cc.egui_ctx, Event::DefaultHandlerCheckRequested);
         app
     }
 
@@ -258,6 +260,14 @@ impl App {
             self.state.update = demo_update(true);
         }
         self.start_demo_update(view);
+        // The default-app question and Preferences row, with a system that is not set up yet.
+        self.state.handler_check = Some(putio_core::handler::Check::Known(
+            putio_core::handler::Status {
+                magnet: false,
+                torrent: false,
+            },
+        ));
+        self.state.handler_prompt = view == "default-app";
         if view == "folders" {
             self.ui.folders = crate::ui::prefs::FolderPicker::demo();
         }
@@ -405,6 +415,8 @@ impl App {
                 };
                 self.dispatch(ctx, Event::UpdateApplied(result));
             }
+            Effect::CheckDefaultHandler => self.send(Job::CheckDefaultHandler),
+            Effect::RegisterDefaultHandler => self.send(Job::RegisterDefaultHandler),
             Effect::CopyText(text) => ctx.copy_text(text),
             Effect::Stream { op, file_id } => self.send(Job::Stream { op, file_id }),
             Effect::FetchLatestRelease => self.send(Job::LatestRelease),

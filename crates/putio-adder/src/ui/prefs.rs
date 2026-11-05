@@ -106,6 +106,7 @@ enum Action {
     OpenProjectPage,
     CheckForUpdates,
     Update(update::Click),
+    MakeDefaultApp,
     SignOut,
 }
 
@@ -143,6 +144,7 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
                 },
             ),
             Action::Update(click) => app.dispatch(ctx, click.event()),
+            Action::MakeDefaultApp => app.dispatch(ctx, Event::DefaultHandlerRequested),
             Action::SignOut => {
                 app.ui.prefs_open = false;
                 app.dispatch(ctx, Event::SignOutRequested);
@@ -239,6 +241,8 @@ fn settings_page(
                     }
                 },
             );
+            widgets::divider(ui);
+            default_app_row(ui, app, locale, actions);
             widgets::divider(ui);
             let mut updates = settings.check_for_updates;
             widgets::row(
@@ -353,6 +357,27 @@ fn folder_row(
         });
     });
     ui.add_space(12.0);
+}
+
+/// "Default app": whether put.io adder opens magnet links and `.torrent` files, and a button to make it so.
+fn default_app_row(ui: &mut egui::Ui, app: &App, locale: Locale, actions: &mut Vec<Action>) {
+    use putio_core::handler::Check;
+    let (hint, can_set) = match &app.state.handler_check {
+        None => (Msg::PrefsDefaultAppChecking.text(locale), false),
+        Some(Check::Unavailable(reason)) => (reason.clone(), false),
+        Some(Check::Known(status)) if status.is_default() => {
+            (Msg::PrefsDefaultAppIs.text(locale), false)
+        }
+        Some(Check::Known(_)) => (Msg::PrefsDefaultAppIsNot.text(locale), true),
+    };
+    widgets::row(ui, &Msg::PrefsDefaultApp.text(locale), Some(&hint), |ui| {
+        if can_set && !app.state.handler_busy {
+            let label = Msg::HandlerMakeDefault.text(locale);
+            if widgets::text_button(ui, &label, true).clicked() {
+                actions.push(Action::MakeDefaultApp);
+            }
+        }
+    });
 }
 
 /// Version, links, update status and the "unofficial" note.

@@ -19,6 +19,7 @@ use putio_api::client::FileListing;
 use putio_api::{ApiError, Client, FileType, Token, Transport, UploadOutcome, UreqTransport};
 use putio_core::state::{Event, OpId, Prepared, StreamFailure};
 use putio_core::update::UpdateAsset;
+use putio_platform::handler;
 use putio_platform::player::{PlayError, PlayerLauncher, VlcLauncher};
 use putio_platform::torrent_file;
 use putio_platform::update;
@@ -77,6 +78,8 @@ pub(crate) enum Job {
         op: OpId,
         asset: UpdateAsset,
     },
+    CheckDefaultHandler,
+    RegisterDefaultHandler,
     LatestRelease,
     /// Folders inside `parent`, for the folder picker (UI-local, not part of the core state machine).
     ListFolders {
@@ -274,6 +277,10 @@ fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
             op,
             result: Err("internal error: the update job ran without a progress channel".to_owned()),
         },
+        Job::CheckDefaultHandler => WorkerMsg::Core(Event::DefaultHandlerChecked(handler::check())),
+        Job::RegisterDefaultHandler => {
+            WorkerMsg::Core(Event::DefaultHandlerRegistered(handler::register()))
+        }
         Job::LatestRelease => WorkerMsg::Core(Event::ReleaseFetched(client.latest_release())),
         Job::ListFolders { parent } => WorkerMsg::Folders {
             parent,
