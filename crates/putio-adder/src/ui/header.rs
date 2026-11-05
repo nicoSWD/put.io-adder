@@ -29,9 +29,13 @@ fn top_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2) {
     let top = Rect::from_min_size(origin, Vec2::new(WIDTH, TOP_HEIGHT));
     ui.painter()
         .rect_filled(top, CornerRadius::ZERO, theme::HEADER);
+    ui.painter().line_segment(
+        [top.left_bottom(), top.right_bottom()],
+        Stroke::new(1.0, theme::DIVIDER),
+    );
 
     // Logo (white with a gold shadow, so it lives on the black row).
-    let logo_height = 26.0;
+    let logo_height = 40.0;
     let logo = Rect::from_min_size(
         origin + Vec2::new(PAD, (TOP_HEIGHT - logo_height) / 2.0),
         Vec2::new(logo_height * theme::LOGO_ASPECT, logo_height),
@@ -49,19 +53,16 @@ fn top_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2) {
         .interact(menu_rect, egui::Id::new("menu-button"), Sense::click())
         .on_hover_cursor(egui::CursorIcon::PointingHand);
     if menu.hovered() {
-        ui.painter().rect_filled(
-            menu_rect,
-            CornerRadius::same(8),
-            Color32::from_rgb(0x24, 0x24, 0x24),
-        );
+        ui.painter()
+            .rect_filled(menu_rect, CornerRadius::same(8), theme::CARD_HOVER);
     }
     icons::dots(
         ui.painter(),
         menu_rect.center(),
         if menu.hovered() {
-            theme::YELLOW
-        } else {
             theme::TEXT
+        } else {
+            theme::MUTED
         },
     );
     menu_popup(&menu, app);
@@ -161,9 +162,9 @@ fn status_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2) {
             center,
             turn,
             if hit.hovered() {
-                theme::YELLOW
-            } else {
                 theme::TEXT
+            } else {
+                theme::MUTED
             },
         );
         if hit.clicked() {
@@ -184,10 +185,7 @@ fn status_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2) {
             Pos2::new(pill.left() - 18.0, strip.center().y),
             Vec2::splat(14.0),
         );
-        ui.put(
-            spinner,
-            egui::Spinner::new().size(14.0).color(theme::YELLOW),
-        );
+        ui.put(spinner, egui::Spinner::new().size(14.0).color(theme::TEXT));
     }
 
     // The message, clipped so it never runs under the pill.
@@ -229,34 +227,21 @@ fn quota_pill(ui: &egui::Ui, app: &App, pill: Rect) {
         let left = account
             .disk
             .map_or(0, |disk| disk.avail.max(disk.size - disk.used));
-        // Black over the yellow part, white over the dark part, so the text reads wherever
-        // the edge falls.
-        let label = Msg::DiskLeft {
-            left: format::bytes(left),
-        }
-        .text(locale);
-        let font = theme::bold(10.5);
-        let dark_part =
-            Rect::from_min_max(Pos2::new(fill.right(), pill.top()), pill.right_bottom());
-        painter.with_clip_rect(fill).text(
+        painter.text(
             pill.center(),
             Align2::CENTER_CENTER,
-            &label,
-            font.clone(),
-            Color32::BLACK,
-        );
-        painter.with_clip_rect(dark_part).text(
-            pill.center(),
-            Align2::CENTER_CENTER,
-            &label,
-            font,
+            Msg::DiskLeft {
+                left: format::bytes(left),
+            }
+            .text(locale),
+            theme::bold(10.5),
             theme::TEXT,
         );
     } else {
         painter.rect_stroke(
             pill,
             radius,
-            Stroke::new(1.0, theme::YELLOW),
+            Stroke::new(1.5, theme::YELLOW_PRESSED),
             StrokeKind::Inside,
         );
         painter.text(
@@ -267,7 +252,7 @@ fn quota_pill(ui: &egui::Ui, app: &App, pill: Rect) {
             }
             .text(locale),
             theme::bold(10.5),
-            theme::YELLOW,
+            theme::TEXT,
         );
     }
 }

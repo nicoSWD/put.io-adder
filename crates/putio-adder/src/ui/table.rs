@@ -70,7 +70,7 @@ fn toolbar(ui: &mut egui::Ui, app: &mut App, ctx: &egui::Context) {
                 ui.label(
                     RichText::new(Msg::UpdateAvailable { version }.text(locale))
                         .font(theme::bold(11.5))
-                        .color(theme::YELLOW),
+                        .color(theme::TEXT),
                 );
                 if ui
                     .link(RichText::new(Msg::UpdateOpenPage.text(locale)).font(theme::text(11.5)))
@@ -90,13 +90,13 @@ fn toolbar(ui: &mut egui::Ui, app: &mut App, ctx: &egui::Context) {
 fn count_pill(ui: &mut egui::Ui, count: usize) {
     let galley = ui
         .painter()
-        .layout_no_wrap(count.to_string(), theme::bold(10.5), theme::BG);
+        .layout_no_wrap(count.to_string(), theme::bold(10.5), theme::TEXT);
     let size = Vec2::new((galley.size().x + 14.0).max(22.0), 18.0);
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     ui.painter()
         .rect_filled(rect, CornerRadius::same(9), theme::YELLOW);
     ui.painter()
-        .galley(rect.center() - galley.size() / 2.0, galley, theme::BG);
+        .galley(rect.center() - galley.size() / 2.0, galley, theme::TEXT);
 }
 
 fn sort_label(key: SortKey) -> Msg {
@@ -283,11 +283,11 @@ fn card(ui: &mut egui::Ui, app: &mut App, transfer: &Transfer) -> Option<Event> 
                 Align2::RIGHT_TOP,
                 format!("{percent:.0}%"),
                 theme::bold(12.0),
-                theme::YELLOW,
+                theme::TEXT,
             );
         }
         let bar = Rect::from_min_max(
-            Pos2::new(text_left, rect.bottom() - 9.0),
+            Pos2::new(text_left, rect.bottom() - 10.0),
             Pos2::new(text_right + 6.0, rect.bottom() - 6.0),
         );
         icons::progress_bar(&painter, bar, percent / 100.0, theme::YELLOW);

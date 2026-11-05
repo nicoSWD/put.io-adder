@@ -14,7 +14,7 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
     ui.vertical_centered(|ui| match app.state.auth.clone() {
         Auth::Starting | Auth::RequestingCode => {
             ui.add_space(60.0);
-            ui.add(egui::Spinner::new().size(22.0).color(theme::YELLOW));
+            ui.add(egui::Spinner::new().size(22.0).color(theme::TEXT));
             ui.label(RichText::new(Msg::FetchingInfo.text(locale)).color(theme::MUTED));
         }
         Auth::Linking(link) => {
@@ -36,16 +36,9 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
                     ctx.copy_text(link.code.clone());
                 }
             });
-            ui.add_space(14.0);
-            ui.horizontal(|ui| {
-                ui.add_space((ui.available_width() / 2.0 - 120.0).max(0.0));
-                ui.add(egui::Spinner::new().size(12.0).color(theme::YELLOW));
-                ui.label(
-                    RichText::new(Msg::SigningIn.text(locale))
-                        .font(theme::text(11.0))
-                        .color(theme::MUTED),
-                );
-            });
+            ui.add_space(16.0);
+            // The status row already says what we are waiting for; a spinner is enough here.
+            ui.add(egui::Spinner::new().size(16.0).color(theme::TEXT));
         }
         Auth::SignedOut(reason) => {
             ui.add_space(48.0);
@@ -76,7 +69,7 @@ fn code_card(ui: &mut egui::Ui, code: &str) {
     ui.painter().rect_stroke(
         rect,
         CornerRadius::same(14),
-        egui::Stroke::new(1.0, theme::DIVIDER),
+        egui::Stroke::new(2.0, theme::YELLOW),
         egui::StrokeKind::Inside,
     );
     let letters: Vec<char> = code.chars().collect();
@@ -91,7 +84,7 @@ fn code_card(ui: &mut egui::Ui, code: &str) {
             Align2::CENTER_CENTER,
             letter.to_string(),
             theme::bold(36.0),
-            theme::YELLOW,
+            theme::TEXT,
         );
     }
 }

@@ -49,9 +49,13 @@ pub(crate) fn window_height(expanded: bool, needs_room: bool) -> f32 {
     }
 }
 
-/// Debug builds only: `PUTIO_ADDER_DEMO=1` shows sample data and never talks to put.io.
-fn demo_requested() -> bool {
-    cfg!(debug_assertions) && std::env::var_os("PUTIO_ADDER_DEMO").is_some()
+/// Debug builds only: `PUTIO_ADDER_DEMO=list|empty|login` shows sample data and never talks to put.io.
+fn demo_requested() -> Option<String> {
+    if cfg!(debug_assertions) {
+        std::env::var("PUTIO_ADDER_DEMO").ok()
+    } else {
+        None
+    }
 }
 
 pub(crate) fn title(version: &str, progress: Option<u8>) -> String {
@@ -79,7 +83,7 @@ pub(crate) struct App {
     badge_percent: Option<u8>,
     /// Debug builds only: show sample data and never talk to put.io.
     #[cfg(debug_assertions)]
-    demo: bool,
+    demo: Option<String>,
     last_height: f32,
     last_title: String,
     _ipc_server: Option<Server>,
@@ -134,7 +138,7 @@ impl App {
             intake_rx,
             click_rx,
             keychain,
-            pending_token: (!demo).then_some(pending_token),
+            pending_token: demo.is_none().then_some(pending_token),
             settings_file,
             notifier,
             opener: SystemOpener,
@@ -147,20 +151,9 @@ impl App {
             _ipc_server: ipc_server,
         };
         // `Started` is sent when the keychain thread reports (see `pump`), except in demo mode.
-        if demo {
-            app.dispatch(&cc.egui_ctx, Event::Started { has_token: true });
-        }
         #[cfg(debug_assertions)]
-        if app.demo {
-            app.state.transfers_expanded = true;
-            let (account, transfers) = (crate::demo::account(), crate::demo::transfers());
-            app.dispatch(
-                &cc.egui_ctx,
-                Event::Polled {
-                    account: Ok(account),
-                    transfers: Ok(transfers),
-                },
-            );
+        if let Some(view) = app.demo.clone() {
+            app.start_demo(&cc.egui_ctx, &view);
         }
         app
     }
@@ -177,9 +170,37 @@ impl App {
         self.dispatch(ctx, Event::Started { has_token });
     }
 
+    /// Debug builds only: put the app into a state worth looking at, without any network.
+    #[cfg(debug_assertions)]
+    fn start_demo(&mut self, ctx: &egui::Context, view: &str) {
+        if view == "login" {
+            self.dispatch(ctx, Event::Started { has_token: false });
+            let code = putio_api::DeviceCode {
+                code: "YJUXZC".into(),
+            };
+            self.dispatch(ctx, Event::DeviceCodeReceived(Ok(code)));
+            return;
+        }
+        self.dispatch(ctx, Event::Started { has_token: true });
+        self.state.transfers_expanded = true;
+        let transfers = if view == "empty" {
+            Vec::new()
+        } else {
+            crate::demo::transfers()
+        };
+        let account = crate::demo::account();
+        self.dispatch(
+            ctx,
+            Event::Polled {
+                account: Ok(account),
+                transfers: Ok(transfers),
+            },
+        );
+    }
+
     fn is_demo(&self) -> bool {
         #[cfg(debug_assertions)]
-        return self.demo;
+        return self.demo.is_some();
         #[cfg(not(debug_assertions))]
         false
     }
@@ -208,6 +229,9 @@ impl App {
 
     fn run(&mut self, ctx: &egui::Context, effect: Effect) {
         match effect {
+            // Demo mode never touches the network.
+            Effect::RequestDeviceCode | Effect::PollDeviceCode { .. } | Effect::Poll
+                if self.is_demo() => {}
             Effect::RequestDeviceCode => self.send(Job::DeviceCode),
             Effect::PollDeviceCode { code } => self.send(Job::PollCode(code)),
             Effect::StoreToken(token) => self.store_token(token),
@@ -222,7 +246,6 @@ impl App {
                     eprintln!("could not save settings: {error}");
                 }
             }
-            Effect::Poll if self.is_demo() => {}
             Effect::Poll => self.send(Job::Poll),
             Effect::AddMagnet { op, uri, parent } => self.send(Job::AddMagnet { op, uri, parent }),
             Effect::UploadTorrent { op, path, parent } => {

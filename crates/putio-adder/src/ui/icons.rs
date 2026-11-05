@@ -71,22 +71,22 @@ pub(crate) fn status_badge(painter: &Painter, center: Pos2, status: TransferStat
     match status {
         TransferStatus::Completed | TransferStatus::Seeding => {
             painter.circle_filled(center, radius, theme::YELLOW);
-            check(painter, center, Color32::BLACK);
+            check(painter, center, theme::TEXT);
         }
         TransferStatus::Error => {
-            painter.circle_filled(center, radius, Color32::from_rgb(0x3A, 0x1E, 0x1B));
+            painter.circle_filled(center, radius, theme::ERROR_SOFT);
             painter.circle_stroke(center, radius, Stroke::new(1.0, theme::ERROR));
             cross(painter, center, theme::ERROR);
         }
         TransferStatus::Downloading | TransferStatus::Completing => {
-            painter.circle_filled(center, radius, Color32::from_rgb(0x2E, 0x28, 0x10));
-            arrow_down(painter, center, theme::YELLOW);
+            painter.circle_filled(center, radius, theme::YELLOW_SOFT);
+            arrow_down(painter, center, theme::TEXT);
         }
         TransferStatus::Waiting
         | TransferStatus::InQueue
         | TransferStatus::PreparingDownload
         | TransferStatus::Unknown => {
-            painter.circle_filled(center, radius, Color32::from_rgb(0x26, 0x26, 0x26));
+            painter.circle_filled(center, radius, theme::NEUTRAL_SOFT);
             painter.circle_stroke(center, 4.5, Stroke::new(1.6, theme::MUTED));
         }
     }
@@ -94,13 +94,9 @@ pub(crate) fn status_badge(painter: &Painter, center: Pos2, status: TransferStat
 
 /// A big round badge for the empty state.
 pub(crate) fn empty_badge(painter: &Painter, center: Pos2) {
-    painter.circle_filled(center, 26.0, Color32::from_rgb(0x2E, 0x28, 0x10));
-    painter.circle_stroke(
-        center,
-        26.0,
-        Stroke::new(1.0, Color32::from_rgb(0x5A, 0x4A, 0x1A)),
-    );
-    let stroke = Stroke::new(3.0, theme::YELLOW);
+    painter.circle_filled(center, 26.0, theme::YELLOW_SOFT);
+    painter.circle_stroke(center, 26.0, Stroke::new(1.5, theme::YELLOW));
+    let stroke = Stroke::new(3.0, theme::TEXT);
     painter.line_segment(
         [center + Vec2::new(0.0, -9.0), center + Vec2::new(0.0, 8.0)],
         stroke,
