@@ -66,13 +66,17 @@ Early. Everything has been run on macOS (Apple Silicon) only. The code for Windo
 ## Build from source
 
 ```sh
-cargo build --release -p putio-adder        # the binary: target/release/putio-adder
-tools/bundle-macos.sh                       # macOS: target/put.io adder.app
+make build-release     # the binary: target/release/putio-adder
+make app               # macOS: target/put.io adder.app (make open also starts it)
+make check             # format, clippy and tests, as CI runs them
+make                   # lists every task
 ```
+
+Without `make`: `cargo build --release --locked -p putio-adder` and `tools/bundle-macos.sh`.
 
 Rust is pinned in `rust-toolchain.toml`. Everything builds with `--locked`.
 
-To look at the UI without an account (debug builds only, no network and no Keychain): `PUTIO_ADDER_DEMO=list cargo run -p putio-adder`. The views, and the other developer notes, are in [docs/development.md](docs/development.md).
+To look at the UI without an account (debug builds only, no network and no Keychain): `make demo` (or `make demo VIEW=prefs THEME=dark`). The views, and the other developer notes, are in [docs/development.md](docs/development.md).
 
 ## How it is built
 
