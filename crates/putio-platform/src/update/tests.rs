@@ -520,6 +520,7 @@ fn the_source_root_is_the_workspace_and_the_test_binary_is_a_development_build()
 }
 
 /// `make app` writes a bundle to `target/` inside the source tree: that is a development build.
+#[cfg(unix)]
 #[test]
 fn a_bundle_built_inside_the_source_tree_never_updates_itself() {
     let root = scratch("bundle-dev");
@@ -528,6 +529,7 @@ fn a_bundle_built_inside_the_source_tree_never_updates_itself() {
     assert!(error.contains("development build"), "{error}");
 }
 
+#[cfg(unix)]
 #[test]
 fn a_bundle_outside_the_source_tree_in_a_folder_the_user_owns_is_the_target() {
     let apps = scratch("bundle-ok");
