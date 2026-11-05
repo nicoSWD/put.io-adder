@@ -8,11 +8,10 @@ use putio_core::format;
 use putio_core::i18n::{Locale, Msg};
 use putio_core::state::Event;
 use putio_core::transfers::{self, SortKey};
-use putio_core::update::UpdateStatus;
 
 use super::icons::MenuIcon;
 use super::menu::{self, Tint};
-use super::{icons, theme, widgets};
+use super::{icons, theme, update, widgets};
 use crate::app::App;
 
 const ROW_HEIGHT: f32 = 56.0;
@@ -77,18 +76,13 @@ fn toolbar(ui: &mut egui::Ui, app: &mut App, ctx: &egui::Context) {
                     .color(theme::pal().text),
             );
             count_pill(ui, app.state.transfers.len());
-            if let UpdateStatus::Available { version, .. } = app.state.update.clone() {
+            if let Some(look) = update::look(&app.state) {
                 ui.add_space(8.0);
-                ui.label(
-                    RichText::new(Msg::UpdateAvailable { version }.text(locale))
-                        .font(theme::bold(11.5))
-                        .color(theme::pal().text),
-                );
-                if ui
-                    .link(RichText::new(Msg::UpdateOpenPage.text(locale)).font(theme::text(11.5)))
-                    .clicked()
+                let response = update::pill(ui, &look);
+                if response.clicked()
+                    && let Some(click) = look.click
                 {
-                    app.dispatch(ctx, Event::OpenReleasePage);
+                    app.dispatch(ctx, click.event());
                 }
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {

@@ -22,8 +22,13 @@ build cache, a pinned toolchain, `--locked`, and fixed timestamps and paths. The
 glibc floor. See docs/releasing.md.
 
 ## What the app can and cannot do
-- It talks only to `api.put.io`, `upload.put.io` and (update check) `api.github.com`; redirects are not followed.
-- It never installs updates by itself: it only tells you a newer release exists.
+- It talks only to `api.put.io`, `upload.put.io` and, for updates, `api.github.com` and (to download a release file)
+  `github.com` / `*.githubusercontent.com`. API calls do not follow redirects; the update download follows at most
+  three, each checked against the GitHub hosts.
+- It checks GitHub for a newer release now and then. It installs one only when you press *Update now* (then
+  *Restart to finish*), and only a release file with the expected name from this project's own releases. It does
+  **not** verify a checksum, a tag signature or a code signature of what it downloads: see docs/updates.md for
+  exactly what it does and does not check.
 - It never opens anything but fixed `https://put.io/...` pages and this project's GitHub pages.
 - Magnet links and file paths handed over by the OS or another launch are validated before use. A `.torrent` is read
   only if it is a regular file below a size limit.

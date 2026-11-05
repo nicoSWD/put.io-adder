@@ -18,9 +18,13 @@ use putio_platform::notify::{self, ClickHandler};
 use putio_platform::paths;
 use putio_platform::secret::{KeyringStore, MemoryStore, SecretStore};
 use putio_platform::settings_store::SettingsFile;
+use putio_platform::update;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+/// How long a process started by an update waits for the old version to quit.
+const RELAUNCH_WAIT: std::time::Duration = std::time::Duration::from_secs(60);
 
+#[allow(clippy::too_many_lines)] // the start-up sequence reads best top to bottom
 fn main() -> eframe::Result {
     // Magnet links and files handed to us by the OS or another launch arrive here as raw strings; the
     // app validates every one of them (`Intake::parse`) before acting.
@@ -42,7 +46,8 @@ fn main() -> eframe::Result {
     }
 
     // Command line (Windows/Linux, and `open --args` on macOS).
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    let relaunched = take_relaunch_flag(&mut args);
 
     // Debug builds only: a demo run is isolated from the real app. It uses sample data and touches no
     // keychain, no settings file and no single-instance socket (so it can run next to the real app).
@@ -52,9 +57,14 @@ fn main() -> eframe::Result {
     let ipc_server = if demo {
         None
     } else {
-        match Endpoint::for_current_user().and_then(|endpoint| {
-            ipc::start_or_forward(&endpoint, &args, intake_tx.clone(), wake_up)
-        }) {
+        let started = Endpoint::for_current_user().and_then(|endpoint| {
+            if relaunched {
+                ipc::start_or_wait(&endpoint, &args, &intake_tx, wake_up, RELAUNCH_WAIT)
+            } else {
+                ipc::start_or_forward(&endpoint, &args, intake_tx.clone(), wake_up)
+            }
+        });
+        match started {
             Ok(Instance::Forwarded) => return Ok(()),
             Ok(Instance::Primary(server)) => Some(server),
             Err(error) => {
@@ -65,6 +75,9 @@ fn main() -> eframe::Result {
     };
     for arg in args {
         let _ = intake_tx.send(arg);
+    }
+    if !demo {
+        spawn_update_cleanup();
     }
 
     let settings_file = if demo {
@@ -133,6 +146,27 @@ fn main() -> eframe::Result {
     )
 }
 
+/// Remove the previous version of the app that an update left next to this one. Not before the
+/// single instance is ours: on Windows and Linux the old process may have been running from it.
+fn spawn_update_cleanup() {
+    let _ = std::thread::Builder::new()
+        .name("putio-update-cleanup".into())
+        .spawn(update::cleanup_stale);
+}
+
+/// Whether an update started this process (Windows/Linux: the old version may still be quitting).
+/// If so, `--relaunch-after <pid>` is taken out of `args`: it is not something for the app to act on.
+fn take_relaunch_flag(args: &mut Vec<String>) -> bool {
+    // `predecessor_pid` expects the program name first, as `std::env::args` gives it.
+    let with_program =
+        std::iter::once(std::ffi::OsString::new()).chain(args.iter().map(std::ffi::OsString::from));
+    let relaunched = update::predecessor_pid(with_program).is_some();
+    if relaunched && let Some(at) = args.iter().position(|arg| arg == update::RELAUNCH_FLAG) {
+        args.drain(at..(at + 2).min(args.len()));
+    }
+    relaunched
+}
+
 /// The OS secret store, or (when there is none) a store that only lives for this session. There is no
 /// file fallback: the token is never written anywhere readable.
 fn open_keychain() -> Arc<dyn SecretStore> {
@@ -141,6 +175,44 @@ fn open_keychain() -> Arc<dyn SecretStore> {
         Err(error) => {
             eprintln!("{error}; you will have to sign in every time the app starts");
             Arc::new(MemoryStore::new())
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(list: &[&str]) -> Vec<String> {
+        list.iter().map(ToString::to_string).collect()
+    }
+
+    #[test]
+    fn the_relaunch_flag_and_its_pid_are_taken_out_of_the_arguments() {
+        let mut list = args(&["--relaunch-after", "4242"]);
+        assert!(take_relaunch_flag(&mut list));
+        assert_eq!(list, Vec::<String>::new());
+        let mut list = args(&[
+            "a.torrent",
+            "--relaunch-after",
+            "7",
+            "magnet:?xt=urn:btih:x",
+        ]);
+        assert!(take_relaunch_flag(&mut list));
+        assert_eq!(list, ["a.torrent", "magnet:?xt=urn:btih:x"]);
+    }
+
+    #[test]
+    fn ordinary_arguments_and_a_flag_without_a_pid_are_left_alone() {
+        for original in [
+            args(&[]),
+            args(&["a.torrent"]),
+            args(&["--relaunch-after"]),
+            args(&["--relaunch-after", "abc"]),
+        ] {
+            let mut list = original.clone();
+            assert!(!take_relaunch_flag(&mut list));
+            assert_eq!(list, original);
         }
     }
 }

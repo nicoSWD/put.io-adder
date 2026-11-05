@@ -11,6 +11,7 @@ pub(crate) mod table;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub(crate) mod theme;
+pub(crate) mod update;
 pub(crate) mod widgets;
 
 use eframe::egui::{self, Frame, Margin};

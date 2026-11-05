@@ -18,8 +18,10 @@ use std::thread;
 use putio_api::client::FileListing;
 use putio_api::{ApiError, Client, FileType, Token, Transport, UploadOutcome, UreqTransport};
 use putio_core::state::{Event, OpId, Prepared, StreamFailure};
+use putio_core::update::UpdateAsset;
 use putio_platform::player::{PlayError, PlayerLauncher, VlcLauncher};
 use putio_platform::torrent_file;
+use putio_platform::update;
 
 /// Most videos queued from one folder.
 const MAX_PLAYLIST: usize = 50;
@@ -70,6 +72,11 @@ pub(crate) enum Job {
         op: OpId,
         file_id: i64,
     },
+    /// Download and unpack an update (progress is reported while it runs; see [`prepare_update`]).
+    PrepareUpdate {
+        op: OpId,
+        asset: UpdateAsset,
+    },
     LatestRelease,
     /// Folders inside `parent`, for the folder picker (UI-local, not part of the core state machine).
     ListFolders {
@@ -79,7 +86,10 @@ pub(crate) enum Job {
 
 impl Job {
     fn is_heavy(&self) -> bool {
-        matches!(self, Self::UploadTorrent { .. } | Self::Stream { .. })
+        matches!(
+            self,
+            Self::UploadTorrent { .. } | Self::Stream { .. } | Self::PrepareUpdate { .. }
+        )
     }
 }
 
@@ -89,6 +99,12 @@ pub(crate) enum WorkerMsg {
     Folders {
         parent: i64,
         result: Result<FileListing, ApiError>,
+    },
+    /// An update is downloaded and unpacked. The unpacked update itself (paths) stays with the app,
+    /// not in the core state machine, which is told only whether it worked.
+    UpdatePrepared {
+        op: OpId,
+        result: Result<update::Prepared, String>,
     },
 }
 
@@ -158,6 +174,14 @@ fn run(
             Err(_) => return,
         };
         let Ok(job) = job else { return };
+        if let Job::PrepareUpdate { op, asset } = job {
+            let result = prepare_update(op, &asset, out, ctx);
+            if out.send(WorkerMsg::UpdatePrepared { op, result }).is_err() {
+                return;
+            }
+            ctx.request_repaint();
+            continue;
+        }
         let snapshot = token.lock().ok().and_then(|slot| slot.clone());
         let client = match snapshot {
             Some(token) => Client::with_token(Arc::clone(transport), token),
@@ -168,6 +192,24 @@ fn run(
         }
         ctx.request_repaint();
     }
+}
+
+/// Download and unpack the update, telling the UI how far along it is.
+fn prepare_update(
+    op: OpId,
+    asset: &UpdateAsset,
+    out: &Sender<WorkerMsg>,
+    ctx: &eframe::egui::Context,
+) -> Result<update::Prepared, String> {
+    let target = update::install_target()?;
+    update::prepare(&target, asset, &|stage, fraction| {
+        let _ = out.send(WorkerMsg::Core(Event::UpdateProgress {
+            op,
+            stage,
+            fraction,
+        }));
+        ctx.request_repaint();
+    })
 }
 
 fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
@@ -227,6 +269,11 @@ fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
             op,
             result: stream(client, &VlcLauncher, file_id),
         }),
+        // Handled in `run`, which has the channel progress is reported on.
+        Job::PrepareUpdate { op, .. } => WorkerMsg::UpdatePrepared {
+            op,
+            result: Err("internal error: the update job ran without a progress channel".to_owned()),
+        },
         Job::LatestRelease => WorkerMsg::Core(Event::ReleaseFetched(client.latest_release())),
         Job::ListFolders { parent } => WorkerMsg::Folders {
             parent,

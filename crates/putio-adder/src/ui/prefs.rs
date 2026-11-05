@@ -9,6 +9,7 @@ use putio_core::state::{Event, SettingsChange};
 use putio_core::update::UpdateStatus;
 
 use super::theme;
+use super::update;
 use super::widgets;
 use crate::app::App;
 use crate::worker::{Job, Workers};
@@ -104,7 +105,7 @@ enum Action {
     Settings(SettingsChange),
     OpenProjectPage,
     CheckForUpdates,
-    OpenReleasePage,
+    Update(update::Click),
     SignOut,
 }
 
@@ -141,7 +142,7 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
                     user_initiated: true,
                 },
             ),
-            Action::OpenReleasePage => app.dispatch(ctx, Event::OpenReleasePage),
+            Action::Update(click) => app.dispatch(ctx, click.event()),
             Action::SignOut => {
                 app.ui.prefs_open = false;
                 app.dispatch(ctx, Event::SignOutRequested);
@@ -391,27 +392,32 @@ fn about(ui: &mut egui::Ui, app: &App, locale: Locale, actions: &mut Vec<Action>
                 ui.add(egui::Spinner::new().size(12.0).color(p.accent_text));
             }
             UpdateStatus::Available { version, .. } => {
-                ui.horizontal(|ui| {
-                    ui.add_space(((ui.available_width() - 230.0) / 2.0).max(0.0));
-                    ui.label(
-                        RichText::new(
-                            Msg::UpdateAvailable {
-                                version: version.clone(),
-                            }
-                            .text(locale),
-                        )
-                        .font(theme::bold(11.0))
-                        .color(p.accent_text),
-                    );
-                    if ui
-                        .link(
-                            RichText::new(Msg::UpdateOpenPage.text(locale)).font(theme::text(11.0)),
-                        )
-                        .clicked()
+                ui.label(
+                    RichText::new(
+                        Msg::UpdateAvailable {
+                            version: version.clone(),
+                        }
+                        .text(locale),
+                    )
+                    .font(theme::bold(11.0))
+                    .color(p.accent_text),
+                );
+                if let Some(look) = update::look(&app.state) {
+                    ui.add_space(4.0);
+                    if update::pill(ui, &look).clicked()
+                        && let Some(click) = look.click
                     {
-                        actions.push(Action::OpenReleasePage);
+                        actions.push(Action::Update(click));
                     }
-                });
+                }
+                if let putio_core::state::Install::Failed { message, .. } = &app.state.install {
+                    ui.add_space(4.0);
+                    ui.label(
+                        RichText::new(message)
+                            .font(theme::text(10.5))
+                            .color(p.error),
+                    );
+                }
             }
             UpdateStatus::UpToDate => {
                 ui.label(

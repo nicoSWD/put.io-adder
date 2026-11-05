@@ -241,6 +241,23 @@ pub enum Msg {
         version: String,
     },
     UpdateOpenPage,
+    UpdateInstallNow,
+    UpdateRestartNow,
+    UpdateUnpacking,
+    UpdateRestarting,
+    UpdateTryAgain,
+    UpdateDownloading {
+        percent: u8,
+    },
+    UpdateReady {
+        version: String,
+    },
+    UpdateFailed {
+        reason: String,
+    },
+    UpdateCannotInstall {
+        reason: String,
+    },
     UpToDate,
     UpdateCheckFailed,
 }
@@ -491,7 +508,9 @@ impl Msg {
                 "Abrir put.io/link"
             )
             .into(),
-            Self::LinkRetryButton => tr!(l, "Try again", "Erneut versuchen", "Reintentar").into(),
+            Self::LinkRetryButton | Self::UpdateTryAgain => {
+                tr!(l, "Try again", "Erneut versuchen", "Reintentar").into()
+            }
             Self::LinkExpired => tr!(
                 l,
                 "That code expired.",
@@ -796,9 +815,9 @@ impl Msg {
             .into(),
             Self::PrefsCheckUpdatesHint => tr!(
                 l,
-                "Looks for new releases on GitHub. Never installs anything.",
-                "Sucht auf GitHub nach neuen Versionen. Installiert nichts.",
-                "Busca versiones nuevas en GitHub. No instala nada."
+                "Looks for new releases on GitHub from time to time. Installs only when you say so.",
+                "Sucht von Zeit zu Zeit auf GitHub nach neuen Versionen. Installiert nur auf Wunsch.",
+                "Busca versiones nuevas en GitHub de vez en cuando. Instala solo si lo pides."
             )
             .into(),
             Self::PrefsDownloads => tr!(l, "Downloads", "Downloads", "Descargas").into(),
@@ -907,6 +926,43 @@ impl Msg {
                 format!("Version {version} ist verfügbar"),
                 format!("La versión {version} está disponible")
             ),
+            Self::UpdateInstallNow => {
+                tr!(l, "Update now", "Jetzt aktualisieren", "Actualizar ahora").into()
+            }
+            Self::UpdateRestartNow => tr!(
+                l,
+                "Restart to finish",
+                "Zum Abschluss neu starten",
+                "Reiniciar para terminar"
+            )
+            .into(),
+            Self::UpdateUnpacking => tr!(
+                l,
+                "Preparing the update…",
+                "Bereite das Update vor…",
+                "Preparando la actualización…"
+            )
+            .into(),
+            Self::UpdateRestarting => tr!(l, "Restarting…", "Starte neu…", "Reiniciando…").into(),
+            Self::UpdateDownloading { percent } => tr!(
+                l,
+                format!("Updating… {percent}%"),
+                format!("Aktualisiere… {percent} %"),
+                format!("Actualizando… {percent} %")
+            ),
+            Self::UpdateReady { version } => tr!(
+                l,
+                format!("{version} is ready"),
+                format!("{version} ist bereit"),
+                format!("{version} está lista")
+            ),
+            Self::UpdateFailed { reason } => tr!(
+                l,
+                format!("Update failed: {reason}"),
+                format!("Update fehlgeschlagen: {reason}"),
+                format!("Falló la actualización: {reason}")
+            ),
+            Self::UpdateCannotInstall { reason } => reason.clone(),
             Self::UpdateOpenPage => tr!(l, "View release", "Release ansehen", "Ver versión").into(),
             Self::UpToDate => tr!(
                 l,

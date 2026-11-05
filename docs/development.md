@@ -12,6 +12,7 @@ PUTIO_ADDER_DEMO=menu cargo run -p putio-adder      # the "..." menu open (menu-
 PUTIO_ADDER_DEMO=sort cargo run -p putio-adder      # the sort drop-down open
 PUTIO_ADDER_DEMO=card-menu cargo run -p putio-adder   # a card's "⋯" menu open (also card-menu-seeding, -failed, -done)
 PUTIO_ADDER_DEMO=details cargo run -p putio-adder     # the details panel (also details-downloading, details-failed, details-long)
+PUTIO_ADDER_DEMO=update cargo run -p putio-adder    # an installable update on offer (also update-installing, -ready, -failed, -manual, prefs-update)
 PUTIO_ADDER_THEME=dark|light|system                 # override the saved theme (any debug run)
 ```
 

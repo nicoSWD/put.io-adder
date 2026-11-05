@@ -7,6 +7,7 @@
 //! * [`settings_store`] and [`paths`]: where preferences live, written atomically with private permissions
 //! * [`opener`]: opens an allow-listed `https` URL in the browser
 //! * [`torrent_file`]: reads a `.torrent` from disk without trusting the path
+//! * [`update`]: downloads a release from GitHub and replaces the running app with it
 //! * [`player`]: finds VLC and starts it with a signed URL
 //! * [`app_icon`]: the Dock icon while the app runs
 //! * [`notify`] and [`badge`]: completion notifications and the dock badge
@@ -26,6 +27,7 @@ pub mod player;
 pub mod secret;
 pub mod settings_store;
 pub mod torrent_file;
+pub mod update;
 
 #[cfg(target_os = "macos")]
 pub mod macos_events;

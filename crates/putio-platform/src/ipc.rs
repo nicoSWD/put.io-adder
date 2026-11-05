@@ -357,6 +357,30 @@ pub fn start_or_forward(
     }
 }
 
+/// [`start_or_forward`] for a process that an update has just started: the old version still holds
+/// the instance, so "another instance is running" means "it has not quit yet". Retries for up to
+/// `wait` (forwarding only the harmless empty "bring your window forward" message, never `messages`)
+/// and becomes the primary instance as soon as the old one is gone. If it is still there when the
+/// wait ends, this returns [`Instance::Forwarded`] and the caller exits like any second launch.
+pub fn start_or_wait(
+    endpoint: &Endpoint,
+    messages: &[String],
+    tx: &Sender<String>,
+    on_message: impl Fn() + Send + Sync + Clone + 'static,
+    wait: Duration,
+) -> Result<Instance, IpcError> {
+    let deadline = Instant::now() + wait;
+    loop {
+        let waiting = Instant::now() < deadline;
+        // While waiting, nothing but a focus request may reach the old instance.
+        let sent: &[String] = if waiting { &[] } else { messages };
+        match start_or_forward(endpoint, sent, tx.clone(), on_message.clone())? {
+            Instance::Forwarded if waiting => thread::sleep(Duration::from_millis(250)),
+            other => return Ok(other),
+        }
+    }
+}
+
 /// Create the listener **without** `try_overwrite`: that option deletes the socket file whenever the
 /// address is in use, which would steal a live instance's socket.
 fn bind(endpoint: &Endpoint) -> io::Result<interprocess::local_socket::Listener> {
@@ -611,6 +635,67 @@ mod tests {
             assert_eq!(
                 rx.recv_timeout(Duration::from_secs(2)).unwrap(),
                 "/tmp/a.torrent"
+            );
+        }
+
+        #[test]
+        fn a_relaunched_process_waits_for_the_old_instance_and_then_takes_over() {
+            let dir = short_dir("wait");
+            let endpoint = endpoint(&dir);
+            let (old, _rx) = primary(&endpoint);
+            let leaving = thread::spawn(move || {
+                thread::sleep(Duration::from_millis(600));
+                drop(old); // the old version quits
+            });
+            let (tx, _rx2) = mpsc::channel();
+            let started = Instant::now();
+            let instance = start_or_wait(
+                &endpoint,
+                &["x.torrent".into()],
+                &tx,
+                || {},
+                Duration::from_secs(10),
+            )
+            .unwrap();
+            assert!(
+                matches!(instance, Instance::Primary(_)),
+                "it took over once the old one was gone"
+            );
+            assert!(
+                started.elapsed() >= Duration::from_millis(500),
+                "it did wait"
+            );
+            leaving.join().unwrap();
+        }
+
+        #[test]
+        fn a_relaunched_process_gives_up_when_the_old_instance_never_quits() {
+            let dir = short_dir("stuck");
+            let endpoint = endpoint(&dir);
+            let (_old, rx) = primary(&endpoint);
+            let (tx, _rx2) = mpsc::channel();
+            let instance = start_or_wait(
+                &endpoint,
+                &["magnet:?xt=urn:btih:abc".into()],
+                &tx,
+                || {},
+                Duration::from_millis(700),
+            )
+            .unwrap();
+            assert!(matches!(instance, Instance::Forwarded));
+            // Only focus requests were sent while waiting; the real message goes through at the end.
+            let mut received = Vec::new();
+            while let Ok(message) = rx.recv_timeout(Duration::from_millis(300)) {
+                received.push(message);
+            }
+            assert_eq!(
+                received.last().map(String::as_str),
+                Some("magnet:?xt=urn:btih:abc")
+            );
+            let before_last = received.len().saturating_sub(1);
+            assert!(
+                received.iter().take(before_last).all(String::is_empty),
+                "{received:?}"
             );
         }
 

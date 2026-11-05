@@ -39,4 +39,4 @@ back-off, auto-close and status-line expiry are all unit-tested without sleeping
 
 See the project plan: device (OOB) sign-in instead of the `putio://` implicit grant, specific error
 messages instead of "already in queue?", cancel by transfer id, polling that starts right after
-sign-in, a Gravatar that is opt-in, and notify-only update checks that compare semantic versions.
+sign-in, a Gravatar that is opt-in, and update checks that compare semantic versions (installing one is described in docs/updates.md).

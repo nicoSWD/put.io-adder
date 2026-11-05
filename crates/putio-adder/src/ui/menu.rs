@@ -6,7 +6,7 @@ use putio_core::state::Event;
 use putio_core::update::UpdateStatus;
 
 use super::icons::{self, MenuIcon};
-use super::theme;
+use super::{theme, update};
 use crate::app::App;
 
 const WIDTH: f32 = 236.0;
@@ -118,6 +118,7 @@ pub(crate) fn show(button: &egui::Response, app: &mut App) {
     let locale = app.state.locale;
     let signed_in = app.state.is_signed_in();
     let update = app.state.update.clone();
+    let update_look = update::look(&app.state);
 
     let mut popup = egui::Popup::menu(button)
         .align(RectAlign::BOTTOM_END)
@@ -134,18 +135,18 @@ pub(crate) fn show(button: &egui::Response, app: &mut App) {
         ui.spacing_mut().item_spacing.y = 0.0;
 
         // A new version comes first, because it is the only thing here that asks for attention.
-        if let UpdateStatus::Available { version, .. } = &update {
-            if item(
-                ui,
-                MenuIcon::Update,
-                &Msg::UpdateAvailable {
-                    version: version.clone(),
-                }
-                .text(locale),
-                None,
-                Tint::Accent,
-            ) {
-                app.dispatch(&ctx, Event::OpenReleasePage);
+        if let (Some(look), UpdateStatus::Available { version, .. }) =
+            (update_look.as_ref(), &update)
+        {
+            let tint = match look.tone {
+                update::Tone::Accent => Tint::Accent,
+                update::Tone::Danger => Tint::Danger,
+                update::Tone::Busy | update::Tone::Quiet => Tint::Normal,
+            };
+            if item(ui, look.icon, &look.label, Some(version), tint)
+                && let Some(click) = look.click
+            {
+                app.dispatch(&ctx, click.event());
             }
             divider(ui);
         }

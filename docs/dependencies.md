@@ -14,6 +14,7 @@ Every direct dependency is a decision. A new one needs an entry here, a license 
 | `interprocess` | platform | local sockets (Unix) and named pipes (Windows) for single-instance forwarding | wrapping `unsafe` OS calls ourselves would be worse |
 | `notify-rust` | platform (Windows, Linux) | desktop notifications | macOS uses `objc2-user-notifications` directly |
 | `objc2`, `objc2-foundation`, `objc2-app-kit`, `objc2-user-notifications`, `block2` | platform (macOS) | Apple Events, Dock badge, notifications | same stack as DegenView; feature lists are minimal |
+| `zip` (inflate only), `tar`, `flate2` | platform | unpack the update's zip (Windows) and tarball (Linux) in-process, with size and entry limits; macOS uses `ditto` | `zip` pulls `typed-path`, `nix` (Unix permissions), `crc32fast`; `tar` pulls `filetime`; all MIT / Apache-2.0 |
 | `proptest` | core (dev) | property tests for parsers and formatters | dev only |
 
 Not used on purpose: `tokio`/async runtimes, `openssl`/`native-tls` (banned), `reqwest`, `regex`, `url`,

@@ -64,6 +64,20 @@ fn with_debug_theme_override(mut settings: Settings) -> Settings {
     settings
 }
 
+/// Debug builds only: an update on offer, installable or not.
+#[cfg(debug_assertions)]
+fn demo_update(installable: bool) -> putio_core::update::UpdateStatus {
+    putio_core::update::UpdateStatus::Available {
+        version: "0.2.0".into(),
+        url: "https://github.com/nicoSWD/putio-adder-rs/releases/tag/v0.2.0".into(),
+        asset: installable.then(|| putio_core::update::UpdateAsset {
+            name: "putio-adder-v0.2.0-macos-arm64.zip".into(),
+            url: "https://github.com/nicoSWD/putio-adder-rs/releases/download/v0.2.0/putio-adder-v0.2.0-macos-arm64.zip".into(),
+            size: 9_400_000,
+        }),
+    }
+}
+
 /// Debug builds only: `PUTIO_ADDER_DEMO=list|empty|login` shows sample data and never talks to put.io.
 pub(crate) fn demo_requested() -> Option<String> {
     if cfg!(debug_assertions) {
@@ -95,6 +109,8 @@ pub(crate) struct App {
     notifier: Arc<dyn Notifier>,
     opener: SystemOpener,
     badge_percent: Option<u8>,
+    /// An update that is downloaded and unpacked, waiting for the user's restart.
+    prepared_update: Option<putio_platform::update::Prepared>,
     /// Debug builds only: show sample data and never talk to put.io.
     #[cfg(debug_assertions)]
     demo: Option<String>,
@@ -167,6 +183,7 @@ impl App {
             notifier,
             opener: SystemOpener,
             badge_percent: None,
+            prepared_update: None,
             #[cfg(debug_assertions)]
             demo,
             last_height: height,
@@ -175,11 +192,16 @@ impl App {
             last_icon_dark: None,
             _ipc_server: ipc_server,
         };
+        app.state.asset_name = putio_platform::update::asset_name;
         // `Started` is sent when the keychain thread reports (see `pump`), except in demo mode.
         #[cfg(debug_assertions)]
         if let Some(view) = app.demo.clone() {
             app.start_demo(&cc.egui_ctx, &view);
+            return app;
         }
+        // Whether this copy can replace itself (not a development build, a folder it may write to).
+        let target = putio_platform::update::install_target().map(drop);
+        app.dispatch(&cc.egui_ctx, Event::InstallTargetKnown(target));
         app
     }
 
@@ -210,7 +232,7 @@ impl App {
         self.state.transfers_expanded = true;
         // The demo drops the update check, so show its finished state instead of a spinner.
         self.state.update = putio_core::update::UpdateStatus::UpToDate;
-        self.ui.prefs_open = view == "prefs" || view == "folders";
+        self.ui.prefs_open = matches!(view, "prefs" | "folders" | "prefs-update");
         self.ui.open_once = match view {
             "menu" | "menu-update" => Some(crate::ui::Overlay::Menu),
             "sort" => Some(crate::ui::Overlay::Sort),
@@ -228,11 +250,9 @@ impl App {
             _ => None,
         };
         if view == "menu-update" {
-            self.state.update = putio_core::update::UpdateStatus::Available {
-                version: "0.2.0".into(),
-                url: "https://github.com/nicoSWD/putio-adder-rs/releases/tag/v0.2.0".into(),
-            };
+            self.state.update = demo_update(true);
         }
+        self.start_demo_update(view);
         if view == "folders" {
             self.ui.folders = crate::ui::prefs::FolderPicker::demo();
         }
@@ -255,6 +275,36 @@ impl App {
                 transfers: Ok(transfers),
             },
         );
+    }
+
+    /// Debug builds only: the update flow in each of its states (`update`, `update-installing`,
+    /// `update-ready`, `update-failed`, `update-manual`).
+    #[cfg(debug_assertions)]
+    fn start_demo_update(&mut self, view: &str) {
+        use putio_core::state::{Install, InstallTarget, UpdateStage};
+        if !view.starts_with("update") && view != "prefs-update" {
+            return;
+        }
+        self.state.update = demo_update(view != "update-manual");
+        self.state.install_target = if view == "update-manual" {
+            InstallTarget::Unavailable("A development build does not update itself.".into())
+        } else {
+            InstallTarget::Ready
+        };
+        self.state.install = match view {
+            "update-installing" => Install::Working {
+                stage: UpdateStage::Downloading,
+                fraction: 0.46,
+            },
+            "update-ready" => Install::Ready {
+                version: "0.2.0".into(),
+            },
+            "update-failed" => Install::Failed {
+                version: "0.2.0".into(),
+                message: "The download is not a put.io adder app.".into(),
+            },
+            _ => Install::Idle,
+        };
     }
 
     fn is_demo(&self) -> bool {
@@ -293,7 +343,10 @@ impl App {
     fn run(&mut self, ctx: &egui::Context, effect: Effect) {
         match effect {
             // Demo mode never touches the network.
-            Effect::RequestDeviceCode | Effect::PollDeviceCode { .. } | Effect::Poll
+            Effect::RequestDeviceCode
+            | Effect::PollDeviceCode { .. }
+            | Effect::Poll
+            | Effect::ApplyUpdate
                 if self.is_demo() => {}
             Effect::RequestDeviceCode => self.send(Job::DeviceCode),
             Effect::PollDeviceCode { code } => self.send(Job::PollCode(code)),
@@ -327,6 +380,15 @@ impl App {
                 if self.opener.open_download(&url).is_err() {
                     eprintln!("could not open the download in the browser");
                 }
+            }
+            Effect::PrepareUpdate { op, asset } => self.send(Job::PrepareUpdate { op, asset }),
+            Effect::ApplyUpdate => {
+                let result = match self.prepared_update.clone() {
+                    Some(prepared) => putio_platform::update::apply(&prepared)
+                        .and_then(|()| putio_platform::update::relaunch(&prepared)),
+                    None => Err("There is no update to install.".to_owned()),
+                };
+                self.dispatch(ctx, Event::UpdateApplied(result));
             }
             Effect::CopyText(text) => ctx.copy_text(text),
             Effect::Stream { op, file_id } => self.send(Job::Stream { op, file_id }),
@@ -372,6 +434,10 @@ impl App {
             match message {
                 WorkerMsg::Core(event) => self.dispatch(ctx, event),
                 WorkerMsg::Folders { parent, result } => self.ui.folder_listed(parent, result),
+                WorkerMsg::UpdatePrepared { op, result } => {
+                    let result = result.map(|prepared| self.prepared_update = Some(prepared));
+                    self.dispatch(ctx, Event::UpdatePrepared { op, result });
+                }
             }
         }
         while let Ok(raw) = self.intake_rx.try_recv() {

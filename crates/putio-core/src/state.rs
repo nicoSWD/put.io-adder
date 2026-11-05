@@ -11,6 +11,8 @@ use std::path::PathBuf;
 
 use putio_api::{Account, ApiError, DeviceCode, Release, Token, Transfer, ZipState, ZipStatus};
 
+use crate::update::UpdateAsset;
+
 use crate::download;
 use crate::i18n::{Locale, Msg};
 use crate::intake::{Intake, IntakeError};
@@ -25,6 +27,9 @@ pub const POLL_INTERVAL: Millis = 20_000;
 pub const MAX_BACKOFF: Millis = 300_000;
 const LINK_POLL_INTERVAL: Millis = 3_000;
 const LINK_TTL: Millis = 10 * 60_000;
+/// Between update checks while the app stays open, and after one that could not reach GitHub.
+const UPDATE_CHECK_INTERVAL: Millis = 6 * 60 * 60_000;
+const UPDATE_RETRY_INTERVAL: Millis = 30 * 60_000;
 const ZIP_POLL_INTERVAL: Millis = 2_000;
 const ZIP_TTL: Millis = 10 * 60_000;
 const CLOSE_DELAY: Millis = 5_000;
@@ -78,7 +83,43 @@ enum Op {
     Retry,
     Clear,
     Download,
+    Update,
     Stream,
+}
+
+/// Where an in-place update has got to.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Install {
+    Idle,
+    Working {
+        stage: UpdateStage,
+        /// How far through the whole job (0 to 1).
+        fraction: f32,
+    },
+    /// Downloaded and unpacked: waiting for the user to restart.
+    Ready {
+        version: String,
+    },
+    Failed {
+        version: String,
+        message: String,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpdateStage {
+    Downloading,
+    Unpacking,
+}
+
+/// Whether this copy of the app can replace itself.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InstallTarget {
+    /// Not looked at yet.
+    Unknown,
+    Ready,
+    /// Why not (a development build, a folder the user cannot write to, …).
+    Unavailable(String),
 }
 
 /// What put.io gave us for a download.
@@ -182,6 +223,25 @@ pub enum Event {
         op: OpId,
         result: Result<ZipStatus, ApiError>,
     },
+    /// Whether this copy of the app can replace itself, as the shell found out at start-up. The text is
+    /// the reason when it cannot.
+    InstallTargetKnown(Result<(), String>),
+    /// Download and unpack the update on offer.
+    UpdateInstallRequested,
+    UpdateProgress {
+        op: OpId,
+        stage: UpdateStage,
+        fraction: f32,
+    },
+    /// The download is unpacked and checked, or why it is not.
+    UpdatePrepared {
+        op: OpId,
+        result: Result<(), String>,
+    },
+    /// Swap the prepared update in and restart.
+    UpdateRestartRequested,
+    /// The swap and the restart helper are done, or why they failed.
+    UpdateApplied(Result<(), String>),
     StreamRequested(i64),
     StreamFinished {
         op: OpId,
@@ -258,6 +318,15 @@ pub enum Effect {
     },
     /// Hand a checked put.io download address to the browser. Never logged: it is a credential.
     OpenDownload(String),
+    /// Download, unpack and check the update, reporting [`Event::UpdateProgress`] as it goes and
+    /// [`Event::UpdatePrepared`] at the end. Nothing on disk is replaced yet.
+    PrepareUpdate {
+        op: OpId,
+        asset: UpdateAsset,
+    },
+    /// Replace the app with the prepared update and arrange for it to start once this process is
+    /// gone. The shell answers with [`Event::UpdateApplied`].
+    ApplyUpdate,
     /// Resolve a playable URL for the file (or the videos inside a folder) and hand it to the player.
     Stream {
         op: OpId,
@@ -289,6 +358,10 @@ pub struct State {
     pub summary: Summary,
     pub transfers_expanded: bool,
     pub update: UpdateStatus,
+    pub install: Install,
+    pub install_target: InstallTarget,
+    /// Which release file this computer installs for a tag (set by the shell: it depends on the OS and CPU).
+    pub asset_name: fn(&str) -> Option<String>,
     pub current_version: String,
 
     base: Msg,
@@ -305,6 +378,7 @@ pub struct State {
     close_at: Option<Millis>,
     badge: Option<u8>,
     update_user_initiated: bool,
+    next_update_check_at: Option<Millis>,
 }
 
 impl State {
@@ -319,6 +393,9 @@ impl State {
             transfers: Vec::new(),
             summary: Summary::default(),
             update: UpdateStatus::Unknown,
+            install: Install::Idle,
+            install_target: InstallTarget::Unknown,
+            asset_name: |_| None,
             current_version: current_version.to_owned(),
             base: Msg::FetchingInfo,
             notice: None,
@@ -334,6 +411,7 @@ impl State {
             close_at: None,
             badge: None,
             update_user_initiated: false,
+            next_update_check_at: None,
         }
     }
 
@@ -456,8 +534,7 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
     match event {
         Event::Started { has_token } => {
             if state.settings.check_for_updates {
-                state.update = UpdateStatus::Checking;
-                fx.push(Effect::FetchLatestRelease);
+                start_update_check(state, false, &mut fx);
             }
             if has_token {
                 become_signed_in(state, now, Msg::FetchingInfo, &mut fx);
@@ -710,28 +787,68 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
         }
 
         Event::CheckForUpdates { user_initiated } => {
-            state.update = UpdateStatus::Checking;
-            state.update_user_initiated = user_initiated;
-            fx.push(Effect::FetchLatestRelease);
+            start_update_check(state, user_initiated, &mut fx);
         }
-        Event::ReleaseFetched(result) => {
-            let user_initiated = std::mem::take(&mut state.update_user_initiated);
-            if let Ok(release) = result {
-                state.update = update::evaluate(&state.current_version, &release);
-                match &state.update {
-                    UpdateStatus::Available { version, .. } => {
-                        let msg = Msg::UpdateAvailable {
+        Event::ReleaseFetched(result) => release_fetched(state, now, result),
+        Event::InstallTargetKnown(result) => {
+            state.install_target = match result {
+                Ok(()) => InstallTarget::Ready,
+                Err(reason) => InstallTarget::Unavailable(reason),
+            };
+        }
+        Event::UpdateInstallRequested => update_install_requested(state, &mut fx),
+        Event::UpdateProgress {
+            op,
+            stage,
+            fraction,
+        } => {
+            if state.ops.get(&op) == Some(&Op::Update)
+                && let Install::Working {
+                    fraction: shown, ..
+                } = &state.install
+            {
+                // The bar only moves forward.
+                let fraction = fraction.clamp(0.0, 1.0).max(*shown);
+                state.install = Install::Working { stage, fraction };
+                let msg = match stage {
+                    UpdateStage::Downloading => Msg::UpdateDownloading {
+                        percent: percent_of(fraction),
+                    },
+                    UpdateStage::Unpacking => Msg::UpdateUnpacking,
+                };
+                state.say_until_replaced(msg);
+            }
+        }
+        Event::UpdatePrepared { op, result } => {
+            if state.finish(op, &[Op::Update]) {
+                let version = available_version(&state.update);
+                match result {
+                    Ok(()) => {
+                        let msg = Msg::UpdateReady {
                             version: version.clone(),
                         };
+                        state.install = Install::Ready { version };
                         state.say(msg, now, ERROR_NOTICE_TIME);
                     }
-                    _ if user_initiated => state.say(Msg::UpToDate, now, NOTICE_TIME),
-                    _ => {}
+                    Err(reason) => update_failed(state, now, version, &reason),
                 }
-            } else {
-                state.update = UpdateStatus::Unknown;
-                if user_initiated {
-                    state.say(Msg::UpdateCheckFailed, now, ERROR_NOTICE_TIME);
+            }
+        }
+        Event::UpdateRestartRequested => {
+            if matches!(state.install, Install::Ready { .. }) {
+                state.close_at = None;
+                state.say_until_replaced(Msg::UpdateRestarting);
+                fx.push(Effect::ApplyUpdate);
+            }
+        }
+        Event::UpdateApplied(result) => {
+            if let Install::Ready { version } = &state.install {
+                match result {
+                    Ok(()) => fx.push(Effect::Quit),
+                    Err(reason) => {
+                        let version = version.clone();
+                        update_failed(state, now, version, &reason);
+                    }
                 }
             }
         }
@@ -787,6 +904,16 @@ fn session_expired(state: &mut State, fx: &mut Vec<Effect>) {
 }
 
 fn tick(state: &mut State, now: Millis, fx: &mut Vec<Effect>) {
+    // The periodic update check: not while an update is being installed or waits for a restart.
+    if state.next_update_check_at.is_some_and(|at| now >= at)
+        && matches!(state.install, Install::Idle | Install::Failed { .. })
+    {
+        if state.settings.check_for_updates {
+            start_update_check(state, false, fx);
+        } else {
+            state.next_update_check_at = None;
+        }
+    }
     // Never quit with work in flight: a slow upload behind a finished one must not be killed.
     if state.close_at.is_some_and(|at| now >= at) && !state.is_busy() {
         state.close_at = None;
@@ -804,6 +931,110 @@ fn tick(state: &mut State, now: Millis, fx: &mut Vec<Effect>) {
             });
         }
     }
+}
+
+fn percent_of(fraction: f32) -> u8 {
+    // Clamped to 0..=100 first, so the cast cannot lose anything that matters.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let percent = (fraction.clamp(0.0, 1.0) * 100.0).round() as u8;
+    percent
+}
+
+fn available_version(status: &UpdateStatus) -> String {
+    match status {
+        UpdateStatus::Available { version, .. } => version.clone(),
+        _ => String::new(),
+    }
+}
+
+/// A failure text from the shell: no control characters (it can contain file names), bounded.
+fn update_failed(state: &mut State, now: Millis, version: String, reason: &str) {
+    let reason: String = reason
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(240)
+        .collect();
+    state.install = Install::Failed {
+        version,
+        message: reason.clone(),
+    };
+    state.say(Msg::UpdateFailed { reason }, now, ERROR_NOTICE_TIME);
+}
+
+/// Ask GitHub for the latest release. A background check keeps showing an update that is already on
+/// offer instead of flashing "checking" over it.
+fn start_update_check(state: &mut State, user_initiated: bool, fx: &mut Vec<Effect>) {
+    if user_initiated || !matches!(state.update, UpdateStatus::Available { .. }) {
+        state.update = UpdateStatus::Checking;
+    }
+    state.update_user_initiated = user_initiated;
+    state.next_update_check_at = None;
+    fx.push(Effect::FetchLatestRelease);
+}
+
+fn release_fetched(state: &mut State, now: Millis, result: Result<Release, ApiError>) {
+    let user_initiated = std::mem::take(&mut state.update_user_initiated);
+    let was_on_offer = available_version(&state.update);
+    let wait = if result.is_ok() {
+        UPDATE_CHECK_INTERVAL
+    } else {
+        UPDATE_RETRY_INTERVAL
+    };
+    state.next_update_check_at = state
+        .settings
+        .check_for_updates
+        .then(|| now.saturating_add(wait));
+    if let Ok(release) = result {
+        state.update = update::evaluate(&state.current_version, &release, &state.asset_name);
+        match &state.update {
+            UpdateStatus::Available { version, .. } => {
+                // A failure about an older release is moot now.
+                if matches!(&state.install, Install::Failed { version: failed, .. } if failed != version)
+                {
+                    state.install = Install::Idle;
+                }
+                // Say it once, not at every re-check.
+                if *version != was_on_offer || user_initiated {
+                    let msg = Msg::UpdateAvailable {
+                        version: version.clone(),
+                    };
+                    state.say(msg, now, ERROR_NOTICE_TIME);
+                }
+            }
+            _ if user_initiated => state.say(Msg::UpToDate, now, NOTICE_TIME),
+            _ => {}
+        }
+    } else {
+        // A failed refresh keeps an update that is already on offer.
+        if !matches!(state.update, UpdateStatus::Available { .. }) {
+            state.update = UpdateStatus::Unknown;
+        }
+        if user_initiated {
+            state.say(Msg::UpdateCheckFailed, now, ERROR_NOTICE_TIME);
+        }
+    }
+}
+
+fn update_install_requested(state: &mut State, fx: &mut Vec<Effect>) {
+    let UpdateStatus::Available {
+        asset: Some(asset), ..
+    } = &state.update
+    else {
+        return;
+    };
+    let startable = matches!(state.install, Install::Idle | Install::Failed { .. });
+    if !startable || state.install_target != InstallTarget::Ready {
+        return;
+    }
+    let asset = asset.clone();
+    state.close_at = None;
+    let op = state.op(Op::Update);
+    state.install = Install::Working {
+        stage: UpdateStage::Downloading,
+        fraction: 0.0,
+    };
+    state.say_until_replaced(Msg::UpdateDownloading { percent: 0 });
+    fx.push(Effect::PrepareUpdate { op, asset });
 }
 
 fn zip_tick(state: &mut State, now: Millis, fx: &mut Vec<Effect>) {
@@ -1159,6 +1390,7 @@ mod tests {
                 | Effect::RetryTransfer { op, .. }
                 | Effect::CleanTransfers { op, .. }
                 | Effect::PrepareDownload { op, .. }
+                | Effect::PrepareUpdate { op, .. }
                 | Effect::Stream { op, .. } => Some(*op),
                 _ => None,
             })
@@ -2552,7 +2784,51 @@ mod tests {
             html_url: format!("https://github.com/x/y/releases/tag/{tag}"),
             prerelease: false,
             draft: false,
+            author: None,
+            assets: Vec::new(),
         }
+    }
+
+    /// A release the project published, with the one file the test namer expects.
+    fn installable_release(tag: &str) -> Release {
+        let name = format!("putio-adder-{tag}-test.zip");
+        Release {
+            author: Some(putio_api::ReleaseAuthor {
+                login: "github-actions[bot]".into(),
+            }),
+            assets: vec![putio_api::ReleaseAsset {
+                browser_download_url: format!(
+                    "https://github.com/nicoSWD/putio-adder-rs/releases/download/{tag}/{name}"
+                ),
+                name,
+                size: 5_000_000,
+            }],
+            ..release(tag)
+        }
+    }
+
+    #[allow(clippy::unnecessary_wraps)] // the shape the real function has
+    fn test_asset_name(tag: &str) -> Option<String> {
+        Some(format!("putio-adder-{tag}-test.zip"))
+    }
+
+    /// A state running 0.1.0 with v0.2.0 on offer as an installable update, on a copy that can update.
+    fn with_installable_update() -> State {
+        let (mut state, _) = signed_in(Settings::default());
+        state.asset_name = test_asset_name;
+        update(&mut state, 0, Event::InstallTargetKnown(Ok(())));
+        update(
+            &mut state,
+            0,
+            Event::ReleaseFetched(Ok(installable_release("v0.2.0"))),
+        );
+        state
+    }
+
+    fn start_install(state: &mut State, now: Millis) -> OpId {
+        let fx = update(state, now, Event::UpdateInstallRequested);
+        assert!(matches!(&fx[..], [Effect::PrepareUpdate { .. }]), "{fx:?}");
+        op_of(&fx)
     }
 
     #[test]
@@ -2579,6 +2855,328 @@ mod tests {
         );
         assert_eq!(state.update, UpdateStatus::UpToDate);
         assert_eq!(*state.status(100_000), Msg::UpToDate);
+    }
+
+    #[test]
+    fn an_installable_release_offers_its_file_and_asks_for_nothing_yet() {
+        let state = with_installable_update();
+        assert!(matches!(
+            &state.update,
+            UpdateStatus::Available { asset: Some(asset), .. } if asset.name == "putio-adder-v0.2.0-test.zip"
+        ));
+        assert_eq!(state.install, Install::Idle);
+        assert!(!state.is_busy());
+    }
+
+    #[test]
+    fn installing_downloads_the_offered_file_and_shows_progress() {
+        let mut state = with_installable_update();
+        let fx = update(&mut state, 1, Event::UpdateInstallRequested);
+        let [Effect::PrepareUpdate { op, asset }] = &fx[..] else {
+            panic!("{fx:?}");
+        };
+        assert_eq!(asset.size, 5_000_000);
+        assert!(state.is_busy());
+        assert_eq!(*state.status(1), Msg::UpdateDownloading { percent: 0 });
+        let op = *op;
+        update(
+            &mut state,
+            2,
+            Event::UpdateProgress {
+                op,
+                stage: UpdateStage::Downloading,
+                fraction: 0.5,
+            },
+        );
+        assert_eq!(*state.status(2), Msg::UpdateDownloading { percent: 50 });
+        // The bar never goes backwards, and is clamped.
+        update(
+            &mut state,
+            3,
+            Event::UpdateProgress {
+                op,
+                stage: UpdateStage::Downloading,
+                fraction: 0.2,
+            },
+        );
+        assert_eq!(
+            state.install,
+            Install::Working {
+                stage: UpdateStage::Downloading,
+                fraction: 0.5
+            }
+        );
+        update(
+            &mut state,
+            4,
+            Event::UpdateProgress {
+                op,
+                stage: UpdateStage::Unpacking,
+                fraction: 7.0,
+            },
+        );
+        assert_eq!(
+            state.install,
+            Install::Working {
+                stage: UpdateStage::Unpacking,
+                fraction: 1.0
+            }
+        );
+        assert_eq!(*state.status(4), Msg::UpdateUnpacking);
+        // Progress for some other operation changes nothing.
+        update(
+            &mut state,
+            5,
+            Event::UpdateProgress {
+                op: OpId(999),
+                stage: UpdateStage::Downloading,
+                fraction: 0.0,
+            },
+        );
+        assert_eq!(
+            state.install,
+            Install::Working {
+                stage: UpdateStage::Unpacking,
+                fraction: 1.0
+            }
+        );
+    }
+
+    #[test]
+    fn nothing_is_installed_without_a_file_a_target_or_when_already_busy() {
+        // No installable file: only a release page.
+        let (mut state, _) = signed_in(Settings::default());
+        state.asset_name = test_asset_name;
+        update(&mut state, 0, Event::InstallTargetKnown(Ok(())));
+        update(&mut state, 0, Event::ReleaseFetched(Ok(release("v0.2.0"))));
+        assert!(update(&mut state, 1, Event::UpdateInstallRequested).is_empty());
+        // A file, but this copy cannot update itself (or has not been looked at).
+        for target in [None, Some(Err("development build".to_owned()))] {
+            let (mut state, _) = signed_in(Settings::default());
+            state.asset_name = test_asset_name;
+            if let Some(target) = target {
+                update(&mut state, 0, Event::InstallTargetKnown(target));
+            }
+            update(
+                &mut state,
+                0,
+                Event::ReleaseFetched(Ok(installable_release("v0.2.0"))),
+            );
+            assert!(update(&mut state, 1, Event::UpdateInstallRequested).is_empty());
+            assert_eq!(state.install, Install::Idle);
+        }
+        // Not twice at once, and not again once it is ready.
+        let mut state = with_installable_update();
+        let op = start_install(&mut state, 1);
+        assert!(update(&mut state, 2, Event::UpdateInstallRequested).is_empty());
+        update(&mut state, 3, Event::UpdatePrepared { op, result: Ok(()) });
+        assert!(update(&mut state, 4, Event::UpdateInstallRequested).is_empty());
+        // And nothing at all when no update is on offer.
+        let (mut none, _) = signed_in(Settings::default());
+        update(&mut none, 0, Event::InstallTargetKnown(Ok(())));
+        assert!(update(&mut none, 1, Event::UpdateInstallRequested).is_empty());
+    }
+
+    #[test]
+    fn a_prepared_update_waits_for_the_restart_and_a_failed_one_can_be_retried() {
+        let mut state = with_installable_update();
+        let op = start_install(&mut state, 1);
+        update(&mut state, 2, Event::UpdatePrepared { op, result: Ok(()) });
+        assert_eq!(
+            state.install,
+            Install::Ready {
+                version: "0.2.0".into()
+            }
+        );
+        assert!(!state.is_busy());
+        assert_eq!(
+            *state.status(2),
+            Msg::UpdateReady {
+                version: "0.2.0".into()
+            }
+        );
+
+        let mut state = with_installable_update();
+        let op = start_install(&mut state, 1);
+        update(
+            &mut state,
+            2,
+            Event::UpdatePrepared {
+                op,
+                result: Err("it is not an app\nat all\u{1b}[31m".into()),
+            },
+        );
+        assert_eq!(
+            state.install,
+            Install::Failed {
+                version: "0.2.0".into(),
+                message: "it is not an appat all[31m".into()
+            }
+        );
+        assert!(!state.is_busy());
+        assert!(matches!(state.status(2), Msg::UpdateFailed { .. }));
+        // A second try is allowed.
+        start_install(&mut state, 3);
+        assert!(matches!(state.install, Install::Working { .. }));
+    }
+
+    #[test]
+    fn a_late_answer_for_an_unknown_operation_is_ignored() {
+        let mut state = with_installable_update();
+        start_install(&mut state, 1);
+        update(
+            &mut state,
+            2,
+            Event::UpdatePrepared {
+                op: OpId(999),
+                result: Ok(()),
+            },
+        );
+        assert!(matches!(state.install, Install::Working { .. }));
+        assert!(state.is_busy());
+    }
+
+    #[test]
+    fn restarting_applies_the_update_and_quits_only_when_that_worked() {
+        let mut state = with_installable_update();
+        // Nothing to restart into yet.
+        assert!(update(&mut state, 1, Event::UpdateRestartRequested).is_empty());
+        assert!(update(&mut state, 1, Event::UpdateApplied(Ok(()))).is_empty());
+        let op = start_install(&mut state, 2);
+        update(&mut state, 3, Event::UpdatePrepared { op, result: Ok(()) });
+        assert_eq!(
+            update(&mut state, 4, Event::UpdateRestartRequested),
+            [Effect::ApplyUpdate]
+        );
+        assert_eq!(*state.status(4), Msg::UpdateRestarting);
+        assert_eq!(
+            update(&mut state, 5, Event::UpdateApplied(Ok(()))),
+            [Effect::Quit]
+        );
+
+        let mut state = with_installable_update();
+        let op = start_install(&mut state, 1);
+        update(&mut state, 2, Event::UpdatePrepared { op, result: Ok(()) });
+        update(&mut state, 3, Event::UpdateRestartRequested);
+        let fx = update(
+            &mut state,
+            4,
+            Event::UpdateApplied(Err("could not move the app".into())),
+        );
+        assert!(!fx.contains(&Effect::Quit));
+        assert!(
+            matches!(&state.install, Install::Failed { message, .. } if message == "could not move the app")
+        );
+    }
+
+    #[test]
+    fn updates_are_rechecked_every_six_hours_and_after_thirty_minutes_when_that_failed() {
+        const SIX_HOURS: Millis = 6 * 60 * 60_000;
+        let mut state = with_installable_update();
+        // Ok at 0: next check in six hours, and the update on offer stays visible meanwhile.
+        assert!(
+            !update(&mut state, SIX_HOURS - 1, Event::Tick).contains(&Effect::FetchLatestRelease)
+        );
+        let fx = update(&mut state, SIX_HOURS, Event::Tick);
+        assert!(fx.contains(&Effect::FetchLatestRelease));
+        assert!(
+            matches!(state.update, UpdateStatus::Available { .. }),
+            "no flash of 'checking'"
+        );
+        // One check at a time: nothing more until it answers.
+        assert!(
+            !update(&mut state, SIX_HOURS + 1, Event::Tick).contains(&Effect::FetchLatestRelease)
+        );
+        // It failed: try again in 30 minutes, still showing what was known.
+        update(
+            &mut state,
+            SIX_HOURS + 10,
+            Event::ReleaseFetched(Err(ApiError::Network("x".into()))),
+        );
+        assert!(matches!(state.update, UpdateStatus::Available { .. }));
+        let retry = SIX_HOURS + 10 + 30 * 60_000;
+        assert!(!update(&mut state, retry - 1, Event::Tick).contains(&Effect::FetchLatestRelease));
+        assert!(update(&mut state, retry, Event::Tick).contains(&Effect::FetchLatestRelease));
+    }
+
+    #[test]
+    fn rechecking_does_not_announce_the_same_update_again_but_does_announce_a_newer_one() {
+        let mut state = with_installable_update();
+        assert!(matches!(state.status(0), Msg::UpdateAvailable { .. }));
+        update(
+            &mut state,
+            100_000,
+            Event::ReleaseFetched(Ok(installable_release("v0.2.0"))),
+        );
+        assert_eq!(*state.status(100_000), Msg::FetchingInfo);
+        update(
+            &mut state,
+            200_000,
+            Event::ReleaseFetched(Ok(installable_release("v0.3.0"))),
+        );
+        assert_eq!(
+            *state.status(200_000),
+            Msg::UpdateAvailable {
+                version: "0.3.0".into()
+            }
+        );
+    }
+
+    #[test]
+    fn no_recheck_while_installing_or_waiting_for_the_restart_or_when_checks_are_off() {
+        const SIX_HOURS: Millis = 6 * 60 * 60_000;
+        let mut state = with_installable_update();
+        let op = start_install(&mut state, 1);
+        assert!(!update(&mut state, SIX_HOURS, Event::Tick).contains(&Effect::FetchLatestRelease));
+        update(
+            &mut state,
+            SIX_HOURS + 1,
+            Event::UpdatePrepared { op, result: Ok(()) },
+        );
+        assert!(
+            !update(&mut state, SIX_HOURS + 2, Event::Tick).contains(&Effect::FetchLatestRelease)
+        );
+
+        let mut off = with_installable_update();
+        update(
+            &mut off,
+            1,
+            Event::SettingsChanged(SettingsChange::CheckForUpdates(false)),
+        );
+        assert!(!update(&mut off, SIX_HOURS, Event::Tick).contains(&Effect::FetchLatestRelease));
+        assert!(
+            !update(&mut off, 2 * SIX_HOURS, Event::Tick).contains(&Effect::FetchLatestRelease)
+        );
+    }
+
+    #[test]
+    fn a_failure_about_an_older_release_is_forgotten_when_a_newer_one_appears() {
+        let mut state = with_installable_update();
+        let op = start_install(&mut state, 1);
+        update(
+            &mut state,
+            2,
+            Event::UpdatePrepared {
+                op,
+                result: Err("nope".into()),
+            },
+        );
+        assert!(matches!(state.install, Install::Failed { .. }));
+        update(
+            &mut state,
+            3,
+            Event::ReleaseFetched(Ok(installable_release("v0.2.0"))),
+        );
+        assert!(
+            matches!(state.install, Install::Failed { .. }),
+            "same release: the error stays"
+        );
+        update(
+            &mut state,
+            4,
+            Event::ReleaseFetched(Ok(installable_release("v0.3.0"))),
+        );
+        assert_eq!(state.install, Install::Idle);
     }
 
     #[test]

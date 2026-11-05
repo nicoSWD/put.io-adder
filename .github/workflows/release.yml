@@ -218,6 +218,11 @@ jobs:
       - name: Disk image (macOS)
         if: matrix.kind == 'macos'
         run: tools/make-dmg.sh "dist/$TARGET/put.io adder.app" "dist/putio-adder-v$VERSION-macos-${{ matrix.arch }}.dmg"
+      # The in-app updater downloads this zip (the disk image is for people). Its name and its layout
+      # (put.io adder.app at the top) are a contract with crates/putio-platform/src/update.
+      - name: Zip (macOS)
+        if: matrix.kind == 'macos'
+        run: ditto -c -k --keepParent "dist/$TARGET/put.io adder.app" "dist/putio-adder-v$VERSION-macos-${{ matrix.arch }}.zip"
 
       # ---- Windows ----
       - name: Install Inno Setup (Windows)
@@ -286,7 +291,7 @@ jobs:
             echo
             echo "| Platform | Files |"
             echo "|---|---|"
-            echo "| macOS (Apple Silicon / Intel) | \`putio-adder-v${VERSION}-macos-arm64.dmg\`, \`putio-adder-v${VERSION}-macos-x64.dmg\` |"
+            echo "| macOS (Apple Silicon / Intel) | \`putio-adder-v${VERSION}-macos-arm64.dmg\`, \`putio-adder-v${VERSION}-macos-x64.dmg\` (the \`.zip\` next to each is what the in-app updater uses) |"
             echo "| Windows (x64 / arm64) | \`...-windows-x64-setup.exe\` or \`.zip\`, \`...-windows-arm64-setup.exe\` or \`.zip\` |"
             echo "| Linux (x86_64 / aarch64) | \`putio-adder-v${VERSION}-linux-x86_64.tar.gz\`, \`...-linux-aarch64.tar.gz\` |"
             echo

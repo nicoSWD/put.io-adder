@@ -284,7 +284,8 @@ pub enum UploadOutcome {
     File(File),
 }
 
-/// The fields of a GitHub release the update check needs.
+/// The fields of a GitHub release the update check needs. Everything but the tag and the page is
+/// optional or defaulted: GitHub adds fields, and a release without assets is simply not installable.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Release {
     pub tag_name: String,
@@ -293,6 +294,28 @@ pub struct Release {
     pub prerelease: bool,
     #[serde(default)]
     pub draft: bool,
+    /// Who published it (the account GitHub records).
+    #[serde(default, deserialize_with = "lenient")]
+    pub author: Option<ReleaseAuthor>,
+    #[serde(default, deserialize_with = "null_default")]
+    pub assets: Vec<ReleaseAsset>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct ReleaseAuthor {
+    #[serde(default, deserialize_with = "null_default")]
+    pub login: String,
+}
+
+/// A file attached to a release. Untrusted text: names and addresses are checked before use.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+pub struct ReleaseAsset {
+    #[serde(default, deserialize_with = "null_default")]
+    pub name: String,
+    #[serde(default, deserialize_with = "null_default")]
+    pub browser_download_url: String,
+    #[serde(default, deserialize_with = "null_default")]
+    pub size: u64,
 }
 
 #[cfg(test)]

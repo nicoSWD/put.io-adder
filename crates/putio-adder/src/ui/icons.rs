@@ -58,7 +58,6 @@ pub(crate) fn glyph(painter: &Painter, center: Pos2, glyph: Glyph, scale: f32, c
 pub(crate) enum MenuIcon {
     Settings,
     Refresh,
-    Update,
     External,
     SignOut,
     Power,
@@ -122,13 +121,6 @@ pub(crate) fn menu_icon(painter: &Painter, center: Pos2, icon: MenuIcon, color: 
             let side = Vec2::new(direction.y, -direction.x);
             painter.line_segment([tip, tip - direction * 4.6 + side * 3.4], stroke);
             painter.line_segment([tip, tip - direction * 4.6 - side * 3.4], stroke);
-        }
-        MenuIcon::Update => {
-            // An arrow pointing down into a tray.
-            painter.line_segment([at(0.0, -6.5), at(0.0, 3.0)], stroke);
-            painter.line_segment([at(-4.0, -1.0), at(0.0, 3.0)], stroke);
-            painter.line_segment([at(4.0, -1.0), at(0.0, 3.0)], stroke);
-            painter.line_segment([at(-6.0, 6.5), at(6.0, 6.5)], stroke);
         }
         MenuIcon::External => {
             // A box with a corner cut out, and an arrow leaving through the gap.
