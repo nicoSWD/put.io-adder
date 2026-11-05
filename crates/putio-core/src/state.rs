@@ -1,0 +1,1798 @@
+//! The application as a pure state machine.
+//!
+//! `update(state, now, event)` mutates the [`State`] and returns the [`Effect`]s the shell must
+//! carry out (network calls, notifications, opening URLs, …). The shell reports results back as
+//! further [`Event`]s. There is no I/O, no threads and no clock in here: `now` is passed in, so
+//! every behaviour (polling cadence, back-off, auto-close, status-line expiry) is testable by
+//! feeding events and advancing a number.
+
+use std::collections::{HashMap, VecDeque};
+use std::path::PathBuf;
+
+use putio_api::{Account, ApiError, DeviceCode, Release, Token, Transfer};
+
+use crate::i18n::{Locale, Msg};
+use crate::intake::{Intake, IntakeError};
+use crate::settings::{Folder, Settings};
+use crate::transfers::{self, Summary, Tracker};
+use crate::update::{self, UpdateStatus};
+
+/// Monotonic milliseconds supplied by the shell.
+pub type Millis = u64;
+
+pub const POLL_INTERVAL: Millis = 20_000;
+pub const MAX_BACKOFF: Millis = 300_000;
+const LINK_POLL_INTERVAL: Millis = 3_000;
+const LINK_TTL: Millis = 10 * 60_000;
+const CLOSE_DELAY: Millis = 5_000;
+const NOTICE_TIME: Millis = 5_000;
+const ERROR_NOTICE_TIME: Millis = 9_000;
+const FOREVER: Millis = Millis::MAX;
+/// Items received before sign-in are kept (and added after) up to this many.
+const MAX_QUEUED_INTAKE: usize = 20;
+const MAX_REASON_CHARS: usize = 200;
+
+pub const LINK_URL: &str = "https://put.io/link";
+pub const PROJECT_URL: &str = "https://github.com/nicoSWD/putio-adder-rs";
+
+/// Identifies one outstanding operation, so a late result can never be attributed to the wrong request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct OpId(pub u64);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignedOutReason {
+    /// The server rejected the stored token.
+    SessionExpired,
+    /// The device code was not linked in time (or the server no longer knows it).
+    CodeExpired,
+    /// Could not even get a code.
+    CodeRequestFailed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Linking {
+    pub code: String,
+    next_poll_at: Millis,
+    deadline: Millis,
+    in_flight: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Auth {
+    /// Before [`Event::Started`].
+    Starting,
+    SignedOut(Option<SignedOutReason>),
+    RequestingCode,
+    Linking(Linking),
+    SignedIn,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Op {
+    AddMagnet,
+    UploadTorrent,
+    Cancel,
+    Stream,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StreamFailure {
+    NoPlayer,
+    NothingToPlay,
+    LaunchFailed,
+    Api(ApiError),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SettingsChange {
+    CloseAfterMagnet(bool),
+    CloseAfterTorrent(bool),
+    CheckForUpdates(bool),
+    ShowAvatar(bool),
+    DefaultFolder(Option<Folder>),
+}
+
+#[derive(Debug)]
+pub enum Event {
+    /// App launched. `has_token` says whether the secret store held a token.
+    Started {
+        has_token: bool,
+    },
+    /// Time passed. Send regularly (a few times a second is plenty).
+    Tick,
+
+    SignInRequested,
+    OpenLinkPage,
+    DeviceCodeReceived(Result<DeviceCode, ApiError>),
+    LinkPolled(Result<Option<Token>, ApiError>),
+    SignOutRequested,
+
+    /// A magnet link or `.torrent` the OS handed over (already validated).
+    Intake(Intake),
+    /// Something the OS handed over that failed validation.
+    IntakeRejected(IntakeError),
+    /// The shell could not use a `.torrent` file (unreadable, wrong content, too big).
+    TorrentUnusable {
+        op: OpId,
+        reason: String,
+    },
+    AddFinished {
+        op: OpId,
+        result: Result<Option<i64>, ApiError>,
+    },
+
+    Polled {
+        account: Result<Account, ApiError>,
+        transfers: Result<Vec<Transfer>, ApiError>,
+    },
+
+    CancelRequested(i64),
+    CancelFinished {
+        op: OpId,
+        result: Result<(), ApiError>,
+    },
+    StreamRequested(i64),
+    StreamFinished {
+        op: OpId,
+        result: Result<(), StreamFailure>,
+    },
+    OpenTransferOnPutio(i64),
+    NotificationClicked {
+        file_id: Option<i64>,
+    },
+    OpenProjectPage,
+
+    ToggleTransfers,
+    SettingsChanged(SettingsChange),
+
+    CheckForUpdates {
+        user_initiated: bool,
+    },
+    ReleaseFetched(Result<Release, ApiError>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Notification {
+    pub title: String,
+    pub body: String,
+    /// File to open on put.io when the notification is clicked.
+    pub file_id: Option<i64>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Effect {
+    RequestDeviceCode,
+    PollDeviceCode {
+        code: String,
+    },
+    StoreToken(Token),
+    DeleteToken,
+    SaveSettings(Settings),
+    /// Fetch account info and the transfer list, then send [`Event::Polled`].
+    Poll,
+    AddMagnet {
+        op: OpId,
+        uri: String,
+        parent: Option<i64>,
+    },
+    UploadTorrent {
+        op: OpId,
+        path: PathBuf,
+        parent: Option<i64>,
+    },
+    CancelTransfer {
+        op: OpId,
+        id: i64,
+    },
+    /// Resolve a playable URL for the file (or the videos inside a folder) and hand it to the player.
+    Stream {
+        op: OpId,
+        file_id: i64,
+    },
+    FetchLatestRelease,
+    Notify(Notification),
+    /// Dock/taskbar progress, `None` to clear.
+    SetBadge(Option<u8>),
+    /// Only ever `https://put.io/…` or the project page, built from numeric ids and constants here.
+    OpenUrl(String),
+    Quit,
+}
+
+#[derive(Debug, Clone)]
+struct Notice {
+    msg: Msg,
+    until: Millis,
+}
+
+#[derive(Debug)]
+#[allow(clippy::struct_excessive_bools)] // independent flags of one state machine
+pub struct State {
+    pub settings: Settings,
+    pub locale: Locale,
+    pub auth: Auth,
+    pub account: Option<Account>,
+    pub transfers: Vec<Transfer>,
+    pub summary: Summary,
+    pub transfers_expanded: bool,
+    pub update: UpdateStatus,
+    pub current_version: String,
+
+    base: Msg,
+    notice: Option<Notice>,
+    busy: u32,
+    ops: HashMap<OpId, Op>,
+    next_op: u64,
+    pending_intake: VecDeque<Intake>,
+    tracker: Tracker,
+    first_poll_done: bool,
+    poll_in_flight: bool,
+    next_poll_at: Option<Millis>,
+    failures: u32,
+    close_at: Option<Millis>,
+    badge: Option<u8>,
+    update_user_initiated: bool,
+}
+
+impl State {
+    #[must_use]
+    pub fn new(settings: Settings, locale: Locale, current_version: &str) -> Self {
+        Self {
+            transfers_expanded: settings.transfers_expanded,
+            settings,
+            locale,
+            auth: Auth::Starting,
+            account: None,
+            transfers: Vec::new(),
+            summary: Summary::default(),
+            update: UpdateStatus::Unknown,
+            current_version: current_version.to_owned(),
+            base: Msg::FetchingInfo,
+            notice: None,
+            busy: 0,
+            ops: HashMap::new(),
+            next_op: 1,
+            pending_intake: VecDeque::new(),
+            tracker: Tracker::new(),
+            first_poll_done: false,
+            poll_in_flight: false,
+            next_poll_at: None,
+            failures: 0,
+            close_at: None,
+            badge: None,
+            update_user_initiated: false,
+        }
+    }
+
+    /// The message for the status line right now: a recent notice, else the standing message.
+    #[must_use]
+    pub fn status(&self, now: Millis) -> &Msg {
+        match &self.notice {
+            Some(notice) if now < notice.until => &notice.msg,
+            _ => &self.base,
+        }
+    }
+
+    #[must_use]
+    pub fn status_text(&self, now: Millis) -> String {
+        self.status(now).text(self.locale)
+    }
+
+    /// An operation (add, upload, cancel, stream) is running: show the spinner.
+    #[must_use]
+    pub fn is_busy(&self) -> bool {
+        self.busy > 0
+    }
+
+    #[must_use]
+    pub fn is_signed_in(&self) -> bool {
+        self.auth == Auth::SignedIn
+    }
+
+    /// Whether the app is going to quit by itself soon (the UI may show a hint).
+    #[must_use]
+    pub fn closing_soon(&self) -> bool {
+        self.close_at.is_some()
+    }
+
+    fn op(&mut self, kind: Op) -> OpId {
+        let id = OpId(self.next_op);
+        self.next_op += 1;
+        self.ops.insert(id, kind);
+        self.busy += 1;
+        id
+    }
+
+    /// Finish an operation. Returns `false` for an unknown (stale or duplicate) id, which is ignored.
+    fn finish(&mut self, id: OpId, expected: &[Op]) -> bool {
+        match self.ops.get(&id) {
+            Some(kind) if expected.contains(kind) => {
+                self.ops.remove(&id);
+                self.busy = self.busy.saturating_sub(1);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn say(&mut self, msg: Msg, now: Millis, hold: Millis) {
+        self.notice = Some(Notice {
+            msg,
+            until: now.saturating_add(hold),
+        });
+    }
+
+    fn say_until_replaced(&mut self, msg: Msg) {
+        self.notice = Some(Notice {
+            msg,
+            until: FOREVER,
+        });
+    }
+
+    fn text(&self, msg: &Msg) -> String {
+        msg.text(self.locale)
+    }
+
+    /// Short, user-facing reason for a failed API call.
+    fn reason(&self, error: &ApiError) -> String {
+        match error {
+            ApiError::Network(_) => self.text(&Msg::Offline),
+            ApiError::RateLimited { retry_after } => self.text(&Msg::RateLimited {
+                seconds: retry_after.as_secs(),
+            }),
+            ApiError::Api(failure) if failure.status >= 500 => self.text(&Msg::ServerError),
+            ApiError::Api(failure) => failure
+                .message
+                .chars()
+                .filter(|c| !c.is_control())
+                .take(MAX_REASON_CHARS)
+                .collect(),
+            ApiError::InvalidInput(why) => (*why).to_owned(),
+            ApiError::Unauthorized | ApiError::Decode(_) | ApiError::TooLarge => {
+                self.text(&Msg::ServerError)
+            }
+        }
+    }
+
+    fn schedule_poll(&mut self, at: Millis) {
+        self.next_poll_at = Some(at);
+    }
+
+    fn backoff(&self, error: &ApiError) -> Millis {
+        if let ApiError::RateLimited { retry_after } = error {
+            let ms = u64::try_from(retry_after.as_millis()).unwrap_or(MAX_BACKOFF);
+            return ms.min(MAX_BACKOFF);
+        }
+        POLL_INTERVAL
+            .saturating_mul(1u64 << self.failures.min(4))
+            .min(MAX_BACKOFF)
+    }
+}
+
+fn open_file_url(file_id: Option<i64>) -> String {
+    match file_id {
+        Some(id) if id >= 0 => format!("https://put.io/files/{id}"),
+        _ => "https://put.io/transfers".to_owned(),
+    }
+}
+
+/// Apply one event. See the module documentation.
+#[allow(clippy::too_many_lines)] // one flat dispatch is easier to audit than many small indirections
+pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
+    let mut fx = Vec::new();
+    match event {
+        Event::Started { has_token } => {
+            if state.settings.check_for_updates {
+                state.update = UpdateStatus::Checking;
+                fx.push(Effect::FetchLatestRelease);
+            }
+            if has_token {
+                state.auth = Auth::SignedIn;
+                state.base = Msg::FetchingInfo;
+                state.schedule_poll(now);
+            } else {
+                begin_sign_in(state, &mut fx);
+            }
+        }
+        Event::Tick => tick(state, now, &mut fx),
+
+        Event::SignInRequested => {
+            if matches!(state.auth, Auth::SignedOut(_) | Auth::Linking(_)) {
+                begin_sign_in(state, &mut fx);
+            }
+        }
+        Event::OpenLinkPage => fx.push(Effect::OpenUrl(LINK_URL.to_owned())),
+        Event::DeviceCodeReceived(result) => {
+            if state.auth == Auth::RequestingCode {
+                match result {
+                    Ok(DeviceCode { code }) => {
+                        state.auth = Auth::Linking(Linking {
+                            code,
+                            next_poll_at: now + LINK_POLL_INTERVAL,
+                            deadline: now + LINK_TTL,
+                            in_flight: false,
+                        });
+                        state.base = Msg::SigningIn;
+                    }
+                    Err(error) => {
+                        state.auth = Auth::SignedOut(Some(SignedOutReason::CodeRequestFailed));
+                        state.base = Msg::AuthRequired;
+                        let reason = state.reason(&error);
+                        state.say(Msg::SignInFailed { reason }, now, ERROR_NOTICE_TIME);
+                    }
+                }
+            }
+        }
+        Event::LinkPolled(result) => link_polled(state, now, result, &mut fx),
+        Event::SignOutRequested => {
+            sign_out(state, &mut fx);
+            state.auth = Auth::SignedOut(None);
+        }
+
+        Event::Intake(item) => intake(state, item, &mut fx),
+        Event::IntakeRejected(error) => {
+            let msg = match error {
+                IntakeError::Magnet(_) => Msg::NotAMagnet,
+                other => Msg::NotATorrent {
+                    reason: other.to_string(),
+                },
+            };
+            state.say(msg, now, ERROR_NOTICE_TIME);
+        }
+        Event::TorrentUnusable { op, reason } => {
+            if state.finish(op, &[Op::UploadTorrent]) {
+                state.say(Msg::NotATorrent { reason }, now, ERROR_NOTICE_TIME);
+            }
+        }
+        Event::AddFinished { op, result } => add_finished(state, now, op, result, &mut fx),
+
+        Event::Polled { account, transfers } => polled(state, now, account, transfers, &mut fx),
+
+        Event::CancelRequested(id) => {
+            if state.is_signed_in() {
+                let op = state.op(Op::Cancel);
+                state.say_until_replaced(Msg::Canceling);
+                fx.push(Effect::CancelTransfer { op, id });
+            }
+        }
+        Event::CancelFinished { op, result } => {
+            if state.finish(op, &[Op::Cancel]) {
+                match result {
+                    Ok(()) => {
+                        state.say(Msg::Canceled, now, NOTICE_TIME);
+                        state.schedule_poll(now);
+                    }
+                    Err(ApiError::Unauthorized) => session_expired(state, &mut fx),
+                    Err(_) => state.say(Msg::CancelFailed, now, ERROR_NOTICE_TIME),
+                }
+            }
+        }
+        Event::StreamRequested(id) => {
+            if let Some(transfer) = state.transfers.iter().find(|t| t.id == id) {
+                match transfer.file_id {
+                    Some(file_id) => {
+                        let op = state.op(Op::Stream);
+                        state.say_until_replaced(Msg::Streaming);
+                        fx.push(Effect::Stream { op, file_id });
+                    }
+                    None => state.say(Msg::StreamNotReady, now, ERROR_NOTICE_TIME),
+                }
+            }
+        }
+        Event::StreamFinished { op, result } => {
+            if state.finish(op, &[Op::Stream]) {
+                match result {
+                    Ok(()) => state.say(Msg::Streaming, now, NOTICE_TIME),
+                    Err(StreamFailure::NoPlayer) => {
+                        state.say(Msg::StreamNoPlayer, now, ERROR_NOTICE_TIME);
+                    }
+                    Err(StreamFailure::NothingToPlay) => {
+                        state.say(Msg::StreamNothingToPlay, now, ERROR_NOTICE_TIME);
+                    }
+                    Err(StreamFailure::Api(ApiError::Unauthorized)) => {
+                        session_expired(state, &mut fx);
+                    }
+                    Err(StreamFailure::LaunchFailed | StreamFailure::Api(_)) => {
+                        state.say(Msg::StreamFailed, now, ERROR_NOTICE_TIME);
+                    }
+                }
+            }
+        }
+        Event::OpenTransferOnPutio(id) => {
+            let file_id = state
+                .transfers
+                .iter()
+                .find(|t| t.id == id)
+                .and_then(|t| t.file_id);
+            fx.push(Effect::OpenUrl(open_file_url(file_id)));
+        }
+        Event::NotificationClicked { file_id } => fx.push(Effect::OpenUrl(open_file_url(file_id))),
+        Event::OpenProjectPage => fx.push(Effect::OpenUrl(PROJECT_URL.to_owned())),
+
+        Event::ToggleTransfers => {
+            state.transfers_expanded = !state.transfers_expanded;
+            state.settings.transfers_expanded = state.transfers_expanded;
+            fx.push(Effect::SaveSettings(state.settings.clone()));
+        }
+        Event::SettingsChanged(change) => {
+            match change {
+                SettingsChange::CloseAfterMagnet(on) => state.settings.close_after_magnet = on,
+                SettingsChange::CloseAfterTorrent(on) => state.settings.close_after_torrent = on,
+                SettingsChange::CheckForUpdates(on) => state.settings.check_for_updates = on,
+                SettingsChange::ShowAvatar(on) => state.settings.show_avatar = on,
+                SettingsChange::DefaultFolder(folder) => state.settings.default_folder = folder,
+            }
+            fx.push(Effect::SaveSettings(state.settings.clone()));
+        }
+
+        Event::CheckForUpdates { user_initiated } => {
+            state.update = UpdateStatus::Checking;
+            state.update_user_initiated = user_initiated;
+            fx.push(Effect::FetchLatestRelease);
+        }
+        Event::ReleaseFetched(result) => {
+            let user_initiated = std::mem::take(&mut state.update_user_initiated);
+            if let Ok(release) = result {
+                state.update = update::evaluate(&state.current_version, &release);
+                match &state.update {
+                    UpdateStatus::Available { version, .. } => {
+                        let msg = Msg::UpdateAvailable {
+                            version: version.clone(),
+                        };
+                        state.say(msg, now, ERROR_NOTICE_TIME);
+                    }
+                    _ if user_initiated => state.say(Msg::UpToDate, now, NOTICE_TIME),
+                    _ => {}
+                }
+            } else {
+                state.update = UpdateStatus::Unknown;
+                if user_initiated {
+                    state.say(Msg::UpdateCheckFailed, now, ERROR_NOTICE_TIME);
+                }
+            }
+        }
+    }
+
+    maybe_poll(state, now, &mut fx);
+    fx
+}
+
+fn begin_sign_in(state: &mut State, fx: &mut Vec<Effect>) {
+    state.auth = Auth::RequestingCode;
+    state.base = Msg::AuthRequired;
+    fx.push(Effect::RequestDeviceCode);
+}
+
+fn sign_out(state: &mut State, fx: &mut Vec<Effect>) {
+    state.account = None;
+    state.transfers.clear();
+    state.summary = Summary::default();
+    state.tracker.reset();
+    state.first_poll_done = false;
+    state.poll_in_flight = false;
+    state.next_poll_at = None;
+    state.failures = 0;
+    state.pending_intake.clear();
+    state.close_at = None;
+    state.base = Msg::AuthRequired;
+    fx.push(Effect::DeleteToken);
+    if state.badge.take().is_some() {
+        fx.push(Effect::SetBadge(None));
+    }
+}
+
+fn session_expired(state: &mut State, fx: &mut Vec<Effect>) {
+    sign_out(state, fx);
+    state.auth = Auth::SignedOut(Some(SignedOutReason::SessionExpired));
+    state.base = Msg::AuthExpired;
+    state.notice = None;
+}
+
+fn tick(state: &mut State, now: Millis, fx: &mut Vec<Effect>) {
+    if state.close_at.is_some_and(|at| now >= at) {
+        state.close_at = None;
+        fx.push(Effect::Quit);
+    }
+    if let Auth::Linking(link) = &mut state.auth {
+        if now >= link.deadline {
+            state.auth = Auth::SignedOut(Some(SignedOutReason::CodeExpired));
+            state.base = Msg::LinkExpired;
+        } else if !link.in_flight && now >= link.next_poll_at {
+            link.in_flight = true;
+            fx.push(Effect::PollDeviceCode {
+                code: link.code.clone(),
+            });
+        }
+    }
+}
+
+fn link_polled(
+    state: &mut State,
+    now: Millis,
+    result: Result<Option<Token>, ApiError>,
+    fx: &mut Vec<Effect>,
+) {
+    let Auth::Linking(link) = &mut state.auth else {
+        return;
+    };
+    link.in_flight = false;
+    match result {
+        Ok(Some(token)) => {
+            state.auth = Auth::SignedIn;
+            state.base = Msg::Authenticated;
+            fx.push(Effect::StoreToken(token));
+            state.schedule_poll(now);
+            // Start the polling cadence right away (the old app only did this after a restart).
+            let queued: Vec<Intake> = state.pending_intake.drain(..).collect();
+            for item in queued {
+                intake(state, item, fx);
+            }
+        }
+        Ok(None) => link.next_poll_at = now + LINK_POLL_INTERVAL,
+        // A temporary problem: keep trying until the code's deadline.
+        Err(error) if error.is_transient() => link.next_poll_at = now + LINK_POLL_INTERVAL,
+        // The server no longer accepts this code.
+        Err(_) => {
+            state.auth = Auth::SignedOut(Some(SignedOutReason::CodeExpired));
+            state.base = Msg::LinkExpired;
+        }
+    }
+}
+
+fn intake(state: &mut State, item: Intake, fx: &mut Vec<Effect>) {
+    if !state.is_signed_in() {
+        if state.pending_intake.len() < MAX_QUEUED_INTAKE {
+            state.pending_intake.push_back(item);
+        }
+        return;
+    }
+    state.close_at = None;
+    let parent = state.settings.default_folder_id();
+    let name = item.display_name();
+    match item {
+        Intake::Magnet(magnet) => {
+            let op = state.op(Op::AddMagnet);
+            state.say_until_replaced(Msg::Adding { name });
+            fx.push(Effect::AddMagnet {
+                op,
+                uri: magnet.uri().to_owned(),
+                parent,
+            });
+        }
+        Intake::TorrentFile(path) => {
+            let op = state.op(Op::UploadTorrent);
+            state.say_until_replaced(Msg::Uploading { name });
+            fx.push(Effect::UploadTorrent { op, path, parent });
+        }
+    }
+}
+
+fn add_finished(
+    state: &mut State,
+    now: Millis,
+    op: OpId,
+    result: Result<Option<i64>, ApiError>,
+    fx: &mut Vec<Effect>,
+) {
+    let kind = state.ops.get(&op).copied();
+    if !matches!(kind, Some(Op::AddMagnet | Op::UploadTorrent)) {
+        return;
+    }
+    state.finish(op, &[Op::AddMagnet, Op::UploadTorrent]);
+    let is_torrent = kind == Some(Op::UploadTorrent);
+    match result {
+        Ok(transfer_id) => {
+            if let Some(id) = transfer_id {
+                state.tracker.note_added(id);
+            }
+            let close = if is_torrent {
+                state.settings.close_after_torrent
+            } else {
+                state.settings.close_after_magnet
+            };
+            match (is_torrent, close) {
+                (false, false) => state.say(Msg::Added, now, NOTICE_TIME),
+                (false, true) => state.say_until_replaced(Msg::AddedClosing),
+                (true, false) => state.say(Msg::Uploaded, now, NOTICE_TIME),
+                (true, true) => state.say_until_replaced(Msg::UploadedClosing),
+            }
+            if close {
+                state.close_at = Some(now + CLOSE_DELAY);
+            }
+            state.schedule_poll(now);
+        }
+        Err(ApiError::Unauthorized) => session_expired(state, fx),
+        Err(error) => {
+            let reason = state.reason(&error);
+            let msg = if is_torrent {
+                Msg::UploadFailed { reason }
+            } else {
+                Msg::AddFailed { reason }
+            };
+            state.say(msg, now, ERROR_NOTICE_TIME);
+        }
+    }
+}
+
+fn polled(
+    state: &mut State,
+    now: Millis,
+    account: Result<Account, ApiError>,
+    transfers: Result<Vec<Transfer>, ApiError>,
+    fx: &mut Vec<Effect>,
+) {
+    state.poll_in_flight = false;
+    if !state.is_signed_in() {
+        return; // signed out while the request was in flight
+    }
+    if matches!(account, Err(ApiError::Unauthorized))
+        || matches!(transfers, Err(ApiError::Unauthorized))
+    {
+        session_expired(state, fx);
+        return;
+    }
+
+    match account {
+        Ok(account) => state.account = Some(account),
+        Err(_) if state.account.is_none() => state.base = Msg::AccountFailed,
+        Err(_) => {}
+    }
+
+    match transfers {
+        Ok(mut list) => {
+            state.failures = 0;
+            state.schedule_poll(now + POLL_INTERVAL);
+            for done in state.tracker.observe(&list) {
+                fx.push(Effect::Notify(Notification {
+                    title: state.text(&Msg::NotificationTitle),
+                    body: state.text(&Msg::NotificationBody { name: done.name }),
+                    file_id: done.file_id,
+                }));
+            }
+            state.first_poll_done = true;
+            transfers::sort(&mut list, transfers::SortKey::Default, true);
+            state.summary = transfers::summarize(&list);
+            state.transfers = list;
+            state.base = Msg::Summary {
+                pending: state.summary.pending,
+                finished: state.summary.finished,
+                failed: state.summary.failed,
+            };
+            let badge = state.summary.average_percent;
+            if badge != state.badge {
+                state.badge = badge;
+                fx.push(Effect::SetBadge(badge));
+            }
+        }
+        Err(error) => {
+            let wait = state.backoff(&error);
+            state.failures = state.failures.saturating_add(1);
+            state.schedule_poll(now + wait);
+            state.base = match &error {
+                ApiError::Network(_) => Msg::Offline,
+                ApiError::RateLimited { retry_after } => Msg::RateLimited {
+                    seconds: retry_after.as_secs(),
+                },
+                ApiError::Api(failure) if failure.status >= 500 => Msg::ServerError,
+                _ => Msg::TransfersFailed,
+            };
+        }
+    }
+}
+
+fn maybe_poll(state: &mut State, now: Millis, fx: &mut Vec<Effect>) {
+    if state.is_signed_in()
+        && !state.poll_in_flight
+        && state.next_poll_at.is_some_and(|at| now >= at)
+    {
+        state.poll_in_flight = true;
+        state.next_poll_at = None;
+        fx.push(Effect::Poll);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use putio_api::{ApiFailure, TransferStatus};
+
+    use super::*;
+    use crate::magnet::Magnet;
+
+    const HASH: &str = "0123456789abcdef0123456789abcdef01234567";
+
+    fn magnet(name: &str) -> Intake {
+        Intake::Magnet(Magnet::parse(&format!("magnet:?xt=urn:btih:{HASH}&dn={name}")).unwrap())
+    }
+
+    fn transfer(
+        id: i64,
+        name: &str,
+        status: TransferStatus,
+        percent: i64,
+        file_id: Option<i64>,
+    ) -> Transfer {
+        let mut t: Transfer = serde_json::from_str(&format!(
+            r#"{{"id":{id},"name":"{name}","percent_done":{percent}}}"#
+        ))
+        .unwrap();
+        t.status = status;
+        t.file_id = file_id;
+        t
+    }
+
+    fn account() -> Account {
+        serde_json::from_str(r#"{"user_id":1,"username":"nico","mail":"n@example.com"}"#).unwrap()
+    }
+
+    fn token() -> Token {
+        Token::new("tok").unwrap()
+    }
+
+    fn api_error(status: u16, message: &str) -> ApiError {
+        ApiError::Api(ApiFailure {
+            status,
+            error_type: Some("X".into()),
+            message: message.into(),
+        })
+    }
+
+    /// A signed-in state that has not polled yet.
+    fn signed_in(settings: Settings) -> (State, Vec<Effect>) {
+        let mut state = State::new(settings, Locale::En, "0.1.0");
+        let fx = update(&mut state, 0, Event::Started { has_token: true });
+        (state, fx)
+    }
+
+    fn no_updates() -> Settings {
+        Settings {
+            check_for_updates: false,
+            ..Settings::default()
+        }
+    }
+
+    fn poll_ok(state: &mut State, now: Millis, list: Vec<Transfer>) -> Vec<Effect> {
+        update(
+            state,
+            now,
+            Event::Polled {
+                account: Ok(account()),
+                transfers: Ok(list),
+            },
+        )
+    }
+
+    fn op_of(fx: &[Effect]) -> OpId {
+        fx.iter()
+            .find_map(|e| match e {
+                Effect::AddMagnet { op, .. }
+                | Effect::UploadTorrent { op, .. }
+                | Effect::CancelTransfer { op, .. }
+                | Effect::Stream { op, .. } => Some(*op),
+                _ => None,
+            })
+            .expect("an effect with an op id")
+    }
+
+    // ---- start-up & sign-in -------------------------------------------------------------
+
+    #[test]
+    fn start_with_token_polls_immediately_and_checks_for_updates() {
+        let (state, fx) = signed_in(Settings::default());
+        assert_eq!(fx, [Effect::FetchLatestRelease, Effect::Poll]);
+        assert!(state.is_signed_in());
+        assert_eq!(state.update, UpdateStatus::Checking);
+    }
+
+    #[test]
+    fn start_without_token_requests_a_device_code_and_skips_updates_when_disabled() {
+        let mut state = State::new(no_updates(), Locale::En, "0.1.0");
+        let fx = update(&mut state, 0, Event::Started { has_token: false });
+        assert_eq!(fx, [Effect::RequestDeviceCode]);
+        assert_eq!(state.auth, Auth::RequestingCode);
+        assert_eq!(*state.status(0), Msg::AuthRequired);
+    }
+
+    fn linking_state() -> State {
+        let mut state = State::new(no_updates(), Locale::En, "0.1.0");
+        update(&mut state, 0, Event::Started { has_token: false });
+        update(
+            &mut state,
+            0,
+            Event::DeviceCodeReceived(Ok(DeviceCode {
+                code: "ABCD1234".into(),
+            })),
+        );
+        state
+    }
+
+    #[test]
+    fn linking_polls_every_three_seconds_and_never_overlaps() {
+        let mut state = linking_state();
+        assert!(matches!(&state.auth, Auth::Linking(l) if l.code == "ABCD1234"));
+        assert!(update(&mut state, 2_999, Event::Tick).is_empty());
+        assert_eq!(
+            update(&mut state, 3_000, Event::Tick),
+            [Effect::PollDeviceCode {
+                code: "ABCD1234".into()
+            }]
+        );
+        assert!(
+            update(&mut state, 9_000, Event::Tick).is_empty(),
+            "one poll in flight at a time"
+        );
+        update(&mut state, 9_000, Event::LinkPolled(Ok(None)));
+        assert!(update(&mut state, 11_999, Event::Tick).is_empty());
+        assert_eq!(update(&mut state, 12_000, Event::Tick).len(), 1);
+    }
+
+    #[test]
+    fn linking_success_stores_the_token_and_starts_polling_at_once() {
+        let mut state = linking_state();
+        update(&mut state, 3_000, Event::Tick);
+        let fx = update(&mut state, 3_100, Event::LinkPolled(Ok(Some(token()))));
+        assert_eq!(fx.len(), 2);
+        assert!(matches!(&fx[0], Effect::StoreToken(t) if t.expose() == "tok"));
+        assert_eq!(
+            fx[1],
+            Effect::Poll,
+            "polling must start right after sign-in"
+        );
+        assert!(state.is_signed_in());
+        assert_eq!(*state.status(3_100), Msg::Authenticated);
+    }
+
+    #[test]
+    fn linking_survives_transient_errors_but_not_server_rejection() {
+        let mut state = linking_state();
+        update(&mut state, 3_000, Event::Tick);
+        update(
+            &mut state,
+            3_000,
+            Event::LinkPolled(Err(ApiError::Network("dns".into()))),
+        );
+        assert!(matches!(state.auth, Auth::Linking(_)));
+        update(&mut state, 6_000, Event::Tick);
+        update(
+            &mut state,
+            6_000,
+            Event::LinkPolled(Err(api_error(400, "bad code"))),
+        );
+        assert_eq!(
+            state.auth,
+            Auth::SignedOut(Some(SignedOutReason::CodeExpired))
+        );
+        assert_eq!(*state.status(6_000), Msg::LinkExpired);
+    }
+
+    #[test]
+    fn linking_times_out_and_can_be_retried() {
+        let mut state = linking_state();
+        assert!(update(&mut state, LINK_TTL, Event::Tick).is_empty());
+        assert_eq!(
+            state.auth,
+            Auth::SignedOut(Some(SignedOutReason::CodeExpired))
+        );
+        assert_eq!(
+            update(&mut state, LINK_TTL, Event::SignInRequested),
+            [Effect::RequestDeviceCode]
+        );
+        assert_eq!(state.auth, Auth::RequestingCode);
+    }
+
+    #[test]
+    fn a_failed_code_request_is_reported() {
+        let mut state = State::new(no_updates(), Locale::En, "0.1.0");
+        update(&mut state, 0, Event::Started { has_token: false });
+        update(
+            &mut state,
+            0,
+            Event::DeviceCodeReceived(Err(ApiError::Network("x".into()))),
+        );
+        assert_eq!(
+            state.auth,
+            Auth::SignedOut(Some(SignedOutReason::CodeRequestFailed))
+        );
+        assert!(matches!(state.status(1), Msg::SignInFailed { .. }));
+    }
+
+    #[test]
+    fn stray_link_results_are_ignored_when_not_linking() {
+        let (mut state, _) = signed_in(no_updates());
+        assert!(
+            update(&mut state, 5, Event::LinkPolled(Ok(Some(token()))))
+                .iter()
+                .all(|e| *e != Effect::StoreToken(token()))
+        );
+        assert!(state.is_signed_in());
+        update(
+            &mut state,
+            5,
+            Event::DeviceCodeReceived(Ok(DeviceCode { code: "X".into() })),
+        );
+        assert!(state.is_signed_in());
+    }
+
+    #[test]
+    fn open_link_page_opens_the_fixed_url() {
+        let (mut state, _) = signed_in(no_updates());
+        assert_eq!(
+            update(&mut state, 0, Event::OpenLinkPage),
+            [Effect::OpenUrl("https://put.io/link".into())]
+        );
+    }
+
+    // ---- polling ---------------------------------------------------------------------------
+
+    #[test]
+    fn polls_every_twenty_seconds_without_overlap() {
+        let (mut state, fx) = signed_in(no_updates());
+        assert_eq!(fx, [Effect::Poll]);
+        assert!(
+            update(&mut state, 100, Event::Tick).is_empty(),
+            "poll in flight"
+        );
+        poll_ok(&mut state, 500, vec![]);
+        assert!(update(&mut state, 20_499, Event::Tick).is_empty());
+        assert_eq!(update(&mut state, 20_500, Event::Tick), [Effect::Poll]);
+    }
+
+    #[test]
+    fn poll_updates_state_summary_badge_and_status_line() {
+        let (mut state, _) = signed_in(no_updates());
+        let fx = poll_ok(
+            &mut state,
+            10,
+            vec![
+                transfer(1, "a", TransferStatus::Downloading, 40, None),
+                transfer(2, "b", TransferStatus::Completed, 100, Some(9)),
+            ],
+        );
+        assert_eq!(fx, [Effect::SetBadge(Some(40))]);
+        assert_eq!(state.account.as_ref().unwrap().username, "nico");
+        assert_eq!(state.status_text(10), "1 pending transfer  |  1 finished");
+        assert_eq!(
+            state.transfers.first().unwrap().id,
+            1,
+            "running transfers sort first"
+        );
+        // Unchanged badge is not re-sent; clearing is.
+        assert!(
+            poll_ok(
+                &mut state,
+                20_100,
+                vec![transfer(1, "a", TransferStatus::Downloading, 40, None)]
+            )
+            .is_empty()
+        );
+        let fx = poll_ok(&mut state, 40_200, vec![]);
+        assert_eq!(fx, [Effect::SetBadge(None)]);
+    }
+
+    #[test]
+    fn completion_notification_for_known_transfers_only() {
+        let (mut state, _) = signed_in(no_updates());
+        let fx = poll_ok(
+            &mut state,
+            0,
+            vec![
+                transfer(1, "Sintel", TransferStatus::Downloading, 90, None),
+                transfer(2, "Old", TransferStatus::Completed, 100, Some(2)),
+            ],
+        );
+        assert!(
+            !fx.iter().any(|e| matches!(e, Effect::Notify(_))),
+            "first poll is silent"
+        );
+        let fx = poll_ok(
+            &mut state,
+            20_000,
+            vec![
+                transfer(1, "Sintel", TransferStatus::Completed, 100, Some(77)),
+                transfer(2, "Old", TransferStatus::Completed, 100, Some(2)),
+            ],
+        );
+        let notes: Vec<_> = fx
+            .iter()
+            .filter_map(|e| {
+                if let Effect::Notify(n) = e {
+                    Some(n)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].title, "Finished Download");
+        assert_eq!(notes[0].body, "“Sintel” finished downloading");
+        assert_eq!(notes[0].file_id, Some(77));
+    }
+
+    #[test]
+    fn notifications_are_localised() {
+        let mut state = State::new(no_updates(), Locale::De, "0.1.0");
+        update(&mut state, 0, Event::Started { has_token: true });
+        poll_ok(
+            &mut state,
+            0,
+            vec![transfer(1, "X", TransferStatus::Downloading, 1, None)],
+        );
+        let fx = poll_ok(
+            &mut state,
+            20_000,
+            vec![transfer(1, "X", TransferStatus::Completed, 100, None)],
+        );
+        assert!(
+            fx.iter()
+                .any(|e| matches!(e, Effect::Notify(n) if n.title == "Download abgeschlossen"))
+        );
+    }
+
+    #[test]
+    fn transfer_poll_failures_back_off_exponentially_and_recover() {
+        let (mut state, _) = signed_in(no_updates());
+        let fail = |state: &mut State, now| {
+            update(
+                state,
+                now,
+                Event::Polled {
+                    account: Ok(account()),
+                    transfers: Err(ApiError::Network("x".into())),
+                },
+            )
+        };
+        fail(&mut state, 0);
+        assert_eq!(*state.status(0), Msg::Offline);
+        assert!(update(&mut state, 19_999, Event::Tick).is_empty());
+        assert_eq!(update(&mut state, 20_000, Event::Tick), [Effect::Poll]);
+        fail(&mut state, 20_000);
+        assert!(
+            update(&mut state, 59_999, Event::Tick).is_empty(),
+            "second failure waits 40 s"
+        );
+        assert_eq!(update(&mut state, 60_000, Event::Tick), [Effect::Poll]);
+        poll_ok(&mut state, 60_000, vec![]);
+        assert!(update(&mut state, 79_999, Event::Tick).is_empty());
+        assert_eq!(
+            update(&mut state, 80_000, Event::Tick),
+            [Effect::Poll],
+            "recovered to the normal interval"
+        );
+    }
+
+    #[test]
+    fn backoff_is_capped() {
+        let (mut state, _) = signed_in(no_updates());
+        let mut now = 0;
+        for _ in 0..12 {
+            update(
+                &mut state,
+                now,
+                Event::Polled {
+                    account: Ok(account()),
+                    transfers: Err(api_error(503, "down")),
+                },
+            );
+            now += MAX_BACKOFF;
+            assert_eq!(update(&mut state, now, Event::Tick), [Effect::Poll]);
+        }
+        assert_eq!(*state.status(0), Msg::ServerError);
+    }
+
+    #[test]
+    fn rate_limiting_waits_for_the_server_supplied_time() {
+        let (mut state, _) = signed_in(no_updates());
+        let err = ApiError::RateLimited {
+            retry_after: Duration::from_secs(90),
+        };
+        update(
+            &mut state,
+            0,
+            Event::Polled {
+                account: Err(err.clone()),
+                transfers: Err(err),
+            },
+        );
+        assert_eq!(*state.status(0), Msg::RateLimited { seconds: 90 });
+        assert!(update(&mut state, 89_999, Event::Tick).is_empty());
+        assert_eq!(update(&mut state, 90_000, Event::Tick), [Effect::Poll]);
+    }
+
+    #[test]
+    fn unauthorized_poll_signs_out_and_deletes_the_token() {
+        let (mut state, _) = signed_in(no_updates());
+        poll_ok(
+            &mut state,
+            0,
+            vec![transfer(1, "a", TransferStatus::Downloading, 50, None)],
+        );
+        let fx = update(
+            &mut state,
+            100,
+            Event::Polled {
+                account: Err(ApiError::Unauthorized),
+                transfers: Err(ApiError::Unauthorized),
+            },
+        );
+        assert!(fx.contains(&Effect::DeleteToken));
+        assert!(fx.contains(&Effect::SetBadge(None)));
+        assert_eq!(
+            state.auth,
+            Auth::SignedOut(Some(SignedOutReason::SessionExpired))
+        );
+        assert_eq!(*state.status(100), Msg::AuthExpired);
+        assert!(state.transfers.is_empty() && state.account.is_none());
+        assert!(
+            update(&mut state, 999_999, Event::Tick).is_empty(),
+            "no more polling while signed out"
+        );
+    }
+
+    #[test]
+    fn a_poll_result_arriving_after_sign_out_is_dropped() {
+        let (mut state, _) = signed_in(no_updates());
+        update(&mut state, 5, Event::SignOutRequested);
+        assert!(
+            poll_ok(
+                &mut state,
+                10,
+                vec![transfer(1, "a", TransferStatus::Downloading, 5, None)]
+            )
+            .is_empty()
+        );
+        assert!(state.transfers.is_empty());
+    }
+
+    #[test]
+    fn account_failure_alone_keeps_transfers_working() {
+        let (mut state, _) = signed_in(no_updates());
+        update(
+            &mut state,
+            0,
+            Event::Polled {
+                account: Err(api_error(500, "x")),
+                transfers: Ok(vec![transfer(1, "a", TransferStatus::Waiting, 0, None)]),
+            },
+        );
+        assert_eq!(state.transfers.len(), 1);
+        assert!(state.account.is_none());
+    }
+
+    #[test]
+    fn sign_out_clears_everything() {
+        let (mut state, _) = signed_in(no_updates());
+        poll_ok(
+            &mut state,
+            0,
+            vec![transfer(1, "a", TransferStatus::Downloading, 50, None)],
+        );
+        let fx = update(&mut state, 5, Event::SignOutRequested);
+        assert!(fx.contains(&Effect::DeleteToken));
+        assert_eq!(state.auth, Auth::SignedOut(None));
+        assert!(state.transfers.is_empty());
+        assert_eq!(state.summary, Summary::default());
+    }
+
+    // ---- adding things ---------------------------------------------------------------------
+
+    #[test]
+    fn adding_a_magnet_uses_the_default_folder_and_shows_progress() {
+        let settings = Settings {
+            default_folder: Some(Folder {
+                id: 42,
+                name: "Movies".into(),
+            }),
+            ..no_updates()
+        };
+        let (mut state, _) = signed_in(settings);
+        poll_ok(&mut state, 0, vec![]);
+        let fx = update(&mut state, 1_000, Event::Intake(magnet("Sintel")));
+        assert!(
+            matches!(&fx[..], [Effect::AddMagnet { parent: Some(42), uri, .. }] if uri.contains(HASH))
+        );
+        assert!(state.is_busy());
+        assert_eq!(state.status_text(9_999_999), "Adding: Sintel");
+    }
+
+    #[test]
+    fn successful_add_refreshes_at_once_and_message_expires_into_the_summary() {
+        let (mut state, _) = signed_in(no_updates());
+        poll_ok(&mut state, 0, vec![]);
+        let op = op_of(&update(&mut state, 1_000, Event::Intake(magnet("X"))));
+        let fx = update(
+            &mut state,
+            1_500,
+            Event::AddFinished {
+                op,
+                result: Ok(Some(5)),
+            },
+        );
+        assert_eq!(fx, [Effect::Poll], "refresh immediately after adding");
+        assert!(!state.is_busy());
+        assert_eq!(*state.status(1_500), Msg::Added);
+        assert!(
+            matches!(state.status(1_500 + NOTICE_TIME), Msg::Summary { .. }),
+            "notice expires"
+        );
+    }
+
+    #[test]
+    fn auto_close_quits_after_five_seconds_for_magnets() {
+        let settings = Settings {
+            close_after_magnet: true,
+            ..no_updates()
+        };
+        let (mut state, _) = signed_in(settings);
+        poll_ok(&mut state, 0, vec![]);
+        let op = op_of(&update(&mut state, 1_000, Event::Intake(magnet("X"))));
+        update(
+            &mut state,
+            2_000,
+            Event::AddFinished {
+                op,
+                result: Ok(None),
+            },
+        );
+        assert_eq!(*state.status(60_000), Msg::AddedClosing);
+        assert!(state.closing_soon());
+        assert!(!update(&mut state, 6_999, Event::Tick).contains(&Effect::Quit));
+        assert!(update(&mut state, 7_000, Event::Tick).contains(&Effect::Quit));
+    }
+
+    #[test]
+    fn a_new_item_cancels_the_pending_auto_close() {
+        let settings = Settings {
+            close_after_magnet: true,
+            ..no_updates()
+        };
+        let (mut state, _) = signed_in(settings);
+        poll_ok(&mut state, 0, vec![]);
+        let op = op_of(&update(&mut state, 1_000, Event::Intake(magnet("A"))));
+        update(
+            &mut state,
+            2_000,
+            Event::AddFinished {
+                op,
+                result: Ok(None),
+            },
+        );
+        let op2 = op_of(&update(&mut state, 4_000, Event::Intake(magnet("B"))));
+        assert!(!state.closing_soon());
+        assert!(!update(&mut state, 8_000, Event::Tick).contains(&Effect::Quit));
+        update(
+            &mut state,
+            8_100,
+            Event::AddFinished {
+                op: op2,
+                result: Ok(None),
+            },
+        );
+        assert!(update(&mut state, 13_100, Event::Tick).contains(&Effect::Quit));
+    }
+
+    #[test]
+    fn auto_close_for_torrents_uses_its_own_setting() {
+        let settings = Settings {
+            close_after_magnet: true,
+            close_after_torrent: false,
+            ..no_updates()
+        };
+        let (mut state, _) = signed_in(settings);
+        poll_ok(&mut state, 0, vec![]);
+        let fx = update(
+            &mut state,
+            0,
+            Event::Intake(Intake::TorrentFile("/tmp/a.torrent".into())),
+        );
+        assert!(matches!(
+            &fx[..],
+            [Effect::UploadTorrent { parent: None, .. }]
+        ));
+        assert_eq!(state.status_text(0), "Uploading torrent: a.torrent");
+        update(
+            &mut state,
+            100,
+            Event::AddFinished {
+                op: op_of(&fx),
+                result: Ok(Some(1)),
+            },
+        );
+        assert!(!state.closing_soon());
+        assert_eq!(*state.status(100), Msg::Uploaded);
+    }
+
+    #[test]
+    fn items_received_before_sign_in_are_added_after_it() {
+        let mut state = linking_state();
+        assert!(update(&mut state, 100, Event::Intake(magnet("Queued"))).is_empty());
+        update(&mut state, 3_000, Event::Tick);
+        let fx = update(&mut state, 3_100, Event::LinkPolled(Ok(Some(token()))));
+        assert!(fx.iter().any(|e| matches!(e, Effect::AddMagnet { .. })));
+        assert!(fx.iter().any(|e| matches!(e, Effect::StoreToken(_))));
+    }
+
+    #[test]
+    fn the_pre_sign_in_queue_is_bounded() {
+        let mut state = linking_state();
+        for _ in 0..(MAX_QUEUED_INTAKE + 10) {
+            update(&mut state, 1, Event::Intake(magnet("Q")));
+        }
+        update(&mut state, 3_000, Event::Tick);
+        let fx = update(&mut state, 3_100, Event::LinkPolled(Ok(Some(token()))));
+        assert_eq!(
+            fx.iter()
+                .filter(|e| matches!(e, Effect::AddMagnet { .. }))
+                .count(),
+            MAX_QUEUED_INTAKE
+        );
+    }
+
+    #[test]
+    fn add_failures_say_why() {
+        let (mut state, _) = signed_in(no_updates());
+        poll_ok(&mut state, 0, vec![]);
+        let cases = [
+            (
+                ApiError::Network("x".into()),
+                "Couldn't add it: Can't reach put.io. Check your connection.",
+            ),
+            (
+                api_error(400, "Transfer already exists"),
+                "Couldn't add it: Transfer already exists",
+            ),
+            (
+                api_error(502, "<html>"),
+                "Couldn't add it: put.io is having problems. Trying again soon.",
+            ),
+        ];
+        for (error, expected) in cases {
+            let op = op_of(&update(&mut state, 100, Event::Intake(magnet("X"))));
+            update(
+                &mut state,
+                200,
+                Event::AddFinished {
+                    op,
+                    result: Err(error),
+                },
+            );
+            assert_eq!(state.status_text(200), expected);
+            assert!(!state.is_busy());
+        }
+    }
+
+    #[test]
+    fn server_messages_are_sanitised_and_bounded() {
+        let (mut state, _) = signed_in(no_updates());
+        poll_ok(&mut state, 0, vec![]);
+        let op = op_of(&update(&mut state, 1, Event::Intake(magnet("X"))));
+        let nasty = format!("bad\u{1b}[31m{}", "x".repeat(1000));
+        update(
+            &mut state,
+            2,
+            Event::AddFinished {
+                op,
+                result: Err(api_error(400, &nasty)),
+            },
+        );
+        let text = state.status_text(2);
+        assert!(!text.contains('\u{1b}'));
+        assert!(text.chars().count() < MAX_REASON_CHARS + 40);
+    }
+
+    #[test]
+    fn unauthorized_while_adding_signs_out() {
+        let (mut state, _) = signed_in(no_updates());
+        poll_ok(&mut state, 0, vec![]);
+        let op = op_of(&update(&mut state, 1, Event::Intake(magnet("X"))));
+        let fx = update(
+            &mut state,
+            2,
+            Event::AddFinished {
+                op,
+                result: Err(ApiError::Unauthorized),
+            },
+        );
+        assert!(fx.contains(&Effect::DeleteToken));
+        assert_eq!(*state.status(2), Msg::AuthExpired);
+    }
+
+    #[test]
+    fn unknown_and_duplicate_op_results_are_ignored() {
+        let (mut state, _) = signed_in(no_updates());
+        poll_ok(&mut state, 0, vec![]);
+        update(
+            &mut state,
+            1,
+            Event::AddFinished {
+                op: OpId(999),
+                result: Ok(None),
+            },
+        );
+        assert!(!state.is_busy());
+        let op = op_of(&update(&mut state, 1, Event::Intake(magnet("X"))));
+        update(
+            &mut state,
+            2,
+            Event::AddFinished {
+                op,
+                result: Ok(None),
+            },
+        );
+        update(
+            &mut state,
+            3,
+            Event::AddFinished {
+                op,
+                result: Ok(None),
+            },
+        );
+        assert!(
+            !state.is_busy(),
+            "busy counter must not underflow or double count"
+        );
+        // A cancel result must not complete an add op.
+        let op = op_of(&update(&mut state, 4, Event::Intake(magnet("Y"))));
+        update(&mut state, 5, Event::CancelFinished { op, result: Ok(()) });
+        assert!(state.is_busy());
+    }
+
+    #[test]
+    fn rejected_input_is_reported_without_effects() {
+        let (mut state, _) = signed_in(no_updates());
+        let fx = update(
+            &mut state,
+            0,
+            Event::IntakeRejected(crate::intake::IntakeError::Magnet(
+                crate::magnet::MagnetError::NoInfoHash,
+            )),
+        );
+        assert!(fx.is_empty());
+        assert_eq!(*state.status(0), Msg::NotAMagnet);
+        update(
+            &mut state,
+            0,
+            Event::IntakeRejected(crate::intake::IntakeError::NotTorrent),
+        );
+        assert!(matches!(state.status(0), Msg::NotATorrent { .. }));
+    }
+
+    #[test]
+    fn an_unusable_torrent_file_ends_the_operation() {
+        let (mut state, _) = signed_in(no_updates());
+        poll_ok(&mut state, 0, vec![]);
+        let fx = update(
+            &mut state,
+            0,
+            Event::Intake(Intake::TorrentFile("/tmp/x.torrent".into())),
+        );
+        update(
+            &mut state,
+            1,
+            Event::TorrentUnusable {
+                op: op_of(&fx),
+                reason: "the file is empty".into(),
+            },
+        );
+        assert!(!state.is_busy());
+        assert_eq!(
+            state.status_text(1),
+            "Not a usable torrent file: the file is empty"
+        );
+    }
+
+    // ---- cancel, stream, open ----------------------------------------------------------------
+
+    #[test]
+    fn cancel_targets_the_transfer_id_not_a_row() {
+        let (mut state, _) = signed_in(no_updates());
+        poll_ok(
+            &mut state,
+            0,
+            vec![transfer(7, "a", TransferStatus::Downloading, 1, None)],
+        );
+        let fx = update(&mut state, 1, Event::CancelRequested(7));
+        assert!(matches!(&fx[..], [Effect::CancelTransfer { id: 7, .. }]));
+        let op = op_of(&fx);
+        let fx = update(&mut state, 2, Event::CancelFinished { op, result: Ok(()) });
+        assert_eq!(fx, [Effect::Poll]);
+        assert_eq!(*state.status(2), Msg::Canceled);
+        let op = op_of(&update(&mut state, 3, Event::CancelRequested(7)));
+        update(
+            &mut state,
+            4,
+            Event::CancelFinished {
+                op,
+                result: Err(api_error(404, "gone")),
+            },
+        );
+        assert_eq!(*state.status(4), Msg::CancelFailed);
+    }
+
+    #[test]
+    fn stream_needs_a_file_and_reports_player_problems() {
+        let (mut state, _) = signed_in(no_updates());
+        poll_ok(
+            &mut state,
+            0,
+            vec![
+                transfer(1, "running", TransferStatus::Downloading, 5, None),
+                transfer(2, "done", TransferStatus::Completed, 100, Some(55)),
+            ],
+        );
+        assert!(update(&mut state, 1, Event::StreamRequested(1)).is_empty());
+        assert_eq!(*state.status(1), Msg::StreamNotReady);
+        assert!(update(&mut state, 1, Event::StreamRequested(404)).is_empty());
+        let fx = update(&mut state, 2, Event::StreamRequested(2));
+        assert!(matches!(&fx[..], [Effect::Stream { file_id: 55, .. }]));
+        let op = op_of(&fx);
+        update(
+            &mut state,
+            3,
+            Event::StreamFinished {
+                op,
+                result: Err(StreamFailure::NoPlayer),
+            },
+        );
+        assert_eq!(*state.status(3), Msg::StreamNoPlayer);
+        assert!(!state.is_busy());
+    }
+
+    #[test]
+    fn opening_on_put_io_builds_only_fixed_urls_from_numeric_ids() {
+        let (mut state, _) = signed_in(no_updates());
+        poll_ok(
+            &mut state,
+            0,
+            vec![
+                transfer(1, "a", TransferStatus::Completed, 100, Some(55)),
+                transfer(2, "b", TransferStatus::Downloading, 1, None),
+            ],
+        );
+        assert_eq!(
+            update(&mut state, 0, Event::OpenTransferOnPutio(1)),
+            [Effect::OpenUrl("https://put.io/files/55".into())]
+        );
+        assert_eq!(
+            update(&mut state, 0, Event::OpenTransferOnPutio(2)),
+            [Effect::OpenUrl("https://put.io/transfers".into())]
+        );
+        assert_eq!(
+            update(&mut state, 0, Event::OpenTransferOnPutio(999)),
+            [Effect::OpenUrl("https://put.io/transfers".into())]
+        );
+        assert_eq!(
+            update(
+                &mut state,
+                0,
+                Event::NotificationClicked { file_id: Some(8) }
+            ),
+            [Effect::OpenUrl("https://put.io/files/8".into())]
+        );
+        assert_eq!(
+            update(
+                &mut state,
+                0,
+                Event::NotificationClicked { file_id: Some(-1) }
+            ),
+            [Effect::OpenUrl("https://put.io/transfers".into())]
+        );
+        assert_eq!(
+            update(&mut state, 0, Event::OpenProjectPage),
+            [Effect::OpenUrl(PROJECT_URL.into())]
+        );
+    }
+
+    // ---- settings, window, updates --------------------------------------------------------------
+
+    #[test]
+    fn settings_changes_are_saved() {
+        let (mut state, _) = signed_in(no_updates());
+        let fx = update(
+            &mut state,
+            0,
+            Event::SettingsChanged(SettingsChange::CloseAfterMagnet(true)),
+        );
+        assert!(matches!(&fx[..], [Effect::SaveSettings(s)] if s.close_after_magnet));
+        let folder = Folder {
+            id: 3,
+            name: "TV".into(),
+        };
+        update(
+            &mut state,
+            0,
+            Event::SettingsChanged(SettingsChange::DefaultFolder(Some(folder.clone()))),
+        );
+        assert_eq!(state.settings.default_folder, Some(folder));
+        update(
+            &mut state,
+            0,
+            Event::SettingsChanged(SettingsChange::ShowAvatar(true)),
+        );
+        assert!(state.settings.show_avatar);
+    }
+
+    #[test]
+    fn toggling_transfers_is_remembered() {
+        let (mut state, _) = signed_in(no_updates());
+        assert!(!state.transfers_expanded);
+        let fx = update(&mut state, 0, Event::ToggleTransfers);
+        assert!(state.transfers_expanded);
+        assert!(matches!(&fx[..], [Effect::SaveSettings(s)] if s.transfers_expanded));
+        let restored = State::new(
+            Settings {
+                transfers_expanded: true,
+                ..no_updates()
+            },
+            Locale::En,
+            "0.1.0",
+        );
+        assert!(restored.transfers_expanded);
+    }
+
+    fn release(tag: &str) -> Release {
+        Release {
+            tag_name: tag.into(),
+            html_url: format!("https://github.com/x/y/releases/tag/{tag}"),
+            prerelease: false,
+            draft: false,
+        }
+    }
+
+    #[test]
+    fn update_check_results() {
+        let (mut state, _) = signed_in(Settings::default());
+        update(&mut state, 0, Event::ReleaseFetched(Ok(release("v0.2.0"))));
+        assert!(
+            matches!(&state.update, UpdateStatus::Available { version, .. } if version == "0.2.0")
+        );
+        assert!(matches!(state.status(0), Msg::UpdateAvailable { .. }));
+
+        update(
+            &mut state,
+            0,
+            Event::CheckForUpdates {
+                user_initiated: true,
+            },
+        );
+        assert_eq!(state.update, UpdateStatus::Checking);
+        update(
+            &mut state,
+            100_000,
+            Event::ReleaseFetched(Ok(release("v0.1.0"))),
+        );
+        assert_eq!(state.update, UpdateStatus::UpToDate);
+        assert_eq!(*state.status(100_000), Msg::UpToDate);
+    }
+
+    #[test]
+    fn background_update_checks_are_silent_unless_there_is_news() {
+        let (mut state, _) = signed_in(Settings::default());
+        update(&mut state, 0, Event::ReleaseFetched(Ok(release("v0.1.0"))));
+        assert_eq!(*state.status(0), Msg::FetchingInfo);
+        update(
+            &mut state,
+            0,
+            Event::ReleaseFetched(Err(ApiError::Network("x".into()))),
+        );
+        assert_eq!(*state.status(0), Msg::FetchingInfo);
+        assert_eq!(state.update, UpdateStatus::Unknown);
+    }
+
+    #[test]
+    fn user_initiated_update_failure_is_reported() {
+        let (mut state, _) = signed_in(Settings::default());
+        update(
+            &mut state,
+            0,
+            Event::CheckForUpdates {
+                user_initiated: true,
+            },
+        );
+        update(
+            &mut state,
+            1,
+            Event::ReleaseFetched(Err(ApiError::Network("x".into()))),
+        );
+        assert_eq!(*state.status(1), Msg::UpdateCheckFailed);
+    }
+}

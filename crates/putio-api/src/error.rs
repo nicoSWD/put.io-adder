@@ -17,7 +17,7 @@ pub struct ApiFailure {
     pub message: String,
 }
 
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
 pub enum ApiError {
     /// Could not reach put.io (DNS, connect, TLS, timeout…).
     #[error("network error: {0}")]
