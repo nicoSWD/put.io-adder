@@ -89,3 +89,10 @@ impl Request {
         format!("{verb} {}", self.path)
     }
 }
+
+/// Lets a test keep using the fake after handing it to a [`Client`](crate::Client).
+impl Transport for &FakeTransport {
+    fn execute(&self, request: &Request) -> Result<Response, TransportError> {
+        (**self).execute(request)
+    }
+}

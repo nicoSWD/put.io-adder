@@ -10,17 +10,21 @@
 pub mod client;
 pub mod error;
 pub mod form;
+#[cfg(feature = "http")]
 pub mod http;
 pub mod models;
 pub mod token;
 pub mod torrent;
 pub mod transport;
 
+#[cfg(test)]
+mod contract_tests;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
 
 pub use client::Client;
 pub use error::{ApiError, ApiFailure};
+#[cfg(feature = "http")]
 pub use http::UreqTransport;
 pub use models::{
     Account, DeviceCode, Disk, File, FileType, Release, Transfer, TransferKind, TransferStatus,

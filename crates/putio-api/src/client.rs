@@ -123,6 +123,18 @@ impl<T: Transport> Client<T> {
         serde_json::from_value(value).map_err(|e| ApiError::Decode(e.to_string()))
     }
 
+    /// For endpoints whose 200 has no documented body (e.g. cancel): success unless the body, when
+    /// there is one, says `"status": "ERROR"`.
+    fn ack(&self, request: &Request) -> Result<(), ApiError> {
+        let response = self.send(request)?;
+        if let Ok(value) = serde_json::from_slice::<Value>(&response.body)
+            && value.get("status").and_then(Value::as_str) == Some("ERROR")
+        {
+            return Err(ApiError::Api(failure_from_value(response.status, &value)));
+        }
+        Ok(())
+    }
+
     fn get(&self, path: String) -> Request {
         self.request(Method::Get, Host::Api, path, Body::None, JSON, true)
     }
@@ -234,8 +246,7 @@ impl<T: Transport> Client<T> {
             return Err(ApiError::InvalidInput("no transfer ids"));
         }
         let joined = ids.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
-        self.json::<Value>(&self.post_form("/transfers/cancel", &[("transfer_ids", &joined)]))
-            .map(|_| ())
+        self.ack(&self.post_form("/transfers/cancel", &[("transfer_ids", &joined)]))
     }
 
     // ---- files ----------------------------------------------------------------------------
@@ -413,12 +424,6 @@ mod tests {
         Client::with_token(transport, token())
     }
 
-    impl Transport for &FakeTransport {
-        fn execute(&self, request: &Request) -> Result<Response, TransportError> {
-            (**self).execute(request)
-        }
-    }
-
     #[test]
     fn account_with_and_without_disk() {
         let fake = FakeTransport::new();
@@ -525,6 +530,22 @@ mod tests {
         assert_eq!(
             c.cancel_transfers(&[]).unwrap_err(),
             ApiError::InvalidInput("no transfer ids")
+        );
+    }
+
+    #[test]
+    fn cancel_accepts_an_empty_200_as_the_spec_documents() {
+        let fake = FakeTransport::new();
+        fake.push_json(200, "");
+        fake.push_json(
+            200,
+            r#"{"status":"ERROR","error_type":"NotFound","error_message":"x"}"#,
+        );
+        let c = client(&fake);
+        assert_eq!(c.cancel_transfers(&[1]), Ok(()));
+        assert_eq!(
+            c.cancel_transfers(&[1]).unwrap_err().error_type(),
+            Some("NotFound")
         );
     }
 

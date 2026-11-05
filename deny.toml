@@ -41,6 +41,8 @@ allow = [
     "BSD-3-Clause",
     "BSL-1.0",
     "CC0-1.0",
+    # webpki-roots: the Mozilla CA bundle as data (permissive, attribution only).
+    "CDLA-Permissive-2.0",
     "ISC",
     "MIT",
     "MIT-0",

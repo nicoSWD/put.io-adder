@@ -48,3 +48,20 @@ jobs:
         with:
           command: check
           arguments: --locked
+
+  spec-digest:
+    name: Vendored spec digest
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: sha256sum --check putio-2.8.14.json.sha256
+        working-directory: crates/putio-api/tests/spec
+      - name: No unpinned GitHub Actions
+        run: |
+          if grep -rnE 'uses: *[^ ]+@' .github/workflows | grep -vE '@[0-9a-f]{40}( |$)'; then
+            echo "::error::every action must be pinned to a full commit SHA"; exit 1
+          fi

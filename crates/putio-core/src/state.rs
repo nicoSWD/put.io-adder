@@ -141,6 +141,8 @@ pub enum Event {
         file_id: Option<i64>,
     },
     OpenProjectPage,
+    /// Open the release page of the update that was found (the URL comes from the validated update status).
+    OpenReleasePage,
 
     ToggleTransfers,
     SettingsChanged(SettingsChange),
@@ -224,7 +226,6 @@ pub struct State {
     next_op: u64,
     pending_intake: VecDeque<Intake>,
     tracker: Tracker,
-    first_poll_done: bool,
     poll_in_flight: bool,
     next_poll_at: Option<Millis>,
     failures: u32,
@@ -253,7 +254,6 @@ impl State {
             next_op: 1,
             pending_intake: VecDeque::new(),
             tracker: Tracker::new(),
-            first_poll_done: false,
             poll_in_flight: false,
             next_poll_at: None,
             failures: 0,
@@ -386,9 +386,7 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
                 fx.push(Effect::FetchLatestRelease);
             }
             if has_token {
-                state.auth = Auth::SignedIn;
-                state.base = Msg::FetchingInfo;
-                state.schedule_poll(now);
+                become_signed_in(state, now, Msg::FetchingInfo, &mut fx);
             } else {
                 begin_sign_in(state, &mut fx);
             }
@@ -449,6 +447,7 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
 
         Event::CancelRequested(id) => {
             if state.is_signed_in() {
+                state.close_at = None;
                 let op = state.op(Op::Cancel);
                 state.say_until_replaced(Msg::Canceling);
                 fx.push(Effect::CancelTransfer { op, id });
@@ -470,6 +469,7 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
             if let Some(transfer) = state.transfers.iter().find(|t| t.id == id) {
                 match transfer.file_id {
                     Some(file_id) => {
+                        state.close_at = None;
                         let op = state.op(Op::Stream);
                         state.say_until_replaced(Msg::Streaming);
                         fx.push(Effect::Stream { op, file_id });
@@ -507,6 +507,11 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
         }
         Event::NotificationClicked { file_id } => fx.push(Effect::OpenUrl(open_file_url(file_id))),
         Event::OpenProjectPage => fx.push(Effect::OpenUrl(PROJECT_URL.to_owned())),
+        Event::OpenReleasePage => {
+            if let UpdateStatus::Available { url, .. } = &state.update {
+                fx.push(Effect::OpenUrl(url.clone()));
+            }
+        }
 
         Event::ToggleTransfers => {
             state.transfers_expanded = !state.transfers_expanded;
@@ -562,12 +567,23 @@ fn begin_sign_in(state: &mut State, fx: &mut Vec<Effect>) {
     fx.push(Effect::RequestDeviceCode);
 }
 
+/// The one way into [`Auth::SignedIn`]: schedule the first poll and add anything the OS handed over
+/// before we were ready (a cold-launch magnet link arrives before the first event loop turn).
+fn become_signed_in(state: &mut State, now: Millis, base: Msg, fx: &mut Vec<Effect>) {
+    state.auth = Auth::SignedIn;
+    state.base = base;
+    state.schedule_poll(now);
+    let queued: Vec<Intake> = state.pending_intake.drain(..).collect();
+    for item in queued {
+        intake(state, item, fx);
+    }
+}
+
 fn sign_out(state: &mut State, fx: &mut Vec<Effect>) {
     state.account = None;
     state.transfers.clear();
     state.summary = Summary::default();
     state.tracker.reset();
-    state.first_poll_done = false;
     state.poll_in_flight = false;
     state.next_poll_at = None;
     state.failures = 0;
@@ -588,7 +604,8 @@ fn session_expired(state: &mut State, fx: &mut Vec<Effect>) {
 }
 
 fn tick(state: &mut State, now: Millis, fx: &mut Vec<Effect>) {
-    if state.close_at.is_some_and(|at| now >= at) {
+    // Never quit with work in flight: a slow upload behind a finished one must not be killed.
+    if state.close_at.is_some_and(|at| now >= at) && !state.is_busy() {
         state.close_at = None;
         fx.push(Effect::Quit);
     }
@@ -617,15 +634,9 @@ fn link_polled(
     link.in_flight = false;
     match result {
         Ok(Some(token)) => {
-            state.auth = Auth::SignedIn;
-            state.base = Msg::Authenticated;
             fx.push(Effect::StoreToken(token));
-            state.schedule_poll(now);
-            // Start the polling cadence right away (the old app only did this after a restart).
-            let queued: Vec<Intake> = state.pending_intake.drain(..).collect();
-            for item in queued {
-                intake(state, item, fx);
-            }
+            // Polling starts right away (the old app only did this after a restart).
+            become_signed_in(state, now, Msg::Authenticated, fx);
         }
         Ok(None) => link.next_poll_at = now + LINK_POLL_INTERVAL,
         // A temporary problem: keep trying until the code's deadline.
@@ -702,6 +713,8 @@ fn add_finished(
         }
         Err(ApiError::Unauthorized) => session_expired(state, fx),
         Err(error) => {
+            // Something went wrong: stay open so the user can read why.
+            state.close_at = None;
             let reason = state.reason(&error);
             let msg = if is_torrent {
                 Msg::UploadFailed { reason }
@@ -748,7 +761,6 @@ fn polled(
                     file_id: done.file_id,
                 }));
             }
-            state.first_poll_done = true;
             transfers::sort(&mut list, transfers::SortKey::Default, true);
             state.summary = transfers::summarize(&list);
             state.transfers = list;
@@ -1794,5 +1806,163 @@ mod tests {
             Event::ReleaseFetched(Err(ApiError::Network("x".into()))),
         );
         assert_eq!(*state.status(1), Msg::UpdateCheckFailed);
+    }
+
+    // ---- regressions found in review -----------------------------------------------------------
+
+    #[test]
+    fn a_magnet_received_before_started_is_added_when_a_token_exists() {
+        // Cold launch via a magnet link: the OS event arrives before the first `Started`.
+        let mut state = State::new(no_updates(), Locale::En, "0.1.0");
+        assert!(update(&mut state, 0, Event::Intake(magnet("Cold"))).is_empty());
+        let fx = update(&mut state, 5, Event::Started { has_token: true });
+        assert!(
+            fx.iter().any(|e| matches!(e, Effect::AddMagnet { .. })),
+            "{fx:?}"
+        );
+        assert!(state.is_busy());
+    }
+
+    #[test]
+    fn a_magnet_received_before_started_survives_a_first_run_sign_in() {
+        let mut state = State::new(no_updates(), Locale::En, "0.1.0");
+        update(&mut state, 0, Event::Intake(magnet("Cold")));
+        update(&mut state, 5, Event::Started { has_token: false });
+        update(
+            &mut state,
+            5,
+            Event::DeviceCodeReceived(Ok(DeviceCode {
+                code: "ABCD".into(),
+            })),
+        );
+        update(&mut state, 3_005, Event::Tick);
+        let fx = update(&mut state, 3_100, Event::LinkPolled(Ok(Some(token()))));
+        assert!(fx.iter().any(|e| matches!(e, Effect::AddMagnet { .. })));
+    }
+
+    #[test]
+    fn auto_close_waits_for_every_running_operation() {
+        let settings = Settings {
+            close_after_magnet: true,
+            ..no_updates()
+        };
+        let mut state = State::new(settings, Locale::En, "0.1.0");
+        update(&mut state, 0, Event::Intake(magnet("A")));
+        update(&mut state, 0, Event::Intake(magnet("B")));
+        let fx = update(&mut state, 10, Event::Started { has_token: true });
+        let ops: Vec<OpId> = fx
+            .iter()
+            .filter_map(|e| {
+                if let Effect::AddMagnet { op, .. } = e {
+                    Some(*op)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert_eq!(ops.len(), 2);
+
+        update(
+            &mut state,
+            1_000,
+            Event::AddFinished {
+                op: ops[0],
+                result: Ok(None),
+            },
+        );
+        assert!(
+            !update(&mut state, 6_000, Event::Tick).contains(&Effect::Quit),
+            "second upload is still running"
+        );
+        assert!(
+            !update(&mut state, 60_000, Event::Tick).contains(&Effect::Quit),
+            "…however long it takes"
+        );
+
+        update(
+            &mut state,
+            61_000,
+            Event::AddFinished {
+                op: ops[1],
+                result: Ok(None),
+            },
+        );
+        assert!(!update(&mut state, 65_999, Event::Tick).contains(&Effect::Quit));
+        assert!(
+            update(&mut state, 66_000, Event::Tick).contains(&Effect::Quit),
+            "five seconds after the last one"
+        );
+    }
+
+    #[test]
+    fn a_failed_add_cancels_auto_close_so_the_error_stays_visible() {
+        let settings = Settings {
+            close_after_magnet: true,
+            ..no_updates()
+        };
+        let (mut state, _) = signed_in(settings);
+        poll_ok(&mut state, 0, vec![]);
+        let a = op_of(&update(&mut state, 100, Event::Intake(magnet("A"))));
+        let b = op_of(&update(&mut state, 100, Event::Intake(magnet("B"))));
+        update(
+            &mut state,
+            200,
+            Event::AddFinished {
+                op: a,
+                result: Ok(None),
+            },
+        );
+        update(
+            &mut state,
+            300,
+            Event::AddFinished {
+                op: b,
+                result: Err(api_error(400, "nope")),
+            },
+        );
+        assert!(!state.closing_soon());
+        assert!(!update(&mut state, 99_999, Event::Tick).contains(&Effect::Quit));
+    }
+
+    #[test]
+    fn interacting_cancels_auto_close() {
+        let settings = Settings {
+            close_after_magnet: true,
+            ..no_updates()
+        };
+        let (mut state, _) = signed_in(settings);
+        poll_ok(
+            &mut state,
+            0,
+            vec![transfer(1, "a", TransferStatus::Completed, 100, Some(5))],
+        );
+        let op = op_of(&update(&mut state, 100, Event::Intake(magnet("A"))));
+        update(
+            &mut state,
+            200,
+            Event::AddFinished {
+                op,
+                result: Ok(None),
+            },
+        );
+        assert!(state.closing_soon());
+        update(&mut state, 300, Event::StreamRequested(1));
+        assert!(!state.closing_soon());
+    }
+
+    #[test]
+    fn the_release_page_comes_from_the_validated_update_status() {
+        let (mut state, _) = signed_in(Settings::default());
+        assert!(
+            update(&mut state, 0, Event::OpenReleasePage).is_empty(),
+            "nothing to open before an update is found"
+        );
+        update(&mut state, 0, Event::ReleaseFetched(Ok(release("v0.2.0"))));
+        assert_eq!(
+            update(&mut state, 0, Event::OpenReleasePage),
+            [Effect::OpenUrl(
+                "https://github.com/x/y/releases/tag/v0.2.0".into()
+            )]
+        );
     }
 }

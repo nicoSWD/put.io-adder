@@ -24,3 +24,19 @@ the handler object must live for the whole process.
 `ViewportCommand::InnerSize` resizes a window created with `with_resizable(false)` (86 px <-> 300 px,
 550 px wide) on macOS. The header strip, gold bar and rotating chevron render as designed using only the
 egui painter. Still to verify on Windows and Linux in CI/manual runs.
+
+## Still to probe against the live API (needs a real token)
+
+Phase 0 spike 1 is open. Everything the client assumes about behaviour the spec does not state:
+
+1. `GET /account/info`: is `disk` (`size`/`used`/`avail`) still returned? (2.8.14 does not list it.)
+2. `GET /oauth2/oob/code?app_id=711`: does OOB work for the old implicit-grant app id? Otherwise register a new app.
+3. **What does `GET /oauth2/oob/code/{code}` return before the user has linked the code?** The client
+   assumes `200 {"oauth_token": null}` (or no field). If put.io answers with a 4xx instead, sign-in would be
+   aborted on the first poll (`link_polled` treats a non-transient error as "code expired").
+4. Does put.io accept `Authorization: Bearer <token>`? (The spec does not say.)
+5. The error body for adding a duplicate transfer (`error_type`).
+6. `GET /files/{id}/url` on a folder.
+7. Does `POST /transfers/cancel` return an empty body or `{"status":"OK"}`? (The spec shows no content; the client accepts both.)
+
+Replace `crates/putio-api/tests/fixtures/*.json` with scrubbed recordings afterwards.
