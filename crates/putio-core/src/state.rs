@@ -44,6 +44,16 @@ const MAX_REASON_CHARS: usize = 200;
 pub const LINK_URL: &str = "https://put.io/link";
 pub const PROJECT_URL: &str = "https://github.com/nicoSWD/put.io-adder";
 
+/// What went wrong with the place the sign-in is kept.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SecretProblem {
+    /// There is none: the sign-in lives only until the app quits.
+    Unavailable,
+    Load,
+    Save,
+    Delete,
+}
+
 /// Identifies one outstanding operation, so a late result can never be attributed to the wrong request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct OpId(pub u64);
@@ -155,7 +165,6 @@ pub enum SettingsChange {
     CloseAfterMagnet(bool),
     CloseAfterTorrent(bool),
     CheckForUpdates(bool),
-    ShowAvatar(bool),
     DefaultFolder(Option<Folder>),
     Theme(ThemeChoice),
     /// The user resized the window.
@@ -262,6 +271,14 @@ pub enum Event {
         result: Result<(), StreamFailure>,
     },
     OpenTransferOnPutio(i64),
+    /// The system was asked to open a download address in the browser, and said whether it took it.
+    DownloadHandedOver {
+        opened: bool,
+    },
+    /// The system could not open a page (the sign-in page, a transfer, the project page).
+    PageOpenFailed,
+    /// The place the sign-in is kept (the system keychain) did not do what was asked.
+    SecretStoreFailed(SecretProblem),
     NotificationClicked {
         file_id: Option<i64>,
     },
@@ -402,7 +419,11 @@ pub struct State {
     close_at: Option<Millis>,
     badge: Option<u8>,
     update_user_initiated: bool,
+    /// A request for the latest release is on its way.
+    update_check_in_flight: bool,
     next_update_check_at: Option<Millis>,
+    /// What to say once the browser has taken the download address.
+    opening: Option<Msg>,
     /// The question has been shown in this run: one time is enough.
     handler_asked: bool,
 }
@@ -440,7 +461,9 @@ impl State {
             close_at: None,
             badge: None,
             update_user_initiated: false,
+            update_check_in_flight: false,
             next_update_check_at: None,
+            opening: None,
             handler_asked: false,
         }
     }
@@ -791,6 +814,25 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
                 .and_then(|t| t.file_id);
             fx.push(Effect::OpenUrl(open_file_url(file_id)));
         }
+        Event::DownloadHandedOver { opened } => {
+            if let Some(started) = state.opening.take() {
+                if opened {
+                    state.say(started, now, NOTICE_TIME);
+                } else {
+                    state.say(Msg::DownloadOpenFailed, now, ERROR_NOTICE_TIME);
+                }
+            }
+        }
+        Event::PageOpenFailed => state.say(Msg::OpenFailed, now, ERROR_NOTICE_TIME),
+        Event::SecretStoreFailed(problem) => {
+            let msg = match problem {
+                SecretProblem::Unavailable => Msg::SecretStoreUnavailable,
+                SecretProblem::Load => Msg::SecretLoadFailed,
+                SecretProblem::Save => Msg::SecretSaveFailed,
+                SecretProblem::Delete => Msg::SecretDeleteFailed,
+            };
+            state.say(msg, now, ERROR_NOTICE_TIME);
+        }
         Event::NotificationClicked { file_id } => fx.push(Effect::OpenUrl(open_file_url(file_id))),
         Event::OpenProjectPage => fx.push(Effect::OpenUrl(PROJECT_URL.to_owned())),
         Event::OpenReleasePage => {
@@ -809,7 +851,6 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
                 SettingsChange::CloseAfterMagnet(on) => state.settings.close_after_magnet = on,
                 SettingsChange::CloseAfterTorrent(on) => state.settings.close_after_torrent = on,
                 SettingsChange::CheckForUpdates(on) => state.settings.check_for_updates = on,
-                SettingsChange::ShowAvatar(on) => state.settings.show_avatar = on,
                 SettingsChange::DefaultFolder(folder) => state.settings.default_folder = folder,
                 SettingsChange::Theme(theme) => state.settings.theme = theme,
                 SettingsChange::WindowSize(size) => {
@@ -853,7 +894,7 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
                     if status.is_default() {
                         state.say(Msg::HandlerSet, now, NOTICE_TIME);
                     } else {
-                        let reason = "the system kept another app for some of them".to_owned();
+                        let reason = state.text(&Msg::HandlerKeptOther);
                         state.say(Msg::HandlerFailed { reason }, now, ERROR_NOTICE_TIME);
                     }
                 }
@@ -970,9 +1011,10 @@ fn sign_out(state: &mut State, fx: &mut Vec<Effect>) {
     state.failures = 0;
     state.pending_intake.clear();
     state.close_at = None;
-    if let Some(job) = state.zip.take() {
-        state.finish(job.op, &[Op::Download]);
-    }
+    state.zip = None;
+    // What was running for this account has no one to report to. (An update is not tied to the account.)
+    state.ops.retain(|_, kind| *kind == Op::Update);
+    state.busy = u32::try_from(state.ops.len()).unwrap_or(u32::MAX);
     state.base = Msg::AuthRequired;
     fx.push(Effect::DeleteToken);
     if state.badge.take().is_some() {
@@ -1051,12 +1093,19 @@ fn start_update_check(state: &mut State, user_initiated: bool, fx: &mut Vec<Effe
     if user_initiated || !matches!(state.update, UpdateStatus::Available { .. }) {
         state.update = UpdateStatus::Checking;
     }
-    state.update_user_initiated = user_initiated;
     state.next_update_check_at = None;
+    if state.update_check_in_flight {
+        // One request at a time. If the user is the one asking, the answer on its way is for them.
+        state.update_user_initiated |= user_initiated;
+        return;
+    }
+    state.update_user_initiated = user_initiated;
+    state.update_check_in_flight = true;
     fx.push(Effect::FetchLatestRelease);
 }
 
 fn release_fetched(state: &mut State, now: Millis, result: Result<Release, ApiError>) {
+    state.update_check_in_flight = false;
     let user_initiated = std::mem::take(&mut state.update_user_initiated);
     let was_on_offer = available_version(&state.update);
     let wait = if result.is_ok() {
@@ -1186,12 +1235,12 @@ fn open_download(
     state.finish(op, &[Op::Download]);
     if download::is_download_url(url) {
         fx.push(Effect::OpenDownload(url.to_owned()));
-        let msg = if missing > 0 {
+        // "Started" is only true once the system has taken the address: see `Event::DownloadHandedOver`.
+        state.opening = Some(if missing > 0 {
             Msg::DownloadStartedPartial { missing }
         } else {
             Msg::DownloadStarted
-        };
-        state.say(msg, now, NOTICE_TIME);
+        });
     } else {
         state.say(Msg::DownloadBadUrl, now, ERROR_NOTICE_TIME);
     }
@@ -1880,6 +1929,48 @@ mod tests {
         assert_eq!(state.summary, Summary::default());
     }
 
+    #[test]
+    fn work_in_flight_for_a_signed_out_account_cannot_sign_out_the_next_session() {
+        let (mut state, _) = signed_in(no_updates());
+        let op = op_of(&update(&mut state, 1, Event::Intake(magnet("A"))));
+        assert!(state.is_busy());
+        update(&mut state, 2, Event::SignOutRequested);
+        assert!(!state.is_busy(), "nothing is running for nobody");
+
+        // Another account signs in.
+        update(&mut state, 3, Event::SignInRequested);
+        update(
+            &mut state,
+            4,
+            Event::DeviceCodeReceived(Ok(DeviceCode { code: "X".into() })),
+        );
+        update(&mut state, 9_000, Event::Tick);
+        update(&mut state, 9_100, Event::LinkPolled(Ok(Some(token()))));
+        assert!(state.is_signed_in());
+
+        // The first account's add comes back late, rejected.
+        let fx = update(
+            &mut state,
+            9_200,
+            Event::AddFinished {
+                op,
+                result: Err(ApiError::Unauthorized),
+            },
+        );
+        assert!(!fx.contains(&Effect::DeleteToken));
+        assert!(state.is_signed_in());
+    }
+
+    #[test]
+    fn signing_out_keeps_an_update_that_is_being_downloaded() {
+        let (mut state, _) = signed_in(no_updates());
+        let op = state.op(Op::Update);
+        update(&mut state, 2, Event::SignOutRequested);
+        assert!(state.is_busy());
+        assert!(state.finish(op, &[Op::Update]));
+        assert!(!state.is_busy());
+    }
+
     // ---- adding things ---------------------------------------------------------------------
 
     #[test]
@@ -2383,8 +2474,97 @@ mod tests {
             },
         );
         assert_eq!(fx, [Effect::OpenDownload(url.into())]);
-        assert_eq!(*state.status(2), Msg::DownloadStarted);
+        assert_ne!(
+            *state.status(2),
+            Msg::DownloadStarted,
+            "not before the browser has taken it"
+        );
         assert!(!state.is_busy());
+        update(&mut state, 3, Event::DownloadHandedOver { opened: true });
+        assert_eq!(*state.status(3), Msg::DownloadStarted);
+    }
+
+    #[test]
+    fn a_browser_that_cannot_be_opened_is_reported_instead_of_a_started_download() {
+        let (mut state, _) = signed_in(no_updates());
+        poll_ok(
+            &mut state,
+            0,
+            vec![transfer(1, "a", TransferStatus::Completed, 100, Some(55))],
+        );
+        let op = op_of(&update(&mut state, 1, Event::DownloadRequested(1)));
+        update(
+            &mut state,
+            2,
+            Event::DownloadPrepared {
+                op,
+                result: Ok(Prepared::Url(
+                    "https://s1.put.io/v2/files/55/download?t=a".into(),
+                )),
+            },
+        );
+        update(&mut state, 3, Event::DownloadHandedOver { opened: false });
+        assert_eq!(*state.status(3), Msg::DownloadOpenFailed);
+        // A late or repeated answer changes nothing.
+        update(&mut state, 4, Event::DownloadHandedOver { opened: true });
+        assert_eq!(*state.status(4), Msg::DownloadOpenFailed);
+    }
+
+    #[test]
+    fn a_page_that_cannot_be_opened_and_a_keychain_that_fails_are_told_to_the_user() {
+        let (mut state, _) = signed_in(no_updates());
+        update(&mut state, 1, Event::PageOpenFailed);
+        assert_eq!(*state.status(1), Msg::OpenFailed);
+        for (problem, msg) in [
+            (SecretProblem::Unavailable, Msg::SecretStoreUnavailable),
+            (SecretProblem::Load, Msg::SecretLoadFailed),
+            (SecretProblem::Save, Msg::SecretSaveFailed),
+            (SecretProblem::Delete, Msg::SecretDeleteFailed),
+        ] {
+            update(&mut state, 2, Event::SecretStoreFailed(problem));
+            assert_eq!(*state.status(2), msg);
+        }
+    }
+
+    #[test]
+    fn asking_for_updates_twice_sends_one_request_and_keeps_the_user_in_the_loop() {
+        let mut state = State::new(Settings::default(), Locale::En, "0.1.0");
+        let first = update(
+            &mut state,
+            0,
+            Event::CheckForUpdates {
+                user_initiated: false,
+            },
+        );
+        assert_eq!(first, [Effect::FetchLatestRelease]);
+        // The user asks while the background check is still out.
+        let second = update(
+            &mut state,
+            1,
+            Event::CheckForUpdates {
+                user_initiated: true,
+            },
+        );
+        assert!(second.is_empty());
+        update(
+            &mut state,
+            2,
+            Event::ReleaseFetched(Err(ApiError::Network("x".into()))),
+        );
+        assert_eq!(
+            *state.status(2),
+            Msg::UpdateCheckFailed,
+            "their answer is not swallowed"
+        );
+        // Once answered, a new request can go out.
+        let third = update(
+            &mut state,
+            3,
+            Event::CheckForUpdates {
+                user_initiated: true,
+            },
+        );
+        assert_eq!(third, [Effect::FetchLatestRelease]);
     }
 
     #[test]
@@ -2478,6 +2658,11 @@ mod tests {
             fx,
             [Effect::OpenDownload("https://s2.put.io/zip/9?sig=x".into())]
         );
+        update(
+            &mut state,
+            3_700,
+            Event::DownloadHandedOver { opened: true },
+        );
         assert_eq!(*state.status(3_700), Msg::DownloadStarted);
         assert!(!state.is_busy());
         assert!(
@@ -2510,6 +2695,7 @@ mod tests {
                 result: Ok(done),
             },
         );
+        update(&mut state, 1, Event::DownloadHandedOver { opened: true });
         assert_eq!(*state.status(1), Msg::DownloadStartedPartial { missing: 3 });
     }
 
@@ -2986,12 +3172,6 @@ mod tests {
             Event::SettingsChanged(SettingsChange::DefaultFolder(Some(folder.clone()))),
         );
         assert_eq!(state.settings.default_folder, Some(folder));
-        update(
-            &mut state,
-            0,
-            Event::SettingsChanged(SettingsChange::ShowAvatar(true)),
-        );
-        assert!(state.settings.show_avatar);
     }
 
     #[test]

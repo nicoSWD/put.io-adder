@@ -38,7 +38,7 @@ pub(super) fn install_target() -> Result<PathBuf, String> {
     target_for(&plain(&exe), &plain(&source_root()))
 }
 
-const DEV_BUILD: &str = "A development build does not update itself.";
+pub(super) const DEV_BUILD: &str = "A development build does not update itself.";
 
 /// The workspace this binary was built from: two levels above this crate (`crates/putio-platform`).
 /// (`CARGO_MANIFEST_DIR` is this crate's folder, not the workspace root; a `cargo run` binary lives in

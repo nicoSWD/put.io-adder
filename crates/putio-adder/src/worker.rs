@@ -7,8 +7,11 @@
 //!   folder picker. These are quick and must never wait behind a big upload.
 //! * **heavy** (2 threads): `.torrent` uploads (up to two minutes on a slow link) and streaming set-up.
 //!
-//! The token is shared state that the UI sets directly (not a queued job), so a job can never run
-//! with a token older than the one the UI just set. Each job takes a snapshot when it starts.
+//! Everything that talks to the account belongs to one *session*: the stretch between two credential
+//! changes (a token stored, a token deleted, a new sign-in attempt). Each such job takes the token and
+//! the session number when the UI sends it, never when a thread gets round to it, so work queued for
+//! one account cannot run as another. The answer carries the same number, and the UI throws away an
+//! answer from a session that has ended ([`Workers::accept`]).
 
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -88,6 +91,19 @@ pub(crate) enum Job {
 }
 
 impl Job {
+    /// Whether the job acts for the signed-in account (or the sign-in attempt in progress), so that its
+    /// answer means nothing once the credentials have changed. Update checks, the default-app calls and
+    /// installing an update do not.
+    fn is_session_bound(&self) -> bool {
+        !matches!(
+            self,
+            Self::PrepareUpdate { .. }
+                | Self::CheckDefaultHandler
+                | Self::RegisterDefaultHandler
+                | Self::LatestRelease
+        )
+    }
+
     fn is_heavy(&self) -> bool {
         matches!(
             self,
@@ -111,86 +127,152 @@ pub(crate) enum WorkerMsg {
     },
 }
 
+/// A job with what it needs from the session it was sent in.
+#[derive(Debug)]
+struct Queued {
+    job: Job,
+    /// The session the job was sent in, for a job that is bound to one.
+    session: Option<u64>,
+    token: Option<Token>,
+}
+
+/// What the worker threads send back: the answer, and the session it belongs to (if it has one).
+#[derive(Debug)]
+pub(crate) struct Delivery {
+    session: Option<u64>,
+    msg: WorkerMsg,
+}
+
+#[derive(Debug, Default)]
+struct Session {
+    number: u64,
+    token: Option<Token>,
+}
+
 /// Handle for sending work. Cheap to clone.
 #[derive(Debug, Clone)]
 pub(crate) struct Workers {
-    interactive: Sender<Job>,
-    heavy: Sender<Job>,
-    token: Arc<Mutex<Option<Token>>>,
+    interactive: Sender<Queued>,
+    heavy: Sender<Queued>,
+    session: Arc<Mutex<Session>>,
 }
 
 impl Workers {
     pub(crate) fn spawn(
         ctx: &eframe::egui::Context,
-        out: &Sender<WorkerMsg>,
+        out: &Sender<Delivery>,
         user_agent: &str,
     ) -> std::io::Result<Self> {
         let transport = Arc::new(UreqTransport::new(user_agent));
-        let token = Arc::new(Mutex::new(None));
-        let lane = |name: &str, threads: usize| -> std::io::Result<Sender<Job>> {
-            let (tx, rx) = mpsc::channel::<Job>();
+        let lane = |name: &str, threads: usize| -> std::io::Result<Sender<Queued>> {
+            let (tx, rx) = mpsc::channel::<Queued>();
             let rx = Arc::new(Mutex::new(rx));
             for index in 0..threads {
                 let (rx, out, ctx) = (Arc::clone(&rx), out.clone(), ctx.clone());
-                let (transport, token) = (Arc::clone(&transport), Arc::clone(&token));
+                let transport = Arc::clone(&transport);
                 thread::Builder::new()
                     .name(format!("putio-{name}-{index}"))
-                    .spawn(move || run(&rx, &out, &ctx, &transport, &token))?;
+                    .spawn(move || run(&rx, &out, &ctx, &transport))?;
             }
             Ok(tx)
         };
         Ok(Self {
             interactive: lane("interactive", INTERACTIVE_THREADS)?,
             heavy: lane("heavy", HEAVY_THREADS)?,
-            token,
+            session: Arc::new(Mutex::new(Session::default())),
         })
     }
 
-    /// Set (or clear) the token used by every job that starts from now on.
-    pub(crate) fn set_token(&self, token: Option<Token>) {
-        if let Ok(mut slot) = self.token.lock() {
-            *slot = token;
+    /// Workers whose jobs go nowhere, for tests of code that only needs to be able to send.
+    #[cfg(test)]
+    pub(crate) fn detached() -> Self {
+        let (interactive, _) = mpsc::channel();
+        let (heavy, _) = mpsc::channel();
+        Self {
+            interactive,
+            heavy,
+            session: Arc::new(Mutex::new(Session::default())),
         }
     }
 
+    /// The credentials changed: a token was stored or deleted. Ends the current session; what was sent
+    /// before is answered to nobody.
+    pub(crate) fn set_token(&self, token: Option<Token>) {
+        if let Ok(mut session) = self.session.lock() {
+            session.number += 1;
+            session.token = token;
+        }
+    }
+
+    /// A new sign-in attempt starts: whatever an earlier attempt still has in flight must not count.
+    pub(crate) fn new_session(&self) {
+        if let Ok(mut session) = self.session.lock() {
+            session.number += 1;
+        }
+    }
+
+    /// Queue `job` with the token and session of this moment.
     pub(crate) fn send(&self, job: Job) {
+        let (session, token) = match self.session.lock() {
+            Ok(session) => (session.number, session.token.clone()),
+            Err(_) => return,
+        };
         let lane = if job.is_heavy() {
             &self.heavy
         } else {
             &self.interactive
         };
-        let _ = lane.send(job);
+        let session = job.is_session_bound().then_some(session);
+        let _ = lane.send(Queued {
+            job,
+            session,
+            token,
+        });
+    }
+
+    /// The answer, unless it comes from a session that has ended.
+    pub(crate) fn accept(&self, delivery: Delivery) -> Option<WorkerMsg> {
+        let current = self.session.lock().ok()?.number;
+        match delivery.session {
+            Some(session) if session != current => None,
+            _ => Some(delivery.msg),
+        }
     }
 }
 
 fn run(
-    jobs: &Mutex<Receiver<Job>>,
-    out: &Sender<WorkerMsg>,
+    jobs: &Mutex<Receiver<Queued>>,
+    out: &Sender<Delivery>,
     ctx: &eframe::egui::Context,
     transport: &Arc<UreqTransport>,
-    token: &Mutex<Option<Token>>,
 ) {
     loop {
         // Hold the queue lock only while waiting for the next job, never while working on it.
-        let job = match jobs.lock() {
+        let queued = match jobs.lock() {
             Ok(queue) => queue.recv(),
             Err(_) => return,
         };
-        let Ok(job) = job else { return };
-        if let Job::PrepareUpdate { op, asset } = job {
-            let result = prepare_update(op, &asset, out, ctx);
-            if out.send(WorkerMsg::UpdatePrepared { op, result }).is_err() {
-                return;
-            }
-            ctx.request_repaint();
-            continue;
-        }
-        let snapshot = token.lock().ok().and_then(|slot| slot.clone());
-        let client = match snapshot {
-            Some(token) => Client::with_token(Arc::clone(transport), token),
-            None => Client::new(Arc::clone(transport)),
+        let Ok(Queued {
+            job,
+            session,
+            token,
+        }) = queued
+        else {
+            return;
         };
-        if out.send(execute(&client, job)).is_err() {
+        let msg = if let Job::PrepareUpdate { op, asset } = job {
+            WorkerMsg::UpdatePrepared {
+                op,
+                result: prepare_update(op, &asset, out, ctx),
+            }
+        } else {
+            let client = match token {
+                Some(token) => Client::with_token(Arc::clone(transport), token),
+                None => Client::new(Arc::clone(transport)),
+            };
+            execute(&client, job)
+        };
+        if out.send(Delivery { session, msg }).is_err() {
             return; // the UI is gone
         }
         ctx.request_repaint();
@@ -201,16 +283,19 @@ fn run(
 fn prepare_update(
     op: OpId,
     asset: &UpdateAsset,
-    out: &Sender<WorkerMsg>,
+    out: &Sender<Delivery>,
     ctx: &eframe::egui::Context,
 ) -> Result<update::Prepared, String> {
     let target = update::install_target()?;
     update::prepare(&target, asset, &|stage, fraction| {
-        let _ = out.send(WorkerMsg::Core(Event::UpdateProgress {
-            op,
-            stage,
-            fraction,
-        }));
+        let _ = out.send(Delivery {
+            session: None,
+            msg: WorkerMsg::Core(Event::UpdateProgress {
+                op,
+                stage,
+                fraction,
+            }),
+        });
         ctx.request_repaint();
     })
 }
@@ -289,6 +374,14 @@ fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
     }
 }
 
+/// Whether put.io answered "this is not something you can list" (a plain file) rather than failing:
+/// a client error other than a rejected login. A dropped connection, a rate limit, a server error or
+/// an answer that cannot be read says nothing about what the item is, and must reach the user as the
+/// failure it is instead of sending a folder down the single-file path.
+fn is_not_a_folder(error: &ApiError) -> bool {
+    matches!(error, ApiError::Api(failure) if (400..500).contains(&failure.status) && failure.status != 403)
+}
+
 /// Decide how to download `file_id`: a plain file has a signed address of its own, a folder has to be
 /// zipped first (put.io builds the ZIP in the background; the reducer polls for it).
 fn prepare_download<T: Transport>(client: &Client<T>, file_id: i64) -> Result<Prepared, ApiError> {
@@ -296,9 +389,8 @@ fn prepare_download<T: Transport>(client: &Client<T>, file_id: i64) -> Result<Pr
         Ok(listing) => listing
             .parent
             .is_some_and(|parent| parent.file_type == FileType::Folder),
-        Err(ApiError::Unauthorized) => return Err(ApiError::Unauthorized),
-        // Not listable: it is a plain file.
-        Err(_) => false,
+        Err(error) if is_not_a_folder(&error) => false,
+        Err(error) => return Err(error),
     };
     if is_folder {
         client.create_zip(&[file_id]).map(Prepared::Zip)
@@ -321,9 +413,8 @@ fn stream<T: Transport>(
             .parent
             .filter(|parent| parent.file_type == FileType::Folder)
             .map(|_| listing.files),
-        Err(ApiError::Unauthorized) => return Err(api(ApiError::Unauthorized)),
-        // Not listable: treat it as a plain file.
-        Err(_) => None,
+        Err(error) if is_not_a_folder(&error) => None,
+        Err(error) => return Err(api(error)),
     };
     let ids: Vec<i64> = match folder {
         Some(mut files) => {
@@ -418,6 +509,44 @@ mod tests {
     }
 
     #[test]
+    fn a_listing_that_fails_for_any_other_reason_is_not_taken_for_a_plain_file() {
+        let failures: [(u16, &str); 3] = [
+            (500, r#"{"error_type":"Internal","error_message":"x"}"#),
+            (503, "<html>bad gateway</html>"),
+            (403, r#"{"error_type":"Forbidden","error_message":"x"}"#),
+        ];
+        for (status, body) in failures {
+            let fake = FakeTransport::new();
+            fake.push_json(status, body);
+            assert!(
+                prepare_download(&client(&fake), 7).is_err(),
+                "{status} must not become a file download"
+            );
+            let fake = FakeTransport::new();
+            fake.push_json(status, body);
+            assert!(
+                matches!(
+                    stream(&client(&fake), &FakeLauncher::default(), 7),
+                    Err(StreamFailure::Api(_))
+                ),
+                "{status} must not start the player"
+            );
+            assert_eq!(fake.requests().len(), 1, "no second request after {status}");
+        }
+    }
+
+    #[test]
+    fn a_dropped_connection_and_a_rate_limit_are_not_taken_for_a_plain_file() {
+        assert!(!is_not_a_folder(&ApiError::Network("reset".into())));
+        assert!(!is_not_a_folder(&ApiError::RateLimited {
+            retry_after: std::time::Duration::from_secs(5)
+        }));
+        assert!(!is_not_a_folder(&ApiError::Decode("x".into())));
+        assert!(!is_not_a_folder(&ApiError::Unauthorized));
+        assert!(!is_not_a_folder(&ApiError::TooLarge));
+    }
+
+    #[test]
     fn a_folder_is_downloaded_as_a_zip() {
         let fake = FakeTransport::new();
         fake.push_json(
@@ -497,6 +626,78 @@ mod tests {
             stream(&client(&fake), &FakeLauncher::default(), 1),
             Err(StreamFailure::Api(ApiError::Unauthorized))
         );
+    }
+
+    /// A `Workers` whose queues the test reads itself (no threads, no network).
+    fn workers_without_threads() -> (Workers, Receiver<Queued>) {
+        let (interactive, queue) = mpsc::channel();
+        let (heavy, _) = mpsc::channel();
+        let workers = Workers {
+            interactive,
+            heavy,
+            session: Arc::new(Mutex::new(Session::default())),
+        };
+        (workers, queue)
+    }
+
+    fn token_named(value: &str) -> Token {
+        Token::new(value).unwrap()
+    }
+
+    #[test]
+    fn a_job_keeps_the_token_of_the_moment_it_was_sent() {
+        let (workers, queue) = workers_without_threads();
+        workers.set_token(Some(token_named("account-a")));
+        workers.send(Job::Poll);
+        // Another account signs in before a thread picks the job up.
+        workers.set_token(Some(token_named("account-b")));
+        let queued = queue.try_recv().unwrap();
+        assert_eq!(queued.token.unwrap().expose(), "account-a");
+    }
+
+    #[test]
+    fn an_answer_from_an_ended_session_is_thrown_away() {
+        let (workers, queue) = workers_without_threads();
+        workers.set_token(Some(token_named("account-a")));
+        workers.send(Job::Poll);
+        let session = queue.try_recv().unwrap().session;
+        let answer = |session| Delivery {
+            session,
+            msg: WorkerMsg::Folders {
+                parent: 0,
+                result: Err(ApiError::Unauthorized),
+            },
+        };
+        assert!(workers.accept(answer(session)).is_some());
+        workers.set_token(None);
+        assert!(workers.accept(answer(session)).is_none());
+    }
+
+    #[test]
+    fn a_new_sign_in_attempt_ends_the_answers_to_the_old_code() {
+        let (workers, queue) = workers_without_threads();
+        workers.send(Job::PollCode("OLD".into()));
+        let old = queue.try_recv().unwrap().session;
+        workers.new_session();
+        let delivery = Delivery {
+            session: old,
+            msg: WorkerMsg::Core(Event::LinkPolled(Ok(None))),
+        };
+        assert!(workers.accept(delivery).is_none());
+    }
+
+    #[test]
+    fn answers_that_do_not_belong_to_an_account_survive_a_sign_out() {
+        let (workers, queue) = workers_without_threads();
+        workers.send(Job::LatestRelease);
+        let queued = queue.try_recv().unwrap();
+        assert_eq!(queued.session, None);
+        workers.set_token(None);
+        let delivery = Delivery {
+            session: queued.session,
+            msg: WorkerMsg::Core(Event::DefaultHandlerRegistered(Err("x".into()))),
+        };
+        assert!(workers.accept(delivery).is_some());
     }
 
     #[test]

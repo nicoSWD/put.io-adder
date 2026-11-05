@@ -519,6 +519,25 @@ fn the_source_root_is_the_workspace_and_the_test_binary_is_a_development_build()
     }
 }
 
+/// `make app` writes a bundle to `target/` inside the source tree: that is a development build.
+#[test]
+fn a_bundle_built_inside_the_source_tree_never_updates_itself() {
+    let root = scratch("bundle-dev");
+    let exe = root.join("target/put.io adder.app/Contents/MacOS/putio-adder");
+    let error = super::bundle::target_for(&exe, &root).unwrap_err();
+    assert!(error.contains("development build"), "{error}");
+}
+
+#[test]
+fn a_bundle_outside_the_source_tree_in_a_folder_the_user_owns_is_the_target() {
+    let apps = scratch("bundle-ok");
+    let exe = apps.join("put.io adder.app/Contents/MacOS/putio-adder");
+    assert_eq!(
+        super::bundle::target_for(&exe, Path::new("/elsewhere")),
+        Ok(apps.join("put.io adder.app"))
+    );
+}
+
 #[test]
 fn an_executable_in_a_folder_the_user_owns_is_the_target() {
     let dir = scratch("target-ok");

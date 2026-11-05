@@ -404,6 +404,23 @@ fn draw_card(ui: &mut egui::Ui, transfer: &Transfer, selected: bool, locale: Loc
     // Added after the body, so it wins where they overlap.
     let more = ui.interact(more_rect, body.id.with("more"), Sense::click());
     let more = more.on_hover_cursor(egui::CursorIcon::PointingHand);
+    let name = if transfer.name.is_empty() {
+        "…"
+    } else {
+        transfer.name.as_str()
+    };
+    widgets::describe(
+        &body,
+        egui::WidgetType::Button,
+        &format!("{name}, {}", format::detail(transfer, locale)),
+    );
+    widgets::describe(
+        &more,
+        egui::WidgetType::Button,
+        &format!("{}: {name}", Msg::A11yTransferActions.text(locale)),
+    );
+    widgets::focus_ring(ui, &body, rect, CornerRadius::same(10));
+    widgets::focus_ring(ui, &more, more_rect, CornerRadius::same(8));
     let body = if more.hovered() {
         body
     } else {
@@ -442,11 +459,6 @@ fn draw_card(ui: &mut egui::Ui, transfer: &Transfer, selected: bool, locale: Loc
     let text_left = rect.left() + 52.0;
     let text_right = rect.right() - RIGHT_COLUMN;
     let text_width = text_right - text_left;
-    let name = if transfer.name.is_empty() {
-        "…"
-    } else {
-        transfer.name.as_str()
-    };
     let name_font = theme::bold(12.5);
     let shown_name = widgets::fit_to_width(&painter, name, &name_font, text_width);
     painter.text(
@@ -749,5 +761,20 @@ mod tests {
             (more, card.more.hovered())
         });
         assert_eq!(resting, hovered);
+    }
+
+    #[test]
+    fn a_card_and_its_actions_button_are_named_for_a_screen_reader() {
+        let t = sample(TransferStatus::Downloading, Some(5), None);
+        let names = crate::ui::test_support::accessible_names(|ui| {
+            draw_card(ui, &t, false, Locale::En);
+        });
+        let button = |wanted: &dyn Fn(&str) -> bool| {
+            names
+                .iter()
+                .any(|(role, name)| role == "Button" && wanted(name))
+        };
+        assert!(button(&|n| n.starts_with("Some.Movie.2024, ")), "{names:?}");
+        assert!(button(&|n| n == "Actions: Some.Movie.2024"), "{names:?}");
     }
 }

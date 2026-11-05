@@ -49,6 +49,34 @@ pub(crate) fn rendered_text(mut add: impl FnMut(&mut egui::Ui)) -> Vec<String> {
     out
 }
 
+/// What a screen reader is told about one frame of `add`: (role, name) of every node that has a name.
+/// A control that is only painted and never described does not show up here.
+pub(crate) fn accessible_names(mut add: impl FnMut(&mut egui::Ui)) -> Vec<(String, String)> {
+    let ctx = egui::Context::default();
+    theme::apply(&ctx, ThemeChoice::Light);
+    ctx.enable_accesskit();
+    let mut names = Vec::new();
+    for _ in 0..3 {
+        let input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(600.0, 800.0))),
+            ..Default::default()
+        };
+        let mut output = ctx.run_ui(input, |ui| add(ui));
+        if let Some(update) = output.platform_output.accesskit_update.take() {
+            names = update
+                .nodes
+                .iter()
+                .filter_map(|(_, node)| {
+                    let name = node.label().or_else(|| node.value())?;
+                    Some((format!("{:?}", node.role()), name.to_owned()))
+                })
+                .collect();
+        }
+        output.drop_without_applying_deltas();
+    }
+    names
+}
+
 /// One frame of `add` (which returns the widget's rect and whether it is hovered), with the pointer
 /// at `pointer` if given. Returns the rect, the hover state and the position of all text drawn.
 fn frame(

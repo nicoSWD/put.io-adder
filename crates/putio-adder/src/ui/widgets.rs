@@ -12,8 +12,31 @@ const SWITCH_SIZE: Vec2 = Vec2::new(40.0, 24.0);
 /// Minimum height of a settings row.
 const ROW_HEIGHT: f32 = 50.0;
 
-/// An on/off switch. Returns the response; `changed()` is set when it was flipped.
-pub(crate) fn switch(ui: &mut egui::Ui, on: &mut bool) -> Response {
+/// An outline around a control that has the keyboard focus. The controls here are painted by hand, so
+/// without this a keyboard user could not see where they are.
+pub(crate) fn focus_ring(
+    ui: &egui::Ui,
+    response: &Response,
+    rect: Rect,
+    radius: impl Into<CornerRadius>,
+) {
+    if response.has_focus() {
+        ui.painter().rect_stroke(
+            rect.expand(1.0),
+            radius,
+            Stroke::new(2.0, theme::pal().accent_text),
+            egui::StrokeKind::Outside,
+        );
+    }
+}
+
+/// Tell assistive technology what a hand-painted control is.
+pub(crate) fn describe(response: &Response, kind: egui::WidgetType, label: &str) {
+    response.widget_info(|| egui::WidgetInfo::labeled(kind, true, label));
+}
+
+/// An on/off switch named `label`. Returns the response; `changed()` is set when it was flipped.
+pub(crate) fn switch(ui: &mut egui::Ui, on: &mut bool, label: &str) -> Response {
     let (rect, mut response) = ui.allocate_exact_size(SWITCH_SIZE, Sense::click());
     let response_cursor = response
         .clone()
@@ -23,14 +46,14 @@ pub(crate) fn switch(ui: &mut egui::Ui, on: &mut bool) -> Response {
         response.mark_changed();
     }
     response.widget_info(|| {
-        egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), *on, "")
+        egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), *on, label)
     });
     let t = ui.ctx().animate_bool_with_time(response.id, *on, 0.14);
     let p = theme::pal();
     let track = p.track.lerp_to_gamma(theme::YELLOW, t);
     let radius = rect.height() / 2.0;
     ui.painter().rect_filled(rect, radius, track);
-    if response.has_focus() || response.hovered() {
+    if response.hovered() {
         ui.painter().rect_stroke(
             rect,
             radius,
@@ -38,6 +61,7 @@ pub(crate) fn switch(ui: &mut egui::Ui, on: &mut bool) -> Response {
             egui::StrokeKind::Outside,
         );
     }
+    focus_ring(ui, &response, rect, radius);
     let knob_x = egui::lerp((rect.left() + radius)..=(rect.right() - radius), t);
     let knob = Pos2::new(knob_x, rect.center().y);
     ui.painter().circle_filled(
@@ -88,6 +112,10 @@ pub(crate) fn segmented<T: Copy + PartialEq>(
             .interact(rect, ui.id().with(label), Sense::click())
             .on_hover_cursor(egui::CursorIcon::PointingHand);
         let selected = *value == current;
+        response.widget_info(|| {
+            egui::WidgetInfo::selected(egui::WidgetType::RadioButton, true, selected, label)
+        });
+        focus_ring(ui, &response, rect, CornerRadius::same(8));
         if selected {
             ui.painter()
                 .rect_filled(rect, CornerRadius::same(8), theme::YELLOW);
@@ -176,9 +204,11 @@ pub(crate) fn row(
 }
 
 /// The round "x" at the top right of a dialog. Returns whether it was clicked.
-pub(crate) fn close_button(ui: &mut egui::Ui) -> bool {
+pub(crate) fn close_button(ui: &mut egui::Ui, label: &str) -> bool {
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(30.0), Sense::click());
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+    describe(&response, egui::WidgetType::Button, label);
+    focus_ring(ui, &response, rect, CornerRadius::same(15));
     let p = theme::pal();
     if response.hovered() {
         ui.painter()
@@ -194,9 +224,11 @@ pub(crate) fn close_button(ui: &mut egui::Ui) -> bool {
 }
 
 /// A back arrow button. Returns whether it was clicked.
-pub(crate) fn back_button(ui: &mut egui::Ui) -> bool {
+pub(crate) fn back_button(ui: &mut egui::Ui, label: &str) -> bool {
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(30.0), Sense::click());
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+    describe(&response, egui::WidgetType::Button, label);
+    focus_ring(ui, &response, rect, CornerRadius::same(15));
     let p = theme::pal();
     if response.hovered() {
         ui.painter()
@@ -271,6 +303,8 @@ fn button(ui: &mut egui::Ui, icon: Option<MenuIcon>, label: &str, primary: bool)
     let size = Vec2::new(text_left + galley.size().x + 18.0, ACTION_HEIGHT);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+    describe(&response, egui::WidgetType::Button, label);
+    focus_ring(ui, &response, rect, CornerRadius::same(10));
     let (fill, hover_fill, ink, quiet_ink) = if primary {
         (theme::YELLOW, p.yellow_pressed, p.on_yellow, p.on_yellow)
     } else {
@@ -425,6 +459,7 @@ pub(crate) fn choice_row(ui: &mut egui::Ui, label: &str, selected: bool) -> bool
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ui::test_support::accessible_names;
     use crate::ui::test_support::text_with_and_without_hover;
 
     #[test]
@@ -482,6 +517,43 @@ mod tests {
                 (response.rect, response.hovered())
             });
             assert_eq!(resting, hovered, "moved on hover (primary: {primary})");
+        }
+    }
+
+    fn named(names: &[(String, String)], role: &str, name: &str) -> bool {
+        names.iter().any(|(r, n)| r == role && n == name)
+    }
+
+    #[test]
+    fn a_switch_is_a_checkbox_with_the_name_of_its_row() {
+        let names = accessible_names(|ui| {
+            let mut on = true;
+            switch(ui, &mut on, "Quit after adding a magnet");
+        });
+        assert!(
+            named(&names, "CheckBox", "Quit after adding a magnet"),
+            "{names:?}"
+        );
+    }
+
+    #[test]
+    fn the_choices_of_a_segmented_control_are_radio_buttons() {
+        let names = accessible_names(|ui| {
+            segmented(ui, &[(1, "System".to_owned()), (2, "Light".to_owned())], 1);
+        });
+        assert!(named(&names, "RadioButton", "System"), "{names:?}");
+        assert!(named(&names, "RadioButton", "Light"), "{names:?}");
+    }
+
+    #[test]
+    fn icon_only_and_painted_buttons_have_names() {
+        let names = accessible_names(|ui| {
+            close_button(ui, "Close");
+            back_button(ui, "Back");
+            text_button(ui, "Cancel", false);
+        });
+        for name in ["Close", "Back", "Cancel"] {
+            assert!(named(&names, "Button", name), "{name} in {names:?}");
         }
     }
 }

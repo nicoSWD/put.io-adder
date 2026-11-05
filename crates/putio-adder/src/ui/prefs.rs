@@ -53,24 +53,29 @@ impl FolderPicker {
     fn start(&mut self, workers: &Workers) {
         self.open = true;
         self.trail.clear();
-        self.folders.clear();
-        self.failed = false;
         self.enter(workers, 0, ROOT_NAME.into());
     }
 
     fn enter(&mut self, workers: &Workers, id: i64, name: String) {
         self.trail.push((id, name));
-        self.loading = true;
-        workers.send(Job::ListFolders { parent: id });
+        self.begin_loading(workers, id);
     }
 
     /// Go back up to the `index`-th folder of the trail.
     fn jump_to(&mut self, workers: &Workers, index: usize) {
         self.trail.truncate(index + 1);
-        if let Some((id, _)) = self.trail.last() {
-            self.loading = true;
-            workers.send(Job::ListFolders { parent: *id });
+        if let Some(&(id, _)) = self.trail.last() {
+            self.begin_loading(workers, id);
         }
+    }
+
+    /// Ask for the folders inside `parent`. The rows of the folder being left go at once: until the
+    /// answer arrives they would be clickable, and a click would put the wrong folder in the trail.
+    fn begin_loading(&mut self, workers: &Workers, parent: i64) {
+        self.folders.clear();
+        self.failed = false;
+        self.loading = true;
+        workers.send(Job::ListFolders { parent });
     }
 
     /// Debug builds only: a populated folder page for previews.
@@ -169,16 +174,21 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
 }
 
 /// Title row: optional back arrow, the title, and a close button. Returns (back, close) clicks.
-pub(crate) fn header(ui: &mut egui::Ui, title: &str, with_back: bool) -> (bool, bool) {
+pub(crate) fn header(
+    ui: &mut egui::Ui,
+    title: &str,
+    with_back: bool,
+    locale: Locale,
+) -> (bool, bool) {
     let (mut back, mut close) = (false, false);
     ui.horizontal(|ui| {
         ui.set_height(32.0);
         if with_back {
-            back = widgets::back_button(ui);
+            back = widgets::back_button(ui, &Msg::A11yBack.text(locale));
         }
         ui.label(RichText::new(title).font(theme::bold(17.0)));
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            close = widgets::close_button(ui);
+            close = widgets::close_button(ui, &Msg::A11yClose.text(locale));
         });
     });
     ui.add_space(6.0);
@@ -210,7 +220,7 @@ fn settings_page(
     locale: Locale,
     actions: &mut Vec<Action>,
 ) -> bool {
-    let (_, close) = header(ui, &Msg::PrefsTitle.text(locale), false);
+    let (_, close) = header(ui, &Msg::PrefsTitle.text(locale), false, locale);
     let settings = app.state.settings.clone();
 
     scroll_region(ui, body_height(ui), |ui| {
@@ -224,7 +234,9 @@ fn settings_page(
                 &Msg::PrefsQuitMagnet.text(locale),
                 Some(&Msg::PrefsQuitMagnetHint.text(locale)),
                 |ui| {
-                    if widgets::switch(ui, &mut magnet).changed() {
+                    if widgets::switch(ui, &mut magnet, &Msg::PrefsQuitMagnet.text(locale))
+                        .changed()
+                    {
                         actions.push(Action::Settings(SettingsChange::CloseAfterMagnet(magnet)));
                     }
                 },
@@ -236,7 +248,9 @@ fn settings_page(
                 &Msg::PrefsQuitTorrent.text(locale),
                 Some(&Msg::PrefsQuitTorrentHint.text(locale)),
                 |ui| {
-                    if widgets::switch(ui, &mut torrent).changed() {
+                    if widgets::switch(ui, &mut torrent, &Msg::PrefsQuitTorrent.text(locale))
+                        .changed()
+                    {
                         actions.push(Action::Settings(SettingsChange::CloseAfterTorrent(torrent)));
                     }
                 },
@@ -250,7 +264,9 @@ fn settings_page(
                 &Msg::PrefsCheckUpdates.text(locale),
                 Some(&Msg::PrefsCheckUpdatesHint.text(locale)),
                 |ui| {
-                    if widgets::switch(ui, &mut updates).changed() {
+                    if widgets::switch(ui, &mut updates, &Msg::PrefsCheckUpdates.text(locale))
+                        .changed()
+                    {
                         actions.push(Action::Settings(SettingsChange::CheckForUpdates(updates)));
                     }
                 },
@@ -573,7 +589,7 @@ fn folder_page(
     locale: Locale,
     chosen: &mut Option<Folder>,
 ) -> bool {
-    let (back, close) = header(ui, &Msg::PrefsChooseFolderTitle.text(locale), true);
+    let (back, close) = header(ui, &Msg::PrefsChooseFolderTitle.text(locale), true, locale);
     if back {
         app.ui.folders.open = false;
         return false;
@@ -605,4 +621,33 @@ fn folder_page(
         });
     });
     close
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_rows_of_the_folder_being_left_are_gone_while_the_next_one_loads() {
+        let workers = Workers::detached();
+        let mut picker = FolderPicker::demo();
+        assert!(picker.folders.len() > 1);
+        picker.enter(&workers, 11, "2023".into());
+        assert!(picker.loading);
+        assert!(
+            picker.folders.is_empty(),
+            "nothing to click on a wrong page"
+        );
+        assert_eq!(picker.trail.last().map(|(id, _)| *id), Some(11));
+    }
+
+    #[test]
+    fn going_back_up_also_clears_the_rows_until_the_answer_comes() {
+        let workers = Workers::detached();
+        let mut picker = FolderPicker::demo();
+        picker.jump_to(&workers, 0);
+        assert!(picker.loading);
+        assert_eq!(picker.folders.len(), 0);
+        assert_eq!(picker.trail.len(), 1);
+    }
 }

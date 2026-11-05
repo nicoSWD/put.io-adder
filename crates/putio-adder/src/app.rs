@@ -9,7 +9,7 @@ use putio_api::Token;
 use putio_core::i18n::Locale;
 use putio_core::intake::Intake;
 use putio_core::settings::{Settings, ThemeChoice};
-use putio_core::state::{Auth, Effect, Event, Millis, State, update};
+use putio_core::state::{Auth, Effect, Event, Millis, SecretProblem, State, update};
 use putio_platform::badge;
 use putio_platform::ipc::Server;
 use putio_platform::notify::Notifier;
@@ -20,7 +20,7 @@ use putio_platform::settings_store::SettingsFile;
 use crate::keychain::Keychain;
 use crate::ui::{self, UiState};
 use crate::window::{Mode, Window};
-use crate::worker::{Job, WorkerMsg, Workers};
+use crate::worker::{Delivery, Job, WorkerMsg, Workers};
 
 /// How often the UI wakes up by itself (to advance timers and the status line).
 const FRAME_INTERVAL: Duration = Duration::from_millis(250);
@@ -31,6 +31,8 @@ pub(crate) struct Startup {
     pub(crate) settings_file: Option<SettingsFile>,
     pub(crate) locale: Locale,
     pub(crate) secrets: Arc<dyn SecretStore>,
+    /// Whether `secrets` keeps the sign-in beyond this run.
+    pub(crate) secrets_persist: bool,
     pub(crate) notifier: Arc<dyn Notifier>,
     pub(crate) intake_rx: Receiver<String>,
     pub(crate) click_rx: Receiver<Option<i64>>,
@@ -96,10 +98,12 @@ pub(crate) struct App {
     pub(crate) ui: UiState,
     start: Instant,
     workers: Workers,
-    from_worker: Receiver<WorkerMsg>,
+    from_worker: Receiver<Delivery>,
     intake_rx: Receiver<String>,
     click_rx: Receiver<Option<i64>>,
     keychain: Keychain,
+    /// What the keychain thread could not do (read, save, delete), to tell the user.
+    secret_problems: Receiver<SecretProblem>,
     /// The saved token, on its way from the keychain thread; `None` once it has arrived.
     pending_token: Option<Receiver<Option<Token>>>,
     settings_file: Option<SettingsFile>,
@@ -131,6 +135,7 @@ impl App {
             settings_file,
             locale,
             secrets,
+            secrets_persist,
             notifier,
             intake_rx,
             click_rx,
@@ -159,13 +164,14 @@ impl App {
 
         // The saved token comes from the keychain on its own thread: the system may ask the user for
         // permission, and the window must not wait for that.
-        let (keychain, pending_token) = match Keychain::spawn(secrets, cc.egui_ctx.clone()) {
-            Ok(pair) => pair,
-            Err(error) => {
-                eprintln!("could not start the keychain thread: {error}");
-                std::process::exit(1);
-            }
-        };
+        let (keychain, pending_token, secret_problems) =
+            match Keychain::spawn(secrets, cc.egui_ctx.clone()) {
+                Ok(pair) => pair,
+                Err(error) => {
+                    eprintln!("could not start the keychain thread: {error}");
+                    std::process::exit(1);
+                }
+            };
         let demo = demo_requested();
 
         let window = Window::new(&settings, initial_mode(&settings));
@@ -180,6 +186,7 @@ impl App {
             intake_rx,
             click_rx,
             keychain,
+            secret_problems,
             pending_token: demo.is_none().then_some(pending_token),
             settings_file,
             notifier,
@@ -198,6 +205,12 @@ impl App {
             _ipc_server: ipc_server,
         };
         app.state.asset_name = putio_platform::update::asset_name;
+        if !secrets_persist && !app.is_demo() {
+            app.dispatch(
+                &cc.egui_ctx,
+                Event::SecretStoreFailed(SecretProblem::Unavailable),
+            );
+        }
         // `Started` is sent when the keychain thread reports (see `pump`), except in demo mode.
         #[cfg(debug_assertions)]
         if let Some(view) = app.demo.clone() {
@@ -364,7 +377,11 @@ impl App {
             | Effect::Poll
             | Effect::ApplyUpdate
                 if self.is_demo() => {}
-            Effect::RequestDeviceCode => self.send(Job::DeviceCode),
+            Effect::RequestDeviceCode => {
+                // A new attempt: the answers to an earlier code are no longer wanted.
+                self.workers.new_session();
+                self.send(Job::DeviceCode);
+            }
             Effect::PollDeviceCode { code } => self.send(Job::PollCode(code)),
             Effect::StoreToken(token) => self.store_token(token),
             Effect::DeleteToken => {
@@ -391,11 +408,16 @@ impl App {
             }
             Effect::PollZip { op, zip_id } => self.send(Job::PollZip { op, zip_id }),
             // The address is a credential: on failure say that it failed, never what it was.
-            Effect::OpenDownload(url) if self.is_demo() => drop(url),
+            Effect::OpenDownload(url) if self.is_demo() => {
+                drop(url);
+                self.dispatch(ctx, Event::DownloadHandedOver { opened: true });
+            }
             Effect::OpenDownload(url) => {
-                if self.opener.open_download(&url).is_err() {
+                let opened = self.opener.open_download(&url).is_ok();
+                if !opened {
                     eprintln!("could not open the download in the browser");
                 }
+                self.dispatch(ctx, Event::DownloadHandedOver { opened });
             }
             Effect::PrepareUpdate { op, asset } => self.send(Job::PrepareUpdate { op, asset }),
             Effect::ApplyUpdate => {
@@ -425,6 +447,7 @@ impl App {
             Effect::OpenUrl(url) => {
                 if let Err(error) = self.opener.open(&url) {
                     eprintln!("could not open {url}: {error}");
+                    self.dispatch(ctx, Event::PageOpenFailed);
                 }
             }
             Effect::Quit => ctx.send_viewport_cmd(ViewportCommand::Close),
@@ -457,7 +480,10 @@ impl App {
         if ctx.input_mut(|input| input.consume_shortcut(&ui::menu::preferences_shortcut())) {
             self.ui.prefs_open = true;
         }
-        while let Ok(message) = self.from_worker.try_recv() {
+        while let Ok(delivery) = self.from_worker.try_recv() {
+            let Some(message) = self.workers.accept(delivery) else {
+                continue; // from a session that has ended
+            };
             match message {
                 WorkerMsg::Core(event) => self.dispatch(ctx, event),
                 WorkerMsg::Folders { parent, result } => self.ui.folder_listed(parent, result),
@@ -466,6 +492,9 @@ impl App {
                     self.dispatch(ctx, Event::UpdatePrepared { op, result });
                 }
             }
+        }
+        while let Ok(problem) = self.secret_problems.try_recv() {
+            self.dispatch(ctx, Event::SecretStoreFailed(problem));
         }
         while let Ok(raw) = self.intake_rx.try_recv() {
             self.intake(ctx, &raw);

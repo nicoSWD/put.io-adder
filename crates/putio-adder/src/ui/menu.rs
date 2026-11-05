@@ -49,6 +49,8 @@ pub(crate) fn item(
     let (rect, response) =
         ui.allocate_exact_size(Vec2::new(ui.available_width(), ROW_HEIGHT), Sense::click());
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+    super::widgets::describe(&response, egui::WidgetType::Button, label);
+    super::widgets::focus_ring(ui, &response, rect, CornerRadius::same(9));
     if response.hovered() {
         ui.painter()
             .rect_filled(rect, CornerRadius::same(9), p.card_hover);
@@ -211,7 +213,26 @@ pub(crate) fn show(button: &egui::Response, app: &mut App) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ui::test_support::text_with_and_without_hover;
+    use crate::ui::test_support::{accessible_names, text_with_and_without_hover};
+
+    #[test]
+    fn a_menu_row_is_a_button_with_its_label() {
+        let names = accessible_names(|ui| {
+            item(
+                ui,
+                MenuIcon::Settings,
+                "Preferences",
+                Some("⌘,"),
+                Tint::Normal,
+            );
+        });
+        assert!(
+            names
+                .iter()
+                .any(|(r, n)| r == "Button" && n == "Preferences"),
+            "{names:?}"
+        );
+    }
 
     #[test]
     fn the_shortcut_label_matches_the_platform() {

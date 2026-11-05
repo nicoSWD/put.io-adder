@@ -46,7 +46,7 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
         .frame(frame)
         .show(ctx, |ui| {
             ui.set_width(CONTENT_WIDTH);
-            let (_, close) = prefs::header(ui, &Msg::DetailsTitle.text(locale), false);
+            let (_, close) = prefs::header(ui, &Msg::DetailsTitle.text(locale), false, locale);
             let height = (ui.ctx().content_rect().height() - CHROME_HEIGHT).max(160.0);
             prefs::scroll_region(ui, height, |ui| body(ui, &transfer, locale));
             ui.add_space(10.0);

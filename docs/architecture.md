@@ -41,5 +41,5 @@ back-off, auto-close and status-line expiry are all unit-tested without sleeping
 - **Errors:** each failure says what went wrong (duplicate, offline, rate limited, signed out, server) instead of one catch-all message.
 - **Operations** (cancel, retry, download, …) act on a transfer's *id*, never on a row position, so a list that changes under the user's hand cannot redirect an action.
 - **Polling** starts right after sign-in and backs off on errors and rate limits.
-- **Avatars:** a Gravatar needs a hash of the account e-mail, so it is opt-in; the default is the initial.
+- **Avatars:** the header shows the account's initial. A Gravatar would need a hash of the e-mail sent to a third party, so there is none.
 - **Updates** compare semantic versions; installing one is described in [updates.md](updates.md).

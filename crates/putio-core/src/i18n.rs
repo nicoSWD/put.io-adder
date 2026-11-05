@@ -149,6 +149,17 @@ pub enum Msg {
     DownloadStartedPartial {
         missing: usize,
     },
+    DownloadOpenFailed,
+    OpenFailed,
+    SecretStoreUnavailable,
+    SecretLoadFailed,
+    SecretSaveFailed,
+    SecretDeleteFailed,
+    CopyCode,
+    HandlerKeptOther,
+    A11yClose,
+    A11yBack,
+    A11yTransferActions,
     MenuDetails,
     DetailsTitle,
     DetailStatus,
@@ -1076,6 +1087,61 @@ impl Msg {
                 "Estás al día."
             )
             .into(),
+            Self::DownloadOpenFailed => tr!(
+                l,
+                "Couldn't open your browser for the download",
+                "Browser konnte für den Download nicht geöffnet werden",
+                "No se pudo abrir el navegador para la descarga"
+            )
+            .into(),
+            Self::OpenFailed => tr!(
+                l,
+                "Couldn't open the browser",
+                "Browser konnte nicht geöffnet werden",
+                "No se pudo abrir el navegador"
+            )
+            .into(),
+            Self::SecretStoreUnavailable => tr!(
+                l,
+                "No secure storage here. You'll need to sign in again next time.",
+                "Kein sicherer Speicher verfügbar. Du musst dich beim nächsten Mal erneut anmelden.",
+                "No hay almacenamiento seguro. Tendrás que iniciar sesión de nuevo la próxima vez."
+            )
+            .into(),
+            Self::SecretLoadFailed => tr!(
+                l,
+                "Couldn't read your saved sign-in.",
+                "Gespeicherte Anmeldung konnte nicht gelesen werden.",
+                "No se pudo leer tu inicio de sesión guardado."
+            )
+            .into(),
+            Self::SecretSaveFailed => tr!(
+                l,
+                "Couldn't save your sign-in. You'll need to sign in again next time.",
+                "Anmeldung konnte nicht gespeichert werden. Du musst dich beim nächsten Mal erneut anmelden.",
+                "No se pudo guardar tu inicio de sesión. Tendrás que iniciar sesión de nuevo la próxima vez."
+            )
+            .into(),
+            Self::SecretDeleteFailed => tr!(
+                l,
+                "Couldn't remove your saved sign-in from this computer.",
+                "Gespeicherte Anmeldung konnte nicht von diesem Computer entfernt werden.",
+                "No se pudo quitar tu inicio de sesión guardado de este equipo."
+            )
+            .into(),
+            Self::CopyCode => tr!(l, "Copy code", "Code kopieren", "Copiar código").into(),
+            Self::HandlerKeptOther => tr!(
+                l,
+                "the system kept another app for some of them",
+                "das System hat für einige davon eine andere App beibehalten",
+                "el sistema mantuvo otra app para algunas de ellas"
+            )
+            .into(),
+            Self::A11yClose => tr!(l, "Close", "Schließen", "Cerrar").into(),
+            Self::A11yBack => tr!(l, "Back", "Zurück", "Atrás").into(),
+            Self::A11yTransferActions => {
+                tr!(l, "Actions", "Aktionen", "Acciones").into()
+            }
             Self::UpdateCheckFailed => tr!(
                 l,
                 "Couldn't check for updates.",
@@ -1153,6 +1219,17 @@ mod tests {
             Msg::NotificationTitle,
             Msg::MenuSignOut,
             Msg::StreamNoPlayer,
+            Msg::DownloadOpenFailed,
+            Msg::OpenFailed,
+            Msg::SecretStoreUnavailable,
+            Msg::SecretLoadFailed,
+            Msg::SecretSaveFailed,
+            Msg::SecretDeleteFailed,
+            Msg::CopyCode,
+            Msg::HandlerKeptOther,
+            Msg::A11yClose,
+            Msg::A11yBack,
+            Msg::A11yTransferActions,
         ];
         for locale in [Locale::En, Locale::De, Locale::Es] {
             for msg in &samples {

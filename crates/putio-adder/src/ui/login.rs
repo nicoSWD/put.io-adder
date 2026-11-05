@@ -36,7 +36,7 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
                 if theme::primary_button(ui, Msg::LinkOpenButton.text(locale)).clicked() {
                     app.dispatch(&ctx, Event::OpenLinkPage);
                 }
-                if theme::secondary_button(ui, "Copy code").clicked() {
+                if theme::secondary_button(ui, Msg::CopyCode.text(locale)).clicked() {
                     ctx.copy_text(link.code.clone());
                 }
             });

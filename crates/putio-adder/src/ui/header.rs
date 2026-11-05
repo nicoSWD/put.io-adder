@@ -77,7 +77,7 @@ fn top_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2, width: f32) {
     }
 
     // Account: name, then a yellow avatar with the initial. (A Gravatar would need your e-mail hash
-    // sent to a third party, so the initial is the default.)
+    // sent to a third party, so there is none.)
     if let Some(account) = &app.state.account {
         let avatar = Pos2::new(menu_rect.left() - 10.0 - 14.0, top.center().y);
         ui.painter().circle_filled(avatar, 14.0, theme::YELLOW);
@@ -173,6 +173,10 @@ fn status_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2, width: f32) {
         Pos2::new(strip.left() + text_left, strip.top()),
         Pos2::new(pill.left() - 26.0, strip.bottom()),
     );
+    // Painted text is invisible to a screen reader: name the whole row, whichever way it is drawn.
+    let status = app.state.status_text(now);
+    ui.interact(area, egui::Id::new("status-row"), Sense::hover())
+        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &status));
     if matches!(app.state.status(now), Msg::Summary { .. }) {
         // The standing message is the transfers summary: show it as chips.
         super::summary::show(ui, app, area);
@@ -181,7 +185,7 @@ fn status_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2, width: f32) {
         ui.painter().with_clip_rect(area).text(
             Pos2::new(area.left(), strip.center().y),
             Align2::LEFT_CENTER,
-            app.state.status_text(now),
+            &status,
             theme::text(12.0),
             theme::pal().text,
         );

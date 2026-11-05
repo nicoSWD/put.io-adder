@@ -20,8 +20,18 @@ pub(super) fn install_target() -> Result<PathBuf, String> {
     let exe = std::env::current_exe()
         .and_then(|exe| exe.canonicalize())
         .map_err(|error| error.to_string())?;
-    let app = bundle_for_executable(&exe)
+    target_for(&exe, &super::portable::source_root())
+}
+
+/// The bundle `exe` runs from, unless it cannot be replaced: not a bundle, translocated, built inside
+/// `source_root` (`make app` puts one under `target/`: a development build, which never replaces
+/// itself with a release), or in a folder that cannot be written to.
+pub(super) fn target_for(exe: &Path, source_root: &Path) -> Result<PathBuf, String> {
+    let app = bundle_for_executable(exe)
         .ok_or_else(|| "put.io adder is not running from an app bundle.".to_owned())?;
+    if app.starts_with(source_root) {
+        return Err(super::portable::DEV_BUILD.to_owned());
+    }
     if app
         .components()
         .any(|part| part.as_os_str() == "AppTranslocation")

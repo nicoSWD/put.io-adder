@@ -44,7 +44,7 @@ finish**. The design follows the updater of the sibling project DegenView, with 
 
 ## Where it will not install
 
-- A **development build** (`cargo run`, anything under the source tree) on Windows/Linux. The message says so.
+- A **development build** (`cargo run`, anything under the source tree, including the bundle `make app` writes to `target/`). The message says so.
 - An app in a folder the user cannot write to (`Program Files`, a read-only disk image, `AppTranslocation`):
   **View release**, with the reason.
 - macOS builds that are not inside a `.app` bundle.

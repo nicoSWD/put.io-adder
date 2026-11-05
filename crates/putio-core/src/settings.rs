@@ -66,8 +66,6 @@ pub struct Settings {
     /// Offer to become the default app for magnet links and `.torrent` files (until the user says
     /// "don't ask again").
     pub ask_default_handler: bool,
-    /// Off by default: Gravatar needs a hash of the account e-mail.
-    pub show_avatar: bool,
     /// `None` means put.io's own default folder.
     pub default_folder: Option<Folder>,
     /// Whether the transfers list was open when the app last ran.
@@ -85,7 +83,6 @@ impl Default for Settings {
             close_after_torrent: false,
             check_for_updates: true,
             ask_default_handler: true,
-            show_avatar: false,
             default_folder: None,
             transfers_expanded: false,
             theme: ThemeChoice::System,
@@ -146,12 +143,15 @@ mod tests {
     #[test]
     fn defaults() {
         let s = Settings::default();
-        assert!(
-            s.check_for_updates
-                && !s.show_avatar
-                && !s.close_after_magnet
-                && s.default_folder.is_none()
-        );
+        assert!(s.check_for_updates && !s.close_after_magnet && s.default_folder.is_none());
+    }
+
+    #[test]
+    fn a_preference_that_no_longer_exists_is_ignored_when_loading() {
+        let s = Settings::from_json_or_default(Some(
+            r#"{"show_avatar": true, "close_after_magnet": true}"#,
+        ));
+        assert!(s.close_after_magnet);
     }
 
     #[test]

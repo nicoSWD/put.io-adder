@@ -94,8 +94,8 @@ fn main() -> eframe::Result {
     );
     let locale = sys_locale::get_locale().map_or(Locale::En, |tag| Locale::from_tag(&tag));
 
-    let secrets: Arc<dyn SecretStore> = if demo {
-        Arc::new(MemoryStore::new()) // a demo run never touches the OS keychain, so it never prompts
+    let (secrets, secrets_persist): (Arc<dyn SecretStore>, bool) = if demo {
+        (Arc::new(MemoryStore::new()), true) // a demo run never touches the OS keychain, so it never prompts
     } else {
         open_keychain()
     };
@@ -118,6 +118,7 @@ fn main() -> eframe::Result {
         settings_file,
         locale,
         secrets,
+        secrets_persist,
         notifier,
         intake_rx,
         click_rx,
@@ -172,13 +173,14 @@ fn take_relaunch_flag(args: &mut Vec<String>) -> bool {
 }
 
 /// The OS secret store, or (when there is none) a store that only lives for this session. There is no
-/// file fallback: the token is never written anywhere readable.
-fn open_keychain() -> Arc<dyn SecretStore> {
+/// file fallback: the token is never written anywhere readable. The flag says whether the sign-in
+/// outlives this run, so the app can tell the user when it does not.
+fn open_keychain() -> (Arc<dyn SecretStore>, bool) {
     match KeyringStore::open() {
-        Ok(store) => Arc::new(store),
+        Ok(store) => (Arc::new(store), true),
         Err(error) => {
             eprintln!("{error}; you will have to sign in every time the app starts");
-            Arc::new(MemoryStore::new())
+            (Arc::new(MemoryStore::new()), false)
         }
     }
 }
