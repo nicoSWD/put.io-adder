@@ -110,7 +110,8 @@ const DESKTOP_TEMPLATE: &str = include_str!("../../../packaging/linux/es.nico.pu
 /// the line and let the rest be read as more keys.
 fn desktop_exec(exe: &Path) -> Result<String, String> {
     let path = exe.to_str().ok_or("the app's path is not plain text")?;
-    if path.chars().any(char::is_control) || !exe.is_absolute() {
+    // A desktop entry is a Linux thing: its paths start with a slash, whatever system runs this code.
+    if path.chars().any(char::is_control) || !path.starts_with('/') {
         return Err("the app's path cannot be used in a desktop entry".to_owned());
     }
     let mut quoted = String::from("\"");

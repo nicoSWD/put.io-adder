@@ -56,9 +56,15 @@ pub fn find(
     env: &dyn Fn(&str) -> Option<String>,
     exists: &dyn Fn(&Path) -> bool,
 ) -> Option<Player> {
+    // Absolute *for the system being searched*, not for the one running: `Path::is_absolute` answers
+    // for the host, so a Linux or macOS path would count as relative when this runs on Windows.
+    let absolute = |path: &Path| {
+        path.to_str()
+            .is_some_and(|text| crate::paths::is_absolute_for(os, text))
+    };
     if let Some(path) = candidate_paths(os, env)
         .into_iter()
-        .find(|path| path.is_absolute() && exists(path))
+        .find(|path| absolute(path) && exists(path))
     {
         return Some(Player::Binary(path));
     }
