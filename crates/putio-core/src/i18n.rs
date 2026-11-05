@@ -99,7 +99,7 @@ pub enum Msg {
     LinkExpired,
     // Table
     ColName,
-    ColSpeed,
+    SortSpeed,
     ColEta,
     ColSize,
     EtaDone,
@@ -122,6 +122,8 @@ pub enum Msg {
     // Transfers panel
     TransfersTitle,
     SortBy,
+    SortAscending,
+    SortDescending,
     SortStatus,
     SortProgress,
     EmptyTitle,
@@ -450,7 +452,7 @@ impl Msg {
             )
             .into(),
             Self::ColName => tr!(l, "Name", "Name", "Nombre").into(),
-            Self::ColSpeed => tr!(l, "↓ Speed", "↓ Tempo", "↓ Velocidad").into(),
+            Self::SortSpeed => tr!(l, "Speed", "Tempo", "Velocidad").into(),
             Self::ColEta => tr!(l, "ETA", "Restzeit", "Restante").into(),
             Self::ColSize => tr!(l, "Size", "Größe", "Tamaño").into(),
             Self::EtaDone => tr!(l, "Done", "Fertig", "Listo").into(),
@@ -477,6 +479,8 @@ impl Msg {
             Self::ChipDone => tr!(l, "done", "fertig", "listas").into(),
             Self::ChipFailed => tr!(l, "failed", "fehlgeschlagen", "con error").into(),
             Self::SortBy => tr!(l, "Sort", "Sortieren", "Ordenar").into(),
+            Self::SortAscending => tr!(l, "Ascending", "Aufsteigend", "Ascendente").into(),
+            Self::SortDescending => tr!(l, "Descending", "Absteigend", "Descendente").into(),
             Self::SortStatus => tr!(l, "Status", "Status", "Estado").into(),
             Self::SortProgress => tr!(l, "Progress", "Fortschritt", "Progreso").into(),
             Self::EmptyTitle => tr!(

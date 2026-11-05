@@ -73,10 +73,10 @@ pub(crate) fn demo_requested() -> Option<String> {
     }
 }
 
-pub(crate) fn title(version: &str, progress: Option<u8>) -> String {
+pub(crate) fn title(progress: Option<u8>) -> String {
     match progress {
-        Some(percent) => format!("{percent}% · Put.io Adder v{version}"),
-        None => format!("Put.io Adder v{version}"),
+        Some(percent) => format!("{percent}% · Put.io Adder"),
+        None => "Put.io Adder".to_owned(),
     }
 }
 
@@ -94,7 +94,6 @@ pub(crate) struct App {
     settings_file: Option<SettingsFile>,
     notifier: Arc<dyn Notifier>,
     opener: SystemOpener,
-    version: &'static str,
     badge_percent: Option<u8>,
     /// Debug builds only: show sample data and never talk to put.io.
     #[cfg(debug_assertions)]
@@ -165,12 +164,11 @@ impl App {
             settings_file,
             notifier,
             opener: SystemOpener,
-            version,
             badge_percent: None,
             #[cfg(debug_assertions)]
             demo,
             last_height: height,
-            last_title: title(version, None),
+            last_title: title(None),
             last_theme: theme,
             last_icon_dark: None,
             _ipc_server: ipc_server,
@@ -211,7 +209,11 @@ impl App {
         // The demo drops the update check, so show its finished state instead of a spinner.
         self.state.update = putio_core::update::UpdateStatus::UpToDate;
         self.ui.prefs_open = view == "prefs" || view == "folders";
-        self.ui.open_menu_once = view == "menu" || view == "menu-update";
+        self.ui.open_once = match view {
+            "menu" | "menu-update" => Some(crate::ui::Overlay::Menu),
+            "sort" => Some(crate::ui::Overlay::Sort),
+            _ => None,
+        };
         if view == "menu-update" {
             self.state.update = putio_core::update::UpdateStatus::Available {
                 version: "0.2.0".into(),
@@ -399,7 +401,7 @@ impl App {
         } else {
             self.badge_percent
         };
-        let wanted = title(self.version, progress);
+        let wanted = title(progress);
         if wanted != self.last_title {
             ctx.send_viewport_cmd(ViewportCommand::Title(wanted.clone()));
             self.last_title = wanted;
@@ -418,5 +420,17 @@ impl eframe::App for App {
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         ui::show(ui, self);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_window_title_has_no_version() {
+        assert_eq!(title(None), "Put.io Adder");
+        assert_eq!(title(Some(42)), "42% · Put.io Adder");
+        assert!(!title(None).contains(char::is_numeric));
     }
 }

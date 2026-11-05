@@ -9,6 +9,7 @@ PUTIO_ADDER_DEMO=login cargo run -p putio-adder     # the sign-in panel with a f
 PUTIO_ADDER_DEMO=prefs cargo run -p putio-adder     # the list with Preferences open
 PUTIO_ADDER_DEMO=folders cargo run -p putio-adder   # Preferences on the folder chooser page
 PUTIO_ADDER_DEMO=menu cargo run -p putio-adder      # the "..." menu open (menu-update: with a new version waiting)
+PUTIO_ADDER_DEMO=sort cargo run -p putio-adder      # the sort drop-down open
 PUTIO_ADDER_THEME=dark|light|system                 # override the saved theme (any debug run)
 ```
 

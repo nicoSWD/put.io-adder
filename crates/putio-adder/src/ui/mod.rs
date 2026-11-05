@@ -7,6 +7,8 @@ pub(crate) mod menu;
 pub(crate) mod prefs;
 pub(crate) mod summary;
 pub(crate) mod table;
+#[cfg(test)]
+pub(crate) mod test_support;
 pub(crate) mod theme;
 pub(crate) mod widgets;
 
@@ -24,14 +26,21 @@ pub(crate) const STRIP_HEIGHT: f32 = 40.0;
 /// Height of the logo row.
 pub(crate) const TOP_HEIGHT: f32 = 56.0;
 
+/// A drop-down that a preview can ask to be open from the first frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Overlay {
+    Menu,
+    Sort,
+}
+
 /// State that only the UI cares about.
 #[derive(Debug)]
 pub(crate) struct UiState {
     pub(crate) sort: SortKey,
     pub(crate) ascending: bool,
     pub(crate) prefs_open: bool,
-    /// Debug previews: open the "..." menu on the first frame.
-    pub(crate) open_menu_once: bool,
+    /// Debug previews: a drop-down to open on the first frame.
+    pub(crate) open_once: Option<Overlay>,
     /// The transfer last clicked (highlighted).
     pub(crate) selected: Option<i64>,
     pub(crate) folders: prefs::FolderPicker,
@@ -43,7 +52,7 @@ impl Default for UiState {
             sort: SortKey::Default,
             ascending: true,
             prefs_open: false,
-            open_menu_once: false,
+            open_once: None,
             selected: None,
             folders: prefs::FolderPicker::default(),
         }

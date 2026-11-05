@@ -117,7 +117,7 @@ fn main() -> eframe::Result {
         .with_resizable(false)
         .with_maximize_button(false)
         .with_app_id("es.nico.putio-adder")
-        .with_title(app::title(VERSION, None));
+        .with_title(app::title(None));
     // Starts with the light icon; the app switches to the dark one when its theme is dark.
     if let Some(icon) = app_icon::window_icon(false) {
         viewport = viewport.with_icon(icon);

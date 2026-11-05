@@ -1,0 +1,118 @@
+//! Helpers for testing how widgets draw, without a window.
+
+use eframe::egui::{self, Pos2, Rect, Vec2};
+use putio_core::settings::ThemeChoice;
+
+use super::theme;
+
+/// Where every piece of text in `shapes` is drawn.
+fn text_positions(shapes: &[egui::epaint::ClippedShape]) -> Vec<Pos2> {
+    fn collect(shape: &egui::Shape, out: &mut Vec<Pos2>) {
+        match shape {
+            egui::Shape::Text(text) => out.push(text.pos),
+            egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    for clipped in shapes {
+        collect(&clipped.shape, &mut out);
+    }
+    out
+}
+
+/// One frame of `add` (which returns the widget's rect and whether it is hovered), with the pointer
+/// at `pointer` if given. Returns the rect, the hover state and the position of all text drawn.
+fn frame(
+    ctx: &egui::Context,
+    pointer: Option<Pos2>,
+    add: &mut dyn FnMut(&mut egui::Ui) -> (Rect, bool),
+) -> (Rect, bool, Vec<Pos2>) {
+    let mut input = egui::RawInput {
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(400.0, 300.0))),
+        ..Default::default()
+    };
+    if let Some(position) = pointer {
+        input.events.push(egui::Event::PointerMoved(position));
+    }
+    let (mut rect, mut hovered) = (Rect::NOTHING, false);
+    let output = ctx.run_ui(input, |ui| {
+        (rect, hovered) = add(ui);
+    });
+    let positions = text_positions(&output.shapes);
+    // The textures egui wants uploaded are irrelevant here (nothing is rendered).
+    output.drop_without_applying_deltas();
+    (rect, hovered, positions)
+}
+
+/// Draw a widget with and without the pointer over it and return the text positions of both.
+///
+/// Panics (failing the test) when the widget never reports being hovered, so a test cannot pass
+/// merely because hovering did not happen.
+pub(crate) fn text_with_and_without_hover(
+    mut add: impl FnMut(&mut egui::Ui) -> (Rect, bool),
+) -> (Vec<Pos2>, Vec<Pos2>) {
+    let ctx = egui::Context::default();
+    theme::apply(&ctx, ThemeChoice::Light);
+    // Fonts and layout settle over the first frames.
+    for _ in 0..3 {
+        frame(&ctx, None, &mut add);
+    }
+    let (rect, hovered, resting) = frame(&ctx, None, &mut add);
+    assert!(!hovered, "not hovered without a pointer");
+    // egui decides hover from the previous frame's layout, so give it two frames with the pointer in place.
+    let inside = rect.center();
+    frame(&ctx, Some(inside), &mut add);
+    let (_, hovered, over) = frame(&ctx, Some(inside), &mut add);
+    assert!(
+        hovered,
+        "the widget must be hovered with the pointer over it"
+    );
+    assert!(!resting.is_empty(), "the widget draws text");
+    (resting, over)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Guards the guard: the harness must be able to *see* text move, or the "does not move on hover"
+    /// tests prove nothing. This widget deliberately draws its text one pixel further right when hovered.
+    #[test]
+    fn the_harness_detects_text_that_moves_on_hover() {
+        let (resting, hovered) = text_with_and_without_hover(|ui| {
+            let (rect, response) =
+                ui.allocate_exact_size(Vec2::new(120.0, 30.0), egui::Sense::hover());
+            let nudge = if response.hovered() { 1.0 } else { 0.0 };
+            ui.painter().text(
+                rect.left_center() + Vec2::new(8.0 + nudge, 0.0),
+                egui::Align2::LEFT_CENTER,
+                "Progress",
+                theme::text(12.0),
+                egui::Color32::BLACK,
+            );
+            (rect, response.hovered())
+        });
+        assert_ne!(
+            resting, hovered,
+            "the harness failed to notice a 1 px shift"
+        );
+    }
+
+    #[test]
+    fn the_harness_sees_identical_positions_for_text_that_stays_put() {
+        let (resting, hovered) = text_with_and_without_hover(|ui| {
+            let (rect, response) =
+                ui.allocate_exact_size(Vec2::new(120.0, 30.0), egui::Sense::hover());
+            ui.painter().text(
+                rect.left_center() + Vec2::new(8.0, 0.0),
+                egui::Align2::LEFT_CENTER,
+                "Progress",
+                theme::text(12.0),
+                egui::Color32::BLACK,
+            );
+            (rect, response.hovered())
+        });
+        assert_eq!(resting, hovered);
+    }
+}

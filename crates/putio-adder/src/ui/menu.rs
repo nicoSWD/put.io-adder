@@ -1,8 +1,6 @@
 //! The "..." menu: a rounded card of icon rows, grouped by hairlines.
 
-use eframe::egui::{
-    self, Align2, Color32, CornerRadius, Margin, Pos2, RectAlign, Sense, Stroke, Vec2,
-};
+use eframe::egui::{self, Align2, CornerRadius, Pos2, RectAlign, Sense, Vec2};
 use putio_core::i18n::Msg;
 use putio_core::state::Event;
 use putio_core::update::UpdateStatus;
@@ -92,29 +90,18 @@ fn divider(ui: &mut egui::Ui) {
 
 /// The menu opened from `button`.
 pub(crate) fn show(button: &egui::Response, app: &mut App) {
-    let p = theme::pal();
     let ctx = button.ctx.clone();
     let locale = app.state.locale;
     let signed_in = app.state.is_signed_in();
     let update = app.state.update.clone();
 
-    let frame = egui::Frame::new()
-        .fill(p.surface)
-        .stroke(Stroke::new(1.0, p.divider))
-        .corner_radius(CornerRadius::same(14))
-        .inner_margin(Margin::same(6))
-        .shadow(egui::Shadow {
-            offset: [0, 6],
-            blur: 22,
-            spread: 0,
-            color: Color32::from_black_alpha(if p.dark { 140 } else { 50 }),
-        });
     let mut popup = egui::Popup::menu(button)
         .align(RectAlign::BOTTOM_END)
         .gap(6.0)
         .width(WIDTH)
-        .frame(frame);
-    if std::mem::take(&mut app.ui.open_menu_once) {
+        .frame(super::widgets::popup_frame());
+    if app.ui.open_once == Some(super::Overlay::Menu) {
+        app.ui.open_once = None;
         // `bool` converts into egui's open command, so this opens the menu without a click.
         popup = popup.open_memory(Some(true.into()));
     }
@@ -199,6 +186,7 @@ pub(crate) fn show(button: &egui::Response, app: &mut App) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ui::test_support::text_with_and_without_hover;
 
     #[test]
     fn the_shortcut_label_matches_the_platform() {
@@ -216,5 +204,26 @@ mod tests {
         let shortcut = preferences_shortcut();
         assert_eq!(shortcut.logical_key, egui::Key::Comma);
         assert!(shortcut.modifiers.command);
+    }
+
+    #[test]
+    fn a_menu_row_does_not_move_its_text_when_hovered() {
+        for (tint, hint) in [
+            (Tint::Normal, None),
+            (Tint::Normal, Some("⌘,")),
+            (Tint::Accent, None),
+        ] {
+            let (resting, hovered) = text_with_and_without_hover(|ui| {
+                let origin = ui.cursor().min;
+                item(ui, MenuIcon::Settings, "Preferences…", hint, tint);
+                let rect =
+                    egui::Rect::from_min_size(origin, Vec2::new(ui.available_width(), ROW_HEIGHT));
+                (rect, ui.rect_contains_pointer(rect))
+            });
+            assert_eq!(
+                resting, hovered,
+                "text moved on hover ({tint:?}, hint {hint:?})"
+            );
+        }
     }
 }

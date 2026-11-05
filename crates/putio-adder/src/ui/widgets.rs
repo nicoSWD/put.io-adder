@@ -236,3 +236,74 @@ pub(crate) fn centered_text(ui: &egui::Ui, rect: Rect, text: &str, size: f32, co
         color,
     );
 }
+
+/// The rounded card used by every drop-down (the "..." menu, the sort menu).
+pub(crate) fn popup_frame() -> egui::Frame {
+    let p = theme::pal();
+    egui::Frame::new()
+        .fill(p.surface)
+        .stroke(Stroke::new(1.0, p.divider))
+        .corner_radius(CornerRadius::same(14))
+        .inner_margin(egui::Margin::same(6))
+        .shadow(egui::Shadow {
+            offset: [0, 6],
+            blur: 22,
+            spread: 0,
+            color: Color32::from_black_alpha(if p.dark { 140 } else { 50 }),
+        })
+}
+
+/// A radio-style row for a drop-down: a dot, then the label. Everything is painted at fixed positions,
+/// so nothing moves when the pointer is over it (egui's stock buttons grow slightly on hover, which
+/// makes their text shift). Returns whether it was clicked.
+pub(crate) fn choice_row(ui: &mut egui::Ui, label: &str, selected: bool) -> bool {
+    let p = theme::pal();
+    let (rect, response) =
+        ui.allocate_exact_size(Vec2::new(ui.available_width(), 34.0), Sense::click());
+    let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+    if response.hovered() {
+        ui.painter()
+            .rect_filled(rect, CornerRadius::same(9), p.card_hover);
+    }
+    let dot = Pos2::new(rect.left() + 18.0, rect.center().y);
+    if selected {
+        ui.painter().circle_filled(dot, 6.0, theme::YELLOW);
+        ui.painter().circle_filled(dot, 2.4, p.on_yellow);
+    } else {
+        ui.painter().circle_stroke(
+            dot,
+            5.5,
+            Stroke::new(1.4, if response.hovered() { p.text } else { p.muted }),
+        );
+    }
+    ui.painter().text(
+        Pos2::new(rect.left() + 38.0, rect.center().y),
+        Align2::LEFT_CENTER,
+        label,
+        theme::text(12.5),
+        p.text,
+    );
+    response.clicked()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::test_support::text_with_and_without_hover;
+
+    #[test]
+    fn a_choice_row_does_not_move_its_text_when_hovered() {
+        for selected in [false, true] {
+            let (resting, hovered) = text_with_and_without_hover(|ui| {
+                let origin = ui.cursor().min;
+                choice_row(ui, "Progress", selected);
+                let rect = Rect::from_min_size(origin, Vec2::new(ui.available_width(), 34.0));
+                (rect, ui.rect_contains_pointer(rect))
+            });
+            assert_eq!(
+                resting, hovered,
+                "text position changed on hover (selected: {selected})"
+            );
+        }
+    }
+}

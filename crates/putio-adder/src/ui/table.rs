@@ -14,6 +14,8 @@ use super::{icons, theme};
 use crate::app::App;
 
 const ROW_HEIGHT: f32 = 56.0;
+/// Width of the sort drop-down card.
+const SORT_MENU_WIDTH: f32 = 236.0;
 const ROW_GAP: f32 = 6.0;
 const TOOLBAR_HEIGHT: f32 = 28.0;
 /// Space kept free at the right of the cards for the scroll bar.
@@ -107,64 +109,113 @@ fn sort_label(key: SortKey) -> Msg {
         SortKey::Default => Msg::SortStatus,
         SortKey::Name => Msg::ColName,
         SortKey::Progress => Msg::SortProgress,
-        SortKey::Speed => Msg::ColSpeed,
+        SortKey::Speed => Msg::SortSpeed,
         SortKey::Eta => Msg::ColEta,
         SortKey::Size => Msg::ColSize,
     }
 }
 
+/// The sort control: a quiet pill showing the current order, and a card to change it.
 fn sort_menu(ui: &mut egui::Ui, app: &mut App) {
+    let p = theme::pal();
     let locale = app.state.locale;
-    let arrow = if app.ui.ascending { "▲" } else { "▼" };
-    let current = format!(
-        "{}: {}  {arrow}",
+    let text = format!(
+        "{}: {}",
         Msg::SortBy.text(locale),
         sort_label(app.ui.sort).text(locale)
     );
-    let button = ui.add(
-        egui::Button::new(
-            RichText::new(current)
-                .font(theme::text(11.0))
-                .color(theme::pal().muted),
-        )
-        .fill(Color32::TRANSPARENT)
-        .stroke(egui::Stroke::NONE),
-    );
-    let button = button.on_hover_cursor(egui::CursorIcon::PointingHand);
-    egui::Popup::menu(&button)
+    let response = sort_trigger(ui, &text, app.ui.ascending);
+
+    let _ = p;
+    let mut popup = egui::Popup::menu(&response)
         .align(egui::RectAlign::BOTTOM_END)
-        .width(170.0)
-        .show(|ui| {
-            for key in [
-                SortKey::Default,
-                SortKey::Name,
-                SortKey::Progress,
-                SortKey::Speed,
-                SortKey::Eta,
-                SortKey::Size,
-            ] {
-                let selected = app.ui.sort == key;
-                let marker = if selected {
-                    if app.ui.ascending { "▲  " } else { "▼  " }
-                } else {
-                    "     "
-                };
-                if ui
-                    .selectable_label(
-                        selected,
-                        format!("{marker}{}", sort_label(key).text(locale)),
-                    )
-                    .clicked()
-                {
-                    if selected {
-                        app.ui.ascending = !app.ui.ascending;
-                    } else {
-                        app.ui.sort = key;
-                        app.ui.ascending = true;
-                    }
+        .gap(6.0)
+        .width(SORT_MENU_WIDTH)
+        .frame(super::widgets::popup_frame())
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside);
+    if app.ui.open_once == Some(super::Overlay::Sort) {
+        app.ui.open_once = None;
+        popup = popup.open_memory(Some(true.into()));
+    }
+    popup.show(|ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for key in [
+            SortKey::Default,
+            SortKey::Name,
+            SortKey::Progress,
+            SortKey::Speed,
+            SortKey::Eta,
+            SortKey::Size,
+        ] {
+            if super::widgets::choice_row(ui, &sort_label(key).text(locale), app.ui.sort == key) {
+                if app.ui.sort != key {
+                    app.ui.sort = key;
+                    app.ui.ascending = true;
                 }
+                ui.close();
+            }
+        }
+        ui.add_space(8.0);
+        let (line, _) =
+            ui.allocate_exact_size(Vec2::new(ui.available_width(), 1.0), Sense::hover());
+        ui.painter()
+            .rect_filled(line.shrink2(Vec2::new(8.0, 0.0)), 0.0, p.divider);
+        ui.add_space(8.0);
+        // The direction stays open after a change, so the result is visible straight away.
+        let options = [
+            (true, Msg::SortAscending.text(locale)),
+            (false, Msg::SortDescending.text(locale)),
+        ];
+        ui.horizontal(|ui| {
+            ui.add_space(4.0);
+            if let Some(ascending) = super::widgets::segmented(ui, &options, app.ui.ascending) {
+                app.ui.ascending = ascending;
             }
         });
+        ui.add_space(4.0);
+    });
+}
+
+/// The pill that shows the current order and opens the drop-down.
+///
+/// It is painted, not an `egui::Button`: stock buttons grow a little when hovered, which shifts their text.
+/// Here only the background and the colour change; the text never moves.
+fn sort_trigger(ui: &mut egui::Ui, text: &str, ascending: bool) -> egui::Response {
+    let p = theme::pal();
+    let galley = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), theme::text(11.0), p.muted);
+    let size = Vec2::new(galley.size().x + 12.0 + 22.0, 26.0);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+    if response.hovered() {
+        ui.painter()
+            .rect_filled(rect, CornerRadius::same(8), p.card_hover);
+    }
+    let color = if response.hovered() { p.text } else { p.muted };
+    let text_pos = Pos2::new(rect.left() + 10.0, rect.center().y - galley.size().y / 2.0);
+    ui.painter().galley(text_pos, galley, color);
+    direction_arrow(
+        ui.painter(),
+        Pos2::new(rect.right() - 12.0, rect.center().y),
+        ascending,
+        color,
+    );
+    response
+}
+
+/// A small triangle: pointing up for ascending, down for descending.
+fn direction_arrow(painter: &egui::Painter, center: Pos2, ascending: bool, color: Color32) {
+    let (tip, base) = if ascending { (-3.0, 2.5) } else { (3.0, -2.5) };
+    painter.add(egui::Shape::convex_polygon(
+        vec![
+            center + Vec2::new(0.0, tip),
+            center + Vec2::new(-3.8, base),
+            center + Vec2::new(3.8, base),
+        ],
+        color,
+        egui::Stroke::NONE,
+    ));
 }
 
 fn empty(ui: &mut egui::Ui, app: &App) {
@@ -383,5 +434,20 @@ mod tests {
         assert_eq!(mix(a, b, 1.0), b);
         assert_eq!(mix(a, b, 2.0), b);
         assert_eq!(mix(a, b, 0.5), Color32::from_rgb(50, 100, 25));
+    }
+
+    #[test]
+    fn the_sort_trigger_does_not_move_its_text_when_hovered() {
+        use crate::ui::test_support::text_with_and_without_hover;
+        for ascending in [true, false] {
+            let (resting, hovered) = text_with_and_without_hover(|ui| {
+                let response = sort_trigger(ui, "Sort: Status", ascending);
+                (response.rect, response.hovered())
+            });
+            assert_eq!(
+                resting, hovered,
+                "the sort label moved on hover (ascending: {ascending})"
+            );
+        }
     }
 }
