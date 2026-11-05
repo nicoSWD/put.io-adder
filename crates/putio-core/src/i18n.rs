@@ -871,9 +871,9 @@ impl Msg {
             Self::PrefsTitle => tr!(l, "Preferences", "Einstellungen", "Ajustes").into(),
             Self::PrefsCheckUpdates => tr!(
                 l,
-                "Check for updates on startup",
-                "Beim Start nach Updates suchen",
-                "Buscar actualizaciones al iniciar"
+                "Check for updates",
+                "Nach Updates suchen",
+                "Buscar actualizaciones"
             )
             .into(),
             Self::PrefsAppearance => tr!(l, "Appearance", "Darstellung", "Apariencia").into(),

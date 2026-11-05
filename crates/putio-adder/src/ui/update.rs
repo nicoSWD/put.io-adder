@@ -106,7 +106,8 @@ pub(crate) fn look(state: &State) -> Option<Look> {
             tone: Tone::Accent,
             icon: MenuIcon::Refresh,
             progress: None,
-            click: Some(Click::Restart),
+            // Restarting ends the app: not while an upload or a download is still being sent.
+            click: (!state.is_busy()).then_some(Click::Restart),
         },
         Install::Failed { message, .. } if installable => Look {
             label: Msg::UpdateTryAgain.text(locale),
@@ -361,6 +362,30 @@ mod tests {
         assert_eq!(
             (look.tone, look.click),
             (Tone::Accent, Some(Click::Restart))
+        );
+    }
+
+    #[test]
+    fn the_restart_waits_while_a_transfer_is_being_added() {
+        let mut ready = state(
+            true,
+            InstallTarget::Ready,
+            Install::Ready {
+                version: "0.2.0".into(),
+            },
+        );
+        assert_eq!(look(&ready).unwrap().click, Some(Click::Restart));
+        // Adding a magnet link is an operation in flight: restarting now would cut it off.
+        putio_core::state::update(&mut ready, 0, Event::Started { has_token: true });
+        let magnet =
+            putio_core::intake::Intake::parse(&format!("magnet:?xt=urn:btih:{}", "a".repeat(40)))
+                .unwrap();
+        putio_core::state::update(&mut ready, 1, Event::Intake(magnet));
+        assert!(ready.is_busy(), "the magnet link is being added");
+        let look = look(&ready).unwrap();
+        assert_eq!(
+            (look.label.as_str(), look.click),
+            ("Restart to finish", None)
         );
     }
 

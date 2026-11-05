@@ -27,16 +27,27 @@ pub(super) fn install_target() -> Result<PathBuf, String> {
     if !cfg!(any(windows, target_os = "linux")) {
         return Err("Automatic updates are not available on this platform.".to_owned());
     }
+    // A debug build is a development build, wherever cargo put it (`CARGO_TARGET_DIR` can point outside
+    // the source tree), and must never replace itself with a release.
+    if cfg!(debug_assertions) {
+        return Err(DEV_BUILD.to_owned());
+    }
     let exe = std::env::current_exe()
         .and_then(|exe| exe.canonicalize())
         .map_err(|error| error.to_string())?;
-    // `canonicalize` gives a `\\?\C:\…` path on Windows, which never `starts_with` the plain
-    // `C:\…` manifest dir: both are brought to the plain form before they are compared.
-    let source_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let source_root = source_root
-        .canonicalize()
-        .unwrap_or_else(|_| source_root.to_path_buf());
-    target_for(&plain(&exe), &plain(&source_root))
+    target_for(&plain(&exe), &plain(&source_root()))
+}
+
+const DEV_BUILD: &str = "A development build does not update itself.";
+
+/// The workspace this binary was built from: two levels above this crate (`crates/putio-platform`).
+/// (`CARGO_MANIFEST_DIR` is this crate's folder, not the workspace root; a `cargo run` binary lives in
+/// `<root>/target/`, which is not below the crate's folder.) `canonicalize` gives a `\\?\C:\…` path on
+/// Windows, so callers compare after [`plain`].
+pub(super) fn source_root() -> PathBuf {
+    let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = crate_dir.ancestors().nth(2).unwrap_or(crate_dir);
+    root.canonicalize().unwrap_or_else(|_| root.to_path_buf())
 }
 
 /// `path` without the `\\?\` prefix `canonicalize` adds on Windows (a `\\?\UNC\` path keeps it).
@@ -51,7 +62,7 @@ pub(super) fn plain(path: &Path) -> PathBuf {
 /// (`cargo run` under `source_root`), which must never replace itself with a release.
 pub(super) fn target_for(exe: &Path, source_root: &Path) -> Result<PathBuf, String> {
     if exe.starts_with(source_root) {
-        return Err("A development build does not update itself.".to_owned());
+        return Err(DEV_BUILD.to_owned());
     }
     let parent = exe.parent().ok_or("The app has no parent folder.")?;
     if !is_writable(parent) {

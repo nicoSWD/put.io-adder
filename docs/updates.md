@@ -69,6 +69,17 @@ field) and `putio_core::update::pick_asset` (pin the tagger).
 The release workflow still signs-checks the tag, attests build provenance and publishes `SHA256SUMS`; people
 who download by hand can verify those (SECURITY.md). The app just does not.
 
+## Known gaps
+
+- **Windows "Installed apps"** keeps showing the version the installer wrote after an in-app update (DegenView
+  rewrites that registry value; this app does not). Uninstalling still works.
+- **macOS asks for Keychain access again** after each update while releases are ad-hoc signed: the signature
+  changes with the binary, so the Keychain no longer recognises the app.
+- The Windows and Linux swap and relaunch run only on those systems; they are tested here with fixtures on
+  macOS, and the `cfg(windows)` spawn code has no test at all.
+- Restart is held back while a magnet link or `.torrent` is being sent (the pill stays disabled); a transfer
+  that is merely downloading on put.io is unaffected.
+
 ## Changing the pipeline
 
 The names and layouts above are a contract with the release workflow and the packaging scripts. A test

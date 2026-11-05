@@ -494,6 +494,29 @@ fn a_development_build_never_replaces_itself() {
     assert!(error.contains("development build"), "{error}");
 }
 
+/// The root the code really computes (not a hand-made one) is the workspace, and the binary that is
+/// running these tests, which `cargo` built under `target/`, counts as a development build.
+#[test]
+fn the_source_root_is_the_workspace_and_the_test_binary_is_a_development_build() {
+    let root = super::portable::source_root();
+    assert!(
+        root.join("Cargo.lock").is_file(),
+        "{} is not the workspace root",
+        root.display()
+    );
+    assert!(root.join("crates").join("putio-platform").is_dir());
+    let exe = std::env::current_exe().unwrap().canonicalize().unwrap();
+    // (Unless the target folder was moved out of the tree: then only the debug-build rule applies.)
+    if exe.starts_with(&root) {
+        let error = super::portable::target_for(
+            &super::portable::plain(&exe),
+            &super::portable::plain(&root),
+        )
+        .unwrap_err();
+        assert!(error.contains("development build"), "{error}");
+    }
+}
+
 #[test]
 fn an_executable_in_a_folder_the_user_owns_is_the_target() {
     let dir = scratch("target-ok");

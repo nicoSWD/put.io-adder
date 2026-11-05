@@ -307,6 +307,7 @@ impl App {
         };
     }
 
+    #[cfg_attr(not(debug_assertions), allow(clippy::unused_self))] // demo mode is compiled out of release builds
     fn is_demo(&self) -> bool {
         #[cfg(debug_assertions)]
         return self.demo.is_some();
@@ -384,8 +385,17 @@ impl App {
             Effect::PrepareUpdate { op, asset } => self.send(Job::PrepareUpdate { op, asset }),
             Effect::ApplyUpdate => {
                 let result = match self.prepared_update.clone() {
-                    Some(prepared) => putio_platform::update::apply(&prepared)
-                        .and_then(|()| putio_platform::update::relaunch(&prepared)),
+                    Some(prepared) => putio_platform::update::apply(&prepared).map(|()| {
+                        // The new version is in place. If nobody can reopen the app, say so before it
+                        // quits: "try again" would only download the same update once more.
+                        if let Err(reason) = putio_platform::update::relaunch(&prepared) {
+                            self.notifier.notify(&putio_core::state::Notification {
+                                title: "put.io adder".to_owned(),
+                                body: reason,
+                                file_id: None,
+                            });
+                        }
+                    }),
                     None => Err("There is no update to install.".to_owned()),
                 };
                 self.dispatch(ctx, Event::UpdateApplied(result));
