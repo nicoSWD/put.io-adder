@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=put.io adder
+GenericName=put.io transfer helper
+Comment=Send magnet links and .torrent files to your put.io account
+Exec=putio-adder %U
+Icon=es.nico.putio-adder
+Terminal=false
+Categories=Network;FileTransfer;
+MimeType=x-scheme-handler/magnet;application/x-bittorrent;
+StartupWMClass=es.nico.putio-adder

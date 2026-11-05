@@ -1,0 +1,73 @@
+# cargo-deny policy. Checked on every PR and weekly (.github/workflows/ci.yml).
+# Every change here is a decision about what may be compiled into a release: review it like code.
+
+[graph]
+targets = [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "aarch64-pc-windows-msvc",
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+]
+
+[advisories]
+version = 2
+yanked = "deny"
+# Each ignore needs a reason and an exit plan. These four are "unmaintained" notices (not
+# vulnerabilities) for crates that only arrive through the GUI toolkit and the D-Bus stack, and no
+# upgrade exists yet. Re-check on every eframe / winit / zbus bump; delete the entry when it clears.
+ignore = [
+    # ttf-parser: winit -> sctk-adwaita (Linux window decorations) -> ab_glyph -> owned_ttf_parser.
+    # Exit: winit/eframe moving to `skrifa`.
+    { id = "RUSTSEC-2026-0192", reason = "unmaintained, no safe upgrade; transitive through winit's Linux window decorations" },
+    # zbus_names, zvariant, zvariant_derive: merged into zbus 6. We are on zbus 5 through
+    # accesskit_unix (eframe), notify-rust and the Secret Service keyring store (Linux only).
+    # Exit: those crates moving to zbus 6.
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names merged into zbus 6; transitive through zbus 5 (accesskit_unix, notify-rust, secret-service)" },
+    { id = "RUSTSEC-2026-0370", reason = "zvariant merged into zbus 6; transitive through zbus 5 (accesskit_unix, notify-rust, secret-service)" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive merged into zbus 6; transitive through zbus 5 (accesskit_unix, notify-rust, secret-service)" },
+]
+
+[sources]
+# crates.io only: no git dependencies, no other registries, no forks.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+# Our own crates depend on each other by path (they are `publish = false`): that is not a wildcard
+# version from a registry.
+allow-wildcard-paths = true
+# TLS is rustls only.
+deny = [{ crate = "openssl" }, { crate = "openssl-sys" }, { crate = "native-tls" }]
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+# One narrow exception instead of allowing the licence everywhere: egui embeds its default fonts.
+# The Ubuntu Font Licence permits redistribution with its notice; it covers font data only.
+exceptions = [
+    { allow = ["Ubuntu-font-1.0"], crate = "epaint_default_fonts" },
+]
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    # webpki-roots: the Mozilla CA bundle as data (permissive, attribution only).
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "OFL-1.1",
+    "Unicode-3.0",
+    "Zlib",
+]

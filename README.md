@@ -1,59 +1,75 @@
-## Put.io magnet: and .torrent Handler for macOS
-![screenshot](https://s3.amazonaws.com/f.cl.ly/items/362l1z432n3O2w1X2C2B/Screen%20Shot%202016-05-21%20at%2000.48.37.png)
+# put.io adder
 
-*put.io adder* is a small open source app for macOS, that registers as new handler for `magnet:` URI schemes, so that every time you click on a magnet link, it will automatically add it to your [put.io](http://put.io/) download queue.
+Click a `magnet:` link or open a `.torrent` file and it lands in your [put.io](https://put.io) queue.
+A small cross-platform app for **macOS, Windows and Linux** (x86-64 and arm64), written in Rust.
 
-Follow me on Twitter: [@nicoSWD](https://twitter.com/nicoSWD)!
+- **Magnet links and `.torrent` files** go straight to your put.io queue. The app asks once whether it should be the default app for them, and sets itself up if you say yes
+- **Your transfers** at a glance: progress, speed, ETA and size, sorted how you like, with a notification when one finishes
+- **Right-click a transfer** (or use its "⋯" button) for a details panel (peers, share ratio, tracker message, dates), retry, copy the put.io link or the magnet link, cancel or stop seeding, clear finished ones, stream in [VLC](https://www.videolan.org/vlc/), or download the file or folder through your browser
+- **Updates itself** from GitHub releases when you press *Update now* (see [What the updater checks](#updates))
+- Optional: choose the put.io folder new transfers are saved in
+- Light and dark theme, a resizable window, English, German and Spanish
 
-**Features**
-- Automatically add `magnet:` links and `.torrent` files to your download queue by clicking on them
-- Stream finished movies directly from the app (requires [VLC](https://www.videolan.org/vlc/index.html) to be installed in /Applications)
-- View current transfers and their download status
-- Double click transfers to open them on put.io
-- `Notification Center` notifications on finished downloads
-- etc...
+<table>
+  <tr>
+    <th align="center">Light</th>
+    <th align="center">Dark</th>
+  </tr>
+  <tr>
+    <td><img src="docs/images/screenshot-light.png" alt="put.io adder in the light theme, showing running, queued, finished and failed transfers" width="420"></td>
+    <td><img src="docs/images/screenshot-dark.png" alt="put.io adder in the dark theme, showing running, queued, finished and failed transfers" width="420"></td>
+  </tr>
+</table>
 
-**Downloads**
+## Install
 
-| Version | Chip |
-|:----------:|:---------------:|
-| **[put.io adder v3.0.5](https://github.com/nicoSWD/put.io-adder/releases/download/v3.0.5/put.io-adder-v3.0.5.zip)** | Apple Silicon
-| **[put.io adder v3.0.4](https://github.com/nicoSWD/put.io-adder/releases/download/v3.0.4/put.io-adder-v3.0.4.zip)** | Intel
+Download the file for your system from the [latest release](https://github.com/nicoSWD/put.io-adder/releases/latest).
 
-![total](https://img.shields.io/github/downloads/nicoSWD/put.io-adder/total.svg?maxAge=25920)
+| System | File | Notes |
+|---|---|---|
+| macOS (Apple Silicon / Intel) | `putio-adder-vX.Y.Z-macos-arm64.dmg` / `-x64.dmg` | Drag the app to *Applications*. If the build is not notarized, right-click → *Open* once. |
+| Windows (x64 / arm64) | `…-windows-x64-setup.exe` (or the `.zip`) | Installs for your user, no administrator rights. |
+| Linux (x86_64 / aarch64) | `putio-adder-vX.Y.Z-linux-x86_64.tar.gz` | Unpack, run `./install.sh` (add `--set-default` to take over magnet links). Needs a Secret Service (GNOME Keyring, KWallet). |
 
-  (Older releases can be found [here](https://github.com/nicoSWD/put.io-adder/releases/))
+<a id="updates"></a>
+## Updates
 
-**Notes**
-- The app requires you to have a [put.io](http://put.io/) account. They're ~~probably~~ not free anymore.
-- The app requires Keychain Access to store put.io's OAuth Token. Denying access will prevent the app from working.
-- To disable Notification Center, go to System Preferences -> Notifications -> Scroll to Put.IO Adder, and make your changes.
-- There are three ways to upload `.torrent` files to your account:
-    - Drag the .torrent file onto the app icon
-    - Make *put.io adder* your default handler for .torrent files
-    - Or right click the torrent and pick "Open with" > put.io adder
+When a newer stable release exists, the transfers toolbar shows **Update now**. It downloads the file for your system from GitHub, unpacks it next to the app, and swaps it in when you press **Restart to finish**. It will not update a development build, or an app in a folder you cannot write to (it then offers *View release*).
 
-Please [report issues](https://github.com/nicoSWD/put.io-adder/issues) you may encounter. Pull requests are also very welcome!
+**What it does not check:** the app does not verify a checksum, a tag signature or a code signature of what it downloads. It does take the file only from this project's GitHub releases over HTTPS, with size limits and a bounded unpack. Details and the reasoning: [docs/updates.md](docs/updates.md). Prefer to verify by hand? Turn off *Check for updates* in Preferences and use the next section.
 
-**Contributing**
+## Verify your download
 
-[AFNetworking](https://github.com/AFNetworking/AFNetworking), [PutioKit](https://github.com/PutioKit/PutioKit), and [SSKeyChain](https://github.com/samsoffes/sskeychain) have been added as submodules. To clone the repo in its entirety, use:
+Releases are built by GitHub Actions from a signed tag. Every file has a build-provenance attestation, and there is a `SHA256SUMS` file and a software bill of materials (`sbom.cdx.json`):
 
-`$ git clone --recursive git@github.com:nicoSWD/put.io-adder.git`
+```sh
+shasum -a 256 -c SHA256SUMS --ignore-missing
+gh attestation verify <file> --repo nicoSWD/put.io-adder
+```
 
+## Status
 
-All contributions are greatly appreciated. If you want to help, send a pull request, or open a [new issue](https://github.com/nicoSWD/put.io-adder/issues/new) with a feature request.
+Early. Everything has been run on macOS (Apple Silicon) only. The code for Windows and Linux (keychain, registering as the default app, updating in place, the installer) is written and unit-tested, but it has not been compiled by CI or run on those systems yet, and no release has been published. Treat those as untested until a release candidate has been tried on real machines ([docs/releasing.md](docs/releasing.md)).
 
-Some ideas for improvement are:
+## Build from source
 
-- Check if *put.io adder* is the default handler for magnet links and torrent files on startup. *~/Library/Preferences/com.apple.LaunchServices.plist* needs to be parsed and/or modified for that. If it's not, an alert asking to change that should be fired.
-- A ["Default folder preference"](https://github.com/nicoSWD/put.io-adder/issues/3) option could be added.
-- An option to download finished transfers to the computer through the app would be nice.
-- A way to browse through existing files and folders on *put.io*.
-- More languages.
-- Settings could be moved to a new preference pane in *System Preferences*.
-- ~~Design improvements.~~
-- ~~A way to stream finished files through the app.~~
-- ~~Authentication could be improved by adding a new custom URI scheme. When authenticating, the browser should open and go to *put.io's* authentication page, and a callback to something like *putio://callback* would open the app and pass over the OAuth token. Just like [mikker's Putter app does](https://github.com/mikker/Putter.app/blob/master/Putter/BBAppDelegate.m).~~ (Added in v2.7)
-- ~~Besides Notification Center, a badge could be added to the app icon, indicating the number of finished downloads. Or the download progress could be shown there.~~
-- etc...
+```sh
+make                   # the optimised binary: target/release/putio-adder
+make app               # macOS: target/put.io adder.app (make open also starts it)
+make check             # format, clippy and tests, as CI runs them
+make help              # lists every task
+```
+
+Without `make`: `cargo build --release --locked -p putio-adder` and `tools/bundle-macos.sh`.
+
+Rust is pinned in `rust-toolchain.toml`. Everything builds with `--locked`.
+
+To look at the UI without an account (debug builds only, no network and no Keychain): `make demo` (or `make demo VIEW=prefs THEME=dark`). The views, and the other developer notes, are in [docs/development.md](docs/development.md).
+
+## How it is built
+
+A pure state machine (`putio-core`) decides what the app does; thin crates do the I/O (`putio-api` for put.io, `putio-platform` for the OS, `putio-adder` for the window). See [docs/architecture.md](docs/architecture.md). Security is the main design constraint: [SECURITY.md](SECURITY.md), [docs/dependencies.md](docs/dependencies.md), [docs/platform.md](docs/platform.md). Updates: [docs/updates.md](docs/updates.md). Cutting a release: [docs/releasing.md](docs/releasing.md).
+
+## Licence
+
+MIT. The put.io name and logo belong to put.io. Montserrat is under the SIL Open Font License. See [assets/PROVENANCE.md](assets/PROVENANCE.md).

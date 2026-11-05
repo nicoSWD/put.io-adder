@@ -1,0 +1,22 @@
+[package]
+name = "putio-adder"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+eframe = "0.36.2"
+egui_extras = { version = "0.36.2", default-features = false, features = ["image"] }
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+putio-api = { path = "../putio-api" }
+putio-core = { path = "../putio-core" }
+putio-platform = { path = "../putio-platform" }
+sys-locale = "0.3.2"
+
+[dev-dependencies]
+putio-api = { path = "../putio-api", features = ["testing"] }
+
+[lints]
+workspace = true

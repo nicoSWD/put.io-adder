@@ -1,0 +1,34 @@
+# Security policy
+
+## Reporting
+Please report vulnerabilities privately through GitHub's "Report a vulnerability" (Security tab). Do not open a public issue.
+
+## Design rules
+- The put.io token lives only in the OS secret store (Keychain / Credential Manager / Secret Service). It is never written to a settings file, log, URL or command line.
+- TLS is rustls only; `openssl` and `native-tls` are banned in `deny.toml`.
+- Only crates.io dependencies, `Cargo.lock` is committed, all CI uses `--locked`.
+- Every GitHub Action is pinned to a full commit SHA.
+- Anything arriving from the OS (magnet URIs, file paths, command-line arguments, IPC frames) is validated as hostile input.
+
+## Verifying a release
+Releases are built by GitHub Actions from a signed tag, by a workflow that refuses tags not signed by the
+maintainer, not on `master`, or whose CI did not pass, and that waits for a human to approve the publish step.
+Each artifact has a build-provenance attestation:
+
+    gh attestation verify <artifact> --repo nicoSWD/put.io-adder
+
+`SHA256SUMS` and a CycloneDX SBOM (`sbom.cdx.json`) are published with every release. Release builds use no
+build cache, a pinned toolchain, `--locked`, and fixed timestamps and paths. The Linux build is checked against a
+glibc floor. See docs/releasing.md.
+
+## What the app can and cannot do
+- It talks only to `api.put.io`, `upload.put.io` and, for updates, `api.github.com` and (to download a release file)
+  `github.com` / `*.githubusercontent.com`. API calls do not follow redirects; the update download follows at most
+  three, each checked against the GitHub hosts.
+- It checks GitHub for a newer release now and then. It installs one only when you press *Update now* (then
+  *Restart to finish*), and only a release file with the expected name from this project's own releases. It does
+  **not** verify a checksum, a tag signature or a code signature of what it downloads: see docs/updates.md for
+  exactly what it does and does not check.
+- It never opens anything but fixed `https://put.io/...` pages and this project's GitHub pages.
+- Magnet links and file paths handed over by the OS or another launch are validated before use. A `.torrent` is read
+  only if it is a regular file below a size limit.

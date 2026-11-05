@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  schedule:
+    - cron: "17 4 * * 1" # weekly: new advisories can break an unchanged tree
+
+# Least privilege by default; jobs ask for more only if they need it.
+permissions: {}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned toolchain
+        shell: bash
+        run: |
+          toolchain=$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$toolchain" --profile minimal --component clippy --component rustfmt
+          echo "RUSTUP_TOOLCHAIN=$toolchain" >> "$GITHUB_ENV"
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
+            libx11-dev libxcursor-dev libxrandr-dev libxi-dev \
+            libgl1-mesa-dev libegl1-mesa-dev pkg-config
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      # --no-fail-fast: one run shows every failing test binary, not just the first one.
+      - run: cargo test --workspace --locked --no-fail-fast
+
+  deny:
+    name: cargo-deny
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check
+          arguments: --locked
+
+  spec-digest:
+    name: Vendored spec digest
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: sha256sum --check putio-2.8.14.json.sha256
+        working-directory: crates/putio-api/tests/spec
+      - name: No unpinned GitHub Actions
+        run: |
+          if grep -rnE 'uses: *[^ ]+@' .github/workflows | grep -vE '@[0-9a-f]{40}( |$)'; then
+            echo "::error::every action must be pinned to a full commit SHA"; exit 1
+          fi
+
+  tools:
+    name: Release tooling tests
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned toolchain
+        shell: bash
+        run: |
+          toolchain=$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$toolchain" --profile minimal --component clippy --component rustfmt
+          echo "RUSTUP_TOOLCHAIN=$toolchain" >> "$GITHUB_ENV"
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
+            libx11-dev libxcursor-dev libxrandr-dev libxi-dev \
+            libgl1-mesa-dev libegl1-mesa-dev pkg-config
+      - run: |
+          for t in tools/test_*.py; do python3 -I "$t"; done
+      - name: Shell scripts parse
+        run: |
+          for f in tools/*.sh packaging/linux/*.sh; do sh -n "$f"; done
+      - name: Linux package builds and installs into a throw-away home
+        run: |
+          cargo build --locked --release -p putio-adder
+          python3 tools/sbom.py --out dist-sbom.json --licenses dist-third-party.txt
+          mkdir -p dist && cp dist-third-party.txt dist/THIRD_PARTY.txt
+          tools/package-linux.sh target/release/putio-adder 0.0.0-ci x86_64
+          tar -tzf dist/putio-adder-v0.0.0-ci-linux-x86_64.tar.gz
+          python3 tools/check-glibc.py target/release/putio-adder --max 2.35
+          tmp=$(mktemp -d); tar -xzf dist/putio-adder-v0.0.0-ci-linux-x86_64.tar.gz -C "$tmp"
+          HOME="$tmp/home" XDG_DATA_HOME="$tmp/home/.local/share" sh "$tmp"/putio-adder-v0.0.0-ci-linux-x86_64/install.sh
+          test -x "$tmp/home/.local/bin/putio-adder"
+          grep -q "^Exec=$tmp/home/.local/bin/putio-adder" "$tmp/home/.local/share/applications/es.nico.putio-adder.desktop"
+          HOME="$tmp/home" XDG_DATA_HOME="$tmp/home/.local/share" sh "$tmp"/putio-adder-v0.0.0-ci-linux-x86_64/uninstall.sh
+          test ! -e "$tmp/home/.local/bin/putio-adder"

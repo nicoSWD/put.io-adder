@@ -1,0 +1,301 @@
+//! Small icons drawn with the painter, so there is no icon font to ship or to be missing.
+
+use eframe::egui::{self, Color32, CornerRadius, Painter, Pos2, Rect, Stroke, StrokeKind, Vec2};
+use putio_api::TransferStatus;
+
+use super::theme;
+
+/// Three dots (a menu button).
+pub(crate) fn dots(painter: &Painter, center: Pos2, color: Color32) {
+    for dx in [-5.5, 0.0, 5.5] {
+        painter.circle_filled(center + Vec2::new(dx, 0.0), 1.9, color);
+    }
+}
+
+/// A chevron pointing down, rotated by `turn` half-turns (0 = down, 1 = up).
+pub(crate) fn chevron(painter: &Painter, center: Pos2, turn: f32, color: Color32) {
+    let angle = turn * std::f32::consts::PI;
+    let (sin, cos) = angle.sin_cos();
+    let rotate = |v: Vec2| Vec2::new(v.x * cos - v.y * sin, v.x * sin + v.y * cos);
+    let a = center + rotate(Vec2::new(-5.0, -2.5));
+    let b = center + rotate(Vec2::new(0.0, 2.5));
+    let c = center + rotate(Vec2::new(5.0, -2.5));
+    let stroke = Stroke::new(2.0, color);
+    painter.line_segment([a, b], stroke);
+    painter.line_segment([b, c], stroke);
+}
+
+/// The small drawn symbols, at `scale` times their normal size (1.0 fits a 24 px badge).
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Glyph {
+    Check,
+    Cross,
+    ArrowDown,
+}
+
+pub(crate) fn glyph(painter: &Painter, center: Pos2, glyph: Glyph, scale: f32, color: Color32) {
+    let stroke = Stroke::new((2.0 * scale).max(1.4), color);
+    let at = |x: f32, y: f32| center + Vec2::new(x, y) * scale;
+    match glyph {
+        Glyph::Check => {
+            painter.line_segment([at(-4.0, 0.5), at(-1.2, 3.3)], stroke);
+            painter.line_segment([at(-1.2, 3.3), at(4.2, -3.0)], stroke);
+        }
+        Glyph::Cross => {
+            painter.line_segment([at(-3.2, -3.2), at(3.2, 3.2)], stroke);
+            painter.line_segment([at(-3.2, 3.2), at(3.2, -3.2)], stroke);
+        }
+        Glyph::ArrowDown => {
+            painter.line_segment([at(0.0, -4.5), at(0.0, 3.5)], stroke);
+            painter.line_segment([at(-3.8, 0.0), at(0.0, 4.0)], stroke);
+            painter.line_segment([at(3.8, 0.0), at(0.0, 4.0)], stroke);
+        }
+    }
+}
+
+/// Icons for the "..." menu, drawn about 16 px square around a centre.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MenuIcon {
+    Settings,
+    Refresh,
+    External,
+    SignOut,
+    Power,
+    Play,
+    Cancel,
+    Copy,
+    Link,
+    Trash,
+    Info,
+    Download,
+    Check,
+}
+
+/// A circular arc as a polyline (angles in degrees, 0 = right, increasing counter-clockwise on screen).
+/// Returns the end point and the (unit) direction of travel there, for an arrow head.
+fn arc(
+    painter: &Painter,
+    center: Pos2,
+    radius: f32,
+    from: f32,
+    to: f32,
+    stroke: Stroke,
+) -> (Pos2, Vec2) {
+    const STEPS: u8 = 16;
+    let point = |degrees: f32| {
+        let angle = degrees.to_radians();
+        center + Vec2::new(angle.cos(), -angle.sin()) * radius
+    };
+    let mut previous = point(from);
+    let mut direction = Vec2::ZERO;
+    for step in 1..=STEPS {
+        let degrees = from + (to - from) * f32::from(step) / f32::from(STEPS);
+        let next = point(degrees);
+        painter.line_segment([previous, next], stroke);
+        direction = (next - previous).normalized();
+        previous = next;
+    }
+    (previous, direction)
+}
+
+#[allow(clippy::too_many_lines)] // one flat match: each icon is a handful of strokes
+pub(crate) fn menu_icon(painter: &Painter, center: Pos2, icon: MenuIcon, color: Color32) {
+    let stroke = Stroke::new(1.6, color);
+    let at = |x: f32, y: f32| center + Vec2::new(x, y);
+    match icon {
+        MenuIcon::Settings => {
+            // A cog: a ring with eight short teeth.
+            painter.circle_stroke(center, 3.2, stroke);
+            painter.circle_stroke(center, 5.6, Stroke::new(1.6, color));
+            for index in 0_u8..8 {
+                let angle = f32::from(index) * std::f32::consts::FRAC_PI_4;
+                let direction = Vec2::new(angle.cos(), angle.sin());
+                painter.line_segment(
+                    [center + direction * 6.2, center + direction * 8.0],
+                    Stroke::new(2.2, color),
+                );
+            }
+        }
+        MenuIcon::Refresh => {
+            // Nearly a full circle with an arrow head at its end, pointing the way the arc runs.
+            let (tip, direction) = arc(painter, center, 6.0, 60.0, 335.0, stroke);
+            let side = Vec2::new(direction.y, -direction.x);
+            painter.line_segment([tip, tip - direction * 4.6 + side * 3.4], stroke);
+            painter.line_segment([tip, tip - direction * 4.6 - side * 3.4], stroke);
+        }
+        MenuIcon::External => {
+            // A box with a corner cut out, and an arrow leaving through the gap.
+            painter.line_segment([at(-1.5, -6.0), at(-6.0, -6.0)], stroke);
+            painter.line_segment([at(-6.0, -6.0), at(-6.0, 6.0)], stroke);
+            painter.line_segment([at(-6.0, 6.0), at(6.0, 6.0)], stroke);
+            painter.line_segment([at(6.0, 6.0), at(6.0, 1.5)], stroke);
+            painter.line_segment([at(-1.0, 1.0), at(6.5, -6.5)], stroke);
+            painter.line_segment([at(1.0, -6.5), at(6.5, -6.5)], stroke);
+            painter.line_segment([at(6.5, -6.5), at(6.5, -1.0)], stroke);
+        }
+        MenuIcon::SignOut => {
+            // A doorway "[" and an arrow going out of it.
+            painter.line_segment([at(-1.0, -6.5), at(-6.5, -6.5)], stroke);
+            painter.line_segment([at(-6.5, -6.5), at(-6.5, 6.5)], stroke);
+            painter.line_segment([at(-6.5, 6.5), at(-1.0, 6.5)], stroke);
+            painter.line_segment([at(-2.0, 0.0), at(7.0, 0.0)], stroke);
+            painter.line_segment([at(3.5, -3.5), at(7.0, 0.0)], stroke);
+            painter.line_segment([at(3.5, 3.5), at(7.0, 0.0)], stroke);
+        }
+        MenuIcon::Power => {
+            // The power symbol: a ring open at the top, with a stroke through the gap.
+            arc(
+                painter,
+                center + Vec2::new(0.0, 0.8),
+                6.0,
+                125.0,
+                415.0,
+                stroke,
+            );
+            painter.line_segment([at(0.0, -7.5), at(0.0, -0.5)], Stroke::new(1.8, color));
+        }
+        MenuIcon::Play => {
+            // A triangle pointing right, nudged so that its weight sits in the middle.
+            painter.add(egui::Shape::closed_line(
+                vec![at(-3.5, -6.0), at(-3.5, 6.0), at(6.0, 0.0)],
+                stroke,
+            ));
+        }
+        MenuIcon::Cancel => {
+            painter.circle_stroke(center, 7.0, stroke);
+            painter.line_segment([at(-2.6, -2.6), at(2.6, 2.6)], stroke);
+            painter.line_segment([at(-2.6, 2.6), at(2.6, -2.6)], stroke);
+        }
+        MenuIcon::Copy => {
+            // Two sheets, the front one over the back one.
+            let rounding = CornerRadius::same(2);
+            painter.rect_stroke(
+                Rect::from_min_max(at(-2.0, -7.0), at(7.0, 2.0)),
+                rounding,
+                stroke,
+                StrokeKind::Middle,
+            );
+            painter.rect_stroke(
+                Rect::from_min_max(at(-7.0, -2.0), at(2.0, 7.0)),
+                rounding,
+                stroke,
+                StrokeKind::Middle,
+            );
+        }
+        MenuIcon::Link => {
+            // Two chain links side by side.
+            let rounding = CornerRadius::same(4);
+            painter.rect_stroke(
+                Rect::from_min_max(at(-7.5, -3.8), at(1.5, 3.8)),
+                rounding,
+                stroke,
+                StrokeKind::Middle,
+            );
+            painter.rect_stroke(
+                Rect::from_min_max(at(-1.5, -3.8), at(7.5, 3.8)),
+                rounding,
+                stroke,
+                StrokeKind::Middle,
+            );
+        }
+        MenuIcon::Download => {
+            // An arrow into a tray, like Update, but with the tray closed at the sides.
+            painter.line_segment([at(0.0, -7.0), at(0.0, 2.5)], stroke);
+            painter.line_segment([at(-4.0, -1.5), at(0.0, 2.5)], stroke);
+            painter.line_segment([at(4.0, -1.5), at(0.0, 2.5)], stroke);
+            painter.line_segment([at(-6.5, 3.0), at(-6.5, 7.0)], stroke);
+            painter.line_segment([at(-6.5, 7.0), at(6.5, 7.0)], stroke);
+            painter.line_segment([at(6.5, 7.0), at(6.5, 3.0)], stroke);
+        }
+        MenuIcon::Check => {
+            painter.line_segment([at(-6.0, 0.5), at(-2.0, 4.5)], stroke);
+            painter.line_segment([at(-2.0, 4.5), at(6.5, -4.5)], stroke);
+        }
+        MenuIcon::Info => {
+            // A circled "i".
+            painter.circle_stroke(center, 7.0, stroke);
+            painter.circle_filled(at(0.0, -3.0), 1.0, color);
+            painter.line_segment([at(0.0, -0.4), at(0.0, 3.8)], stroke);
+        }
+        MenuIcon::Trash => {
+            painter.line_segment([at(-6.5, -4.0), at(6.5, -4.0)], stroke);
+            painter.line_segment([at(-2.2, -4.0), at(-2.2, -6.5)], stroke);
+            painter.line_segment([at(-2.2, -6.5), at(2.2, -6.5)], stroke);
+            painter.line_segment([at(2.2, -6.5), at(2.2, -4.0)], stroke);
+            painter.add(egui::Shape::line(
+                vec![at(-4.8, -4.0), at(-4.0, 6.5), at(4.0, 6.5), at(4.8, -4.0)],
+                stroke,
+            ));
+            painter.line_segment([at(-1.6, -1.0), at(-1.6, 3.5)], stroke);
+            painter.line_segment([at(1.6, -1.0), at(1.6, 3.5)], stroke);
+        }
+    }
+}
+
+/// The round badge at the left of a transfer row, by state.
+pub(crate) fn status_badge(painter: &Painter, center: Pos2, status: TransferStatus) {
+    let radius = 12.0;
+    match status {
+        TransferStatus::Completed | TransferStatus::Seeding => {
+            painter.circle_filled(center, radius, theme::YELLOW);
+            glyph(painter, center, Glyph::Check, 1.0, theme::pal().on_yellow);
+        }
+        TransferStatus::Error => {
+            painter.circle_filled(center, radius, theme::pal().error_soft);
+            painter.circle_stroke(center, radius, Stroke::new(1.0, theme::pal().error));
+            glyph(painter, center, Glyph::Cross, 1.0, theme::pal().error);
+        }
+        TransferStatus::Downloading | TransferStatus::Completing => {
+            painter.circle_filled(center, radius, theme::pal().yellow_soft);
+            glyph(
+                painter,
+                center,
+                Glyph::ArrowDown,
+                1.0,
+                theme::pal().accent_text,
+            );
+        }
+        TransferStatus::Waiting
+        | TransferStatus::InQueue
+        | TransferStatus::PreparingDownload
+        | TransferStatus::Unknown => {
+            painter.circle_filled(center, radius, theme::pal().neutral_soft);
+            painter.circle_stroke(center, 4.5, Stroke::new(1.6, theme::pal().muted));
+        }
+    }
+}
+
+/// A big round badge for the empty state.
+pub(crate) fn empty_badge(painter: &Painter, center: Pos2) {
+    painter.circle_filled(center, 26.0, theme::pal().yellow_soft);
+    painter.circle_stroke(center, 26.0, Stroke::new(1.5, theme::pal().badge_border));
+    let stroke = Stroke::new(3.0, theme::pal().accent_text);
+    painter.line_segment(
+        [center + Vec2::new(0.0, -9.0), center + Vec2::new(0.0, 8.0)],
+        stroke,
+    );
+    painter.line_segment(
+        [center + Vec2::new(-7.5, 1.0), center + Vec2::new(0.0, 8.5)],
+        stroke,
+    );
+    painter.line_segment(
+        [center + Vec2::new(7.5, 1.0), center + Vec2::new(0.0, 8.5)],
+        stroke,
+    );
+}
+
+/// A slim rounded progress bar: `fraction` in `0.0..=1.0` painted over an empty track.
+pub(crate) fn progress_bar(painter: &Painter, rect: Rect, fraction: f32, fill: Color32) {
+    let radius = rect.height() / 2.0;
+    painter.rect_filled(rect, radius, theme::pal().track);
+    let fraction = fraction.clamp(0.0, 1.0);
+    if fraction > 0.0 {
+        // Never narrower than the bar is tall, so a tiny fraction still shows as a dot.
+        let width = (rect.width() * fraction).max(rect.height());
+        painter.rect_filled(
+            Rect::from_min_size(rect.min, Vec2::new(width, rect.height())),
+            radius,
+            fill,
+        );
+    }
+}
