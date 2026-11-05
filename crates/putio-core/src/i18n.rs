@@ -134,6 +134,27 @@ pub enum Msg {
     MenuRemoveFromList,
     MenuStream,
     MenuCopyLink,
+    MenuDetails,
+    DetailsTitle,
+    DetailStatus,
+    DetailType,
+    DetailDownloaded,
+    DetailUploaded,
+    DetailRatio,
+    DetailSeedingFor,
+    DetailPeers,
+    DetailAvailability,
+    DetailPrivate,
+    DetailTrackerMessage,
+    DetailError,
+    DetailAdded,
+    DetailFinished,
+    DetailYes,
+    DetailNo,
+    KindTorrent,
+    KindUrl,
+    KindPlaylist,
+    KindLiveStream,
     MenuCopyMagnet,
     MenuCopySource,
     MenuRetry,
@@ -493,7 +514,7 @@ impl Msg {
             Self::SortBy => tr!(l, "Sort", "Sortieren", "Ordenar").into(),
             Self::SortAscending => tr!(l, "Ascending", "Aufsteigend", "Ascendente").into(),
             Self::SortDescending => tr!(l, "Descending", "Absteigend", "Descendente").into(),
-            Self::SortStatus => tr!(l, "Status", "Status", "Estado").into(),
+            Self::SortStatus | Self::DetailStatus => tr!(l, "Status", "Status", "Estado").into(),
             Self::SortProgress => tr!(l, "Progress", "Fortschritt", "Progreso").into(),
             Self::EmptyTitle => tr!(
                 l,
@@ -529,6 +550,41 @@ impl Msg {
             .into(),
             Self::MenuStream => {
                 tr!(l, "Stream in VLC", "In VLC streamen", "Reproducir en VLC").into()
+            }
+            Self::MenuDetails | Self::DetailsTitle => {
+                tr!(l, "Details", "Details", "Detalles").into()
+            }
+            Self::DetailType => tr!(l, "Type", "Typ", "Tipo").into(),
+            Self::DetailDownloaded => tr!(l, "Downloaded", "Heruntergeladen", "Descargado").into(),
+            Self::DetailUploaded => tr!(l, "Uploaded", "Hochgeladen", "Subido").into(),
+            Self::DetailRatio => tr!(l, "Share ratio", "Share-Ratio", "Ratio").into(),
+            Self::DetailSeedingFor => {
+                tr!(l, "Seeding for", "Seed-Dauer", "Tiempo compartiendo").into()
+            }
+            Self::DetailPeers => tr!(l, "Peers", "Peers", "Pares").into(),
+            Self::DetailAvailability => {
+                tr!(l, "Availability", "Verfügbarkeit", "Disponibilidad").into()
+            }
+            Self::DetailPrivate => {
+                tr!(l, "Private tracker", "Privater Tracker", "Tracker privado").into()
+            }
+            Self::DetailTrackerMessage => tr!(
+                l,
+                "Tracker message",
+                "Tracker-Meldung",
+                "Mensaje del tracker"
+            )
+            .into(),
+            Self::DetailError => tr!(l, "Error", "Fehler", "Error").into(),
+            Self::DetailAdded => tr!(l, "Added", "Hinzugefügt", "Añadido").into(),
+            Self::DetailFinished => tr!(l, "Finished", "Fertiggestellt", "Finalizado").into(),
+            Self::DetailYes => tr!(l, "Yes", "Ja", "Sí").into(),
+            Self::DetailNo => tr!(l, "No", "Nein", "No").into(),
+            Self::KindTorrent => tr!(l, "Torrent", "Torrent", "Torrent").into(),
+            Self::KindUrl => tr!(l, "Link", "Link", "Enlace").into(),
+            Self::KindPlaylist => tr!(l, "Playlist", "Playlist", "Lista de reproducción").into(),
+            Self::KindLiveStream => {
+                tr!(l, "Live stream", "Livestream", "Transmisión en vivo").into()
             }
             Self::MenuCopyLink => tr!(
                 l,

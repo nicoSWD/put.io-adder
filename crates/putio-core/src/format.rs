@@ -1,6 +1,6 @@
 //! Human-readable numbers for the transfers table and header.
 
-use putio_api::{Transfer, TransferStatus};
+use putio_api::{Transfer, TransferKind, TransferStatus};
 
 use crate::i18n::{Locale, Msg};
 
@@ -112,6 +112,175 @@ pub fn detail(transfer: &Transfer, locale: Locale) -> String {
     }
 }
 
+/// One line of the details panel.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DetailRow {
+    pub label: Msg,
+    pub value: String,
+    /// Free text that needs the full width (drawn under its label) rather than a short value.
+    pub long: bool,
+}
+
+/// The facts about a transfer worth showing in the details panel, in display order. Anything the
+/// server did not send (or sent as nonsense) is left out rather than shown as `0` or `–`.
+#[must_use]
+pub fn details(transfer: &Transfer, locale: Locale) -> Vec<DetailRow> {
+    let mut rows = Vec::new();
+    let mut short = |label: Msg, value: String| {
+        rows.push(DetailRow {
+            label,
+            value,
+            long: false,
+        });
+    };
+
+    short(Msg::DetailStatus, status_label(transfer.status, locale));
+    let kind = match transfer.kind {
+        TransferKind::Torrent => Some(Msg::KindTorrent),
+        TransferKind::Url => Some(Msg::KindUrl),
+        TransferKind::Playlist => Some(Msg::KindPlaylist),
+        TransferKind::LiveStream => Some(Msg::KindLiveStream),
+        TransferKind::Unknown => None,
+    };
+    if let Some(kind) = kind {
+        short(Msg::DetailType, kind.text(locale));
+    }
+    if transfer.size > 0 {
+        short(Msg::ColSize, bytes(transfer.size));
+    }
+    if let Some(value) = transfer.downloaded.filter(|v| *v > 0) {
+        short(Msg::DetailDownloaded, bytes(value));
+    }
+    if let Some(value) = transfer.uploaded.filter(|v| *v > 0) {
+        short(Msg::DetailUploaded, bytes(value));
+    }
+    if let Some(ratio) = transfer
+        .current_ratio
+        .filter(|r| r.is_finite() && *r >= 0.0)
+    {
+        short(Msg::DetailRatio, format!("{ratio:.2}"));
+    }
+    if let Some(seconds) = transfer.seconds_seeding.filter(|s| *s > 0) {
+        short(Msg::DetailSeedingFor, duration(seconds));
+    }
+    if let Some(peers) = transfer.peers.filter(|p| *p >= 0) {
+        short(Msg::DetailPeers, peers.to_string());
+    }
+    if let Some(percent) = transfer.availability.filter(|a| (0..=100).contains(a)) {
+        short(Msg::DetailAvailability, format!("{percent}%"));
+    }
+    if let Some(private) = transfer.is_private {
+        let answer = if private {
+            Msg::DetailYes
+        } else {
+            Msg::DetailNo
+        };
+        short(Msg::DetailPrivate, answer.text(locale));
+    }
+    for (label, stamp) in [
+        (Msg::DetailAdded, &transfer.created_at),
+        (Msg::DetailFinished, &transfer.finished_at),
+    ] {
+        if let Some(text) = stamp.as_deref().and_then(timestamp) {
+            short(label, text);
+        }
+    }
+
+    let mut long = |label: Msg, text: Option<&str>| {
+        if let Some(text) = text.map(clean_error).filter(|t| !t.is_empty()) {
+            rows.push(DetailRow {
+                label,
+                value: text,
+                long: true,
+            });
+        }
+    };
+    if transfer.status == TransferStatus::Error {
+        long(Msg::DetailError, transfer.error_message.as_deref());
+    }
+    long(
+        Msg::DetailTrackerMessage,
+        transfer.tracker_message.as_deref(),
+    );
+    rows
+}
+
+fn status_label(status: TransferStatus, locale: Locale) -> String {
+    match status {
+        TransferStatus::InQueue => Msg::StatusQueued,
+        TransferStatus::Waiting => Msg::StatusWaiting,
+        TransferStatus::PreparingDownload => Msg::StatusPreparing,
+        TransferStatus::Downloading => Msg::StatusDownloading,
+        TransferStatus::Completing => Msg::EtaFinishing,
+        TransferStatus::Seeding => Msg::StatusSeeding,
+        TransferStatus::Completed => Msg::EtaDone,
+        TransferStatus::Error => Msg::StatusFailed,
+        TransferStatus::Unknown => return "–".into(),
+    }
+    .text(locale)
+}
+
+/// `2024-05-01T12:34:56` (optionally with fraction and zone) as `2024-05-01 12:34 UTC`.
+/// Anything that is not a plain ISO 8601 timestamp yields `None`: the text comes from the server.
+fn timestamp(raw: &str) -> Option<String> {
+    let raw = raw.trim();
+    if !raw.is_ascii() {
+        return None;
+    }
+    let bytes = raw.as_bytes();
+    let digits = |range: std::ops::Range<usize>| {
+        bytes
+            .get(range)
+            .is_some_and(|part| part.iter().all(u8::is_ascii_digit))
+    };
+    let shape = digits(0..4)
+        && bytes.get(4) == Some(&b'-')
+        && digits(5..7)
+        && bytes.get(7) == Some(&b'-')
+        && digits(8..10)
+        && matches!(bytes.get(10), Some(b'T' | b' '))
+        && digits(11..13)
+        && bytes.get(13) == Some(&b':')
+        && digits(14..16);
+    if !shape {
+        return None;
+    }
+    let mut rest = raw.get(16..)?;
+    if let Some(after) = rest.strip_prefix(':') {
+        if !after.get(..2)?.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        rest = after.get(2..)?;
+        if let Some(fraction) = rest.strip_prefix('.') {
+            let tail = fraction.trim_start_matches(|c: char| c.is_ascii_digit());
+            if tail.len() == fraction.len() {
+                return None;
+            }
+            rest = tail;
+        }
+    }
+    let zone = match rest {
+        "" | "Z" | "+00:00" | "-00:00" => " UTC".to_owned(),
+        other => {
+            let offset = other.as_bytes();
+            let valid = other.len() == 6
+                && matches!(offset.first(), Some(b'+' | b'-'))
+                && offset
+                    .get(1..3)
+                    .is_some_and(|h| h.iter().all(u8::is_ascii_digit))
+                && offset.get(3) == Some(&b':')
+                && offset
+                    .get(4..6)
+                    .is_some_and(|m| m.iter().all(u8::is_ascii_digit));
+            if !valid {
+                return None;
+            }
+            format!(" {other}")
+        }
+    };
+    Some(format!("{} {}{zone}", raw.get(..10)?, raw.get(11..16)?))
+}
+
 fn clean_error(message: &str) -> String {
     let cleaned: String = message.chars().filter(|c| !c.is_control()).collect();
     let cleaned = cleaned.trim();
@@ -130,6 +299,165 @@ mod tests {
         let mut transfer: Transfer = serde_json::from_str(r#"{"id": 1, "name": "x"}"#).unwrap();
         transfer.status = status;
         transfer
+    }
+
+    fn labelled(rows: &[DetailRow]) -> Vec<(Msg, &str)> {
+        rows.iter()
+            .map(|r| (r.label.clone(), r.value.as_str()))
+            .collect()
+    }
+
+    #[test]
+    fn details_of_a_bare_transfer_are_just_its_status() {
+        let rows = details(&transfer(TransferStatus::Waiting), Locale::En);
+        assert_eq!(labelled(&rows), [(Msg::DetailStatus, "Waiting…")]);
+    }
+
+    #[test]
+    fn details_of_a_seeding_torrent_show_the_swarm_and_the_ratio() {
+        let mut t = transfer(TransferStatus::Seeding);
+        t.kind = putio_api::TransferKind::Torrent;
+        t.size = 1024 * 1024;
+        t.downloaded = Some(1024 * 1024);
+        t.uploaded = Some(3 * 1024 * 1024);
+        t.current_ratio = Some(3.0);
+        t.seconds_seeding = Some(3_700);
+        t.peers = Some(8);
+        t.availability = Some(100);
+        t.is_private = Some(true);
+        t.tracker_message = Some("Announce OK".into());
+        t.created_at = Some("2024-05-01T12:34:56".into());
+        t.finished_at = Some("2024-05-01T13:00:00Z".into());
+        let rows = details(&t, Locale::En);
+        assert_eq!(
+            labelled(&rows),
+            [
+                (Msg::DetailStatus, "Done · seeding"),
+                (Msg::DetailType, "Torrent"),
+                (Msg::ColSize, "1.0 MB"),
+                (Msg::DetailDownloaded, "1.0 MB"),
+                (Msg::DetailUploaded, "3.0 MB"),
+                (Msg::DetailRatio, "3.00"),
+                (Msg::DetailSeedingFor, "1h 01m"),
+                (Msg::DetailPeers, "8"),
+                (Msg::DetailAvailability, "100%"),
+                (Msg::DetailPrivate, "Yes"),
+                (Msg::DetailAdded, "2024-05-01 12:34 UTC"),
+                (Msg::DetailFinished, "2024-05-01 13:00 UTC"),
+                (Msg::DetailTrackerMessage, "Announce OK"),
+            ]
+        );
+        assert!(rows.last().unwrap().long);
+        assert!(rows.iter().rev().skip(1).all(|r| !r.long));
+    }
+
+    #[test]
+    fn a_failed_transfer_shows_its_error_and_only_for_a_failed_transfer() {
+        let mut t = transfer(TransferStatus::Error);
+        t.error_message = Some("Tracker\nunreachable\u{1b}[31m".into());
+        t.tracker_message = Some("  ".into());
+        let rows = details(&t, Locale::En);
+        assert_eq!(
+            labelled(&rows),
+            [
+                (Msg::DetailStatus, "Failed"),
+                (Msg::DetailError, "Trackerunreachable[31m"),
+            ]
+        );
+        let mut fine = transfer(TransferStatus::Downloading);
+        fine.error_message = Some("old".into());
+        let rows = details(&fine, Locale::En);
+        assert!(!rows.iter().any(|r| r.label == Msg::DetailError));
+    }
+
+    #[test]
+    fn nonsense_numbers_are_left_out() {
+        let mut t = transfer(TransferStatus::Seeding);
+        t.peers = Some(-1);
+        t.availability = Some(250);
+        t.current_ratio = Some(f64::NAN);
+        t.uploaded = Some(0);
+        t.seconds_seeding = Some(-5);
+        assert_eq!(details(&t, Locale::En).len(), 1);
+        t.current_ratio = Some(f64::INFINITY);
+        assert_eq!(details(&t, Locale::En).len(), 1);
+        t.current_ratio = Some(-1.0);
+        assert_eq!(details(&t, Locale::En).len(), 1);
+        t.current_ratio = Some(0.0);
+        assert_eq!(details(&t, Locale::En).len(), 2);
+    }
+
+    #[test]
+    fn a_long_tracker_message_is_bounded() {
+        let mut t = transfer(TransferStatus::Seeding);
+        t.tracker_message = Some("x".repeat(10_000));
+        let rows = details(&t, Locale::En);
+        assert!(rows.last().unwrap().value.chars().count() <= MAX_ERROR_CHARS + 1);
+    }
+
+    #[test]
+    fn timestamps_are_shown_without_seconds_and_with_their_zone() {
+        let shown = |raw: &str| timestamp(raw).unwrap_or_default();
+        assert_eq!(shown("2024-05-01T12:34:56"), "2024-05-01 12:34 UTC");
+        assert_eq!(shown("2024-05-01 12:34:56.789Z"), "2024-05-01 12:34 UTC");
+        assert_eq!(shown("2024-05-01T12:34:56+00:00"), "2024-05-01 12:34 UTC");
+        assert_eq!(
+            shown("2024-05-01T12:34:56+02:00"),
+            "2024-05-01 12:34 +02:00"
+        );
+        assert_eq!(shown("2024-05-01T12:34"), "2024-05-01 12:34 UTC");
+        assert_eq!(shown(" 2024-05-01T12:34:56 "), "2024-05-01 12:34 UTC");
+    }
+
+    #[test]
+    fn anything_that_is_not_a_timestamp_is_dropped() {
+        for bad in [
+            "",
+            "yesterday",
+            "2024-05-01",
+            "2024/05/01T12:34:56",
+            "2024-05-01T12-34-56",
+            "2024-05-01T12:34:5x",
+            "2024-05-01T12:34:56+2",
+            "2024-05-01T12:34:56 UTC",
+            "2024-05-01T12:34:56.Z",
+            "２０２４-05-01T12:34:56",
+            "2024-05-01T12:34:56\u{1b}[0m",
+            "日本語日本語日本語日本語日本語日本語",
+        ] {
+            assert_eq!(timestamp(bad), None, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn every_detail_label_is_translated() {
+        for locale in [Locale::En, Locale::De, Locale::Es] {
+            for msg in [
+                Msg::MenuDetails,
+                Msg::DetailsTitle,
+                Msg::DetailStatus,
+                Msg::DetailType,
+                Msg::DetailDownloaded,
+                Msg::DetailUploaded,
+                Msg::DetailRatio,
+                Msg::DetailSeedingFor,
+                Msg::DetailPeers,
+                Msg::DetailAvailability,
+                Msg::DetailPrivate,
+                Msg::DetailTrackerMessage,
+                Msg::DetailError,
+                Msg::DetailAdded,
+                Msg::DetailFinished,
+                Msg::DetailYes,
+                Msg::DetailNo,
+                Msg::KindTorrent,
+                Msg::KindUrl,
+                Msg::KindPlaylist,
+                Msg::KindLiveStream,
+            ] {
+                assert!(!msg.text(locale).trim().is_empty(), "{msg:?} {locale:?}");
+            }
+        }
     }
 
     #[test]

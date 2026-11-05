@@ -1,8 +1,6 @@
 //! Preferences: a modal card with grouped settings, and the folder chooser as its second page.
 
-use eframe::egui::{
-    self, Align, Color32, CornerRadius, Layout, Margin, Pos2, Rect, RichText, Sense, Stroke, Vec2,
-};
+use eframe::egui::{self, Align, CornerRadius, Layout, Pos2, Rect, RichText, Sense, Vec2};
 use putio_api::client::FileListing;
 use putio_api::{ApiError, File};
 use putio_core::i18n::{Locale, Msg};
@@ -114,19 +112,7 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
     if !app.ui.prefs_open {
         return;
     }
-    let p = theme::pal();
-    let frame = egui::Frame::new()
-        .fill(p.surface)
-        .stroke(Stroke::new(1.0, p.divider))
-        .corner_radius(CornerRadius::same(18))
-        .inner_margin(Margin::same(22))
-        .shadow(egui::Shadow {
-            offset: [0, 8],
-            blur: 28,
-            spread: 0,
-            color: Color32::from_black_alpha(if p.dark { 150 } else { 60 }),
-        });
-    let backdrop = Color32::from_black_alpha(if p.dark { 150 } else { 80 });
+    let (frame, backdrop) = widgets::dialog_frame();
 
     let workers = app.workers();
     let locale = app.state.locale;
@@ -180,7 +166,7 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
 }
 
 /// Title row: optional back arrow, the title, and a close button. Returns (back, close) clicks.
-fn header(ui: &mut egui::Ui, title: &str, with_back: bool) -> (bool, bool) {
+pub(crate) fn header(ui: &mut egui::Ui, title: &str, with_back: bool) -> (bool, bool) {
     let (mut back, mut close) = (false, false);
     ui.horizontal(|ui| {
         ui.set_height(32.0);
@@ -199,7 +185,7 @@ fn header(ui: &mut egui::Ui, title: &str, with_back: bool) -> (bool, bool) {
 /// A vertical scroll area of at most `height`, given an explicit size. (A modal's own idea of the free
 /// height can be tiny if it was first laid out while the window was still small, and a scroll area would
 /// obey that: sizing it explicitly keeps the dialog correct whatever the window did before.)
-fn scroll_region(ui: &mut egui::Ui, height: f32, content: impl FnOnce(&mut egui::Ui)) {
+pub(crate) fn scroll_region(ui: &mut egui::Ui, height: f32, content: impl FnOnce(&mut egui::Ui)) {
     ui.allocate_ui(Vec2::new(ui.available_width(), height), |ui| {
         egui::ScrollArea::vertical()
             .max_height(height)
@@ -209,7 +195,7 @@ fn scroll_region(ui: &mut egui::Ui, height: f32, content: impl FnOnce(&mut egui:
 }
 
 /// The scrolling area under the header: tall enough for the dialog, never taller than the window.
-fn body_height(ui: &egui::Ui) -> f32 {
+pub(crate) fn body_height(ui: &egui::Ui) -> f32 {
     (ui.ctx().content_rect().height() - 150.0).max(160.0)
 }
 

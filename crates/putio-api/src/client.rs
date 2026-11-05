@@ -329,7 +329,7 @@ impl<T: Transport> Client<T> {
 
         let reply: Reply = self.json(&request)?;
         match (reply.transfer, reply.file) {
-            (Some(transfer), _) => Ok(UploadOutcome::Transfer(transfer)),
+            (Some(transfer), _) => Ok(UploadOutcome::Transfer(Box::new(transfer))),
             (None, Some(file)) => Ok(UploadOutcome::File(file)),
             (None, None) => Err(ApiError::Decode(
                 "upload reply has neither `transfer` nor `file`".into(),
@@ -628,6 +628,45 @@ mod tests {
                 .is_some_and(|s| s.starts_with("magnet:?xt=urn:btih:"))
         );
         assert_eq!(transfers[1].source, None);
+    }
+
+    #[test]
+    fn transfer_details_are_read_when_present_and_absent_otherwise() {
+        let fake = FakeTransport::new();
+        fake.push_json(200, include_str!("../tests/fixtures/transfers_list.json"));
+        let transfers = client(&fake).transfers().unwrap();
+        assert_eq!(transfers[0].peers, Some(12));
+        assert_eq!(transfers[0].availability, Some(100));
+        assert_eq!(transfers[0].current_ratio, None);
+        let done = &transfers[1];
+        assert_eq!(done.uploaded, Some(209_715_200));
+        assert_eq!(done.downloaded, Some(104_857_600));
+        assert_eq!(done.current_ratio, Some(2.0));
+        assert_eq!(done.seconds_seeding, Some(3600));
+        assert_eq!(done.is_private, Some(false));
+        assert_eq!(done.tracker_message.as_deref(), Some("Announce OK"));
+        assert_eq!(done.created_at.as_deref(), Some("2024-05-01T12:34:56"));
+        assert_eq!(done.finished_at.as_deref(), Some("2024-05-01T13:00:00"));
+    }
+
+    #[test]
+    fn a_detail_of_the_wrong_type_is_dropped_without_losing_the_transfer() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            200,
+            r#"{"status":"OK","transfers":[{"id":5,"name":"x","status":"SEEDING","peers":"many","availability":1.5,
+               "current_ratio":"high","is_private":"yes","tracker_message":["a"],"created_at":12,"uploaded":null}]}"#,
+        );
+        let transfers = client(&fake).transfers().unwrap();
+        let t = &transfers[0];
+        assert_eq!((t.id, t.name.as_str()), (5, "x"));
+        assert_eq!(t.peers, None);
+        assert_eq!(t.availability, None);
+        assert_eq!(t.current_ratio, None);
+        assert_eq!(t.is_private, None);
+        assert_eq!(t.tracker_message, None);
+        assert_eq!(t.created_at, None);
+        assert_eq!(t.uploaded, None);
     }
 
     #[test]

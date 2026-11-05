@@ -218,6 +218,12 @@ impl App {
             "card-menu-done" => Some(crate::ui::Overlay::Card(5)),
             _ => None,
         };
+        self.ui.details = match view {
+            "details" => Some(6),
+            "details-failed" => Some(7),
+            "details-downloading" => Some(1),
+            _ => None,
+        };
         if view == "menu-update" {
             self.state.update = putio_core::update::UpdateStatus::Available {
                 version: "0.2.0".into(),

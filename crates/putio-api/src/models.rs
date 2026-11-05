@@ -8,6 +8,17 @@
 use serde::{Deserialize, Deserializer};
 
 /// `null` and missing both become `T::default()`.
+/// A field that is kept when it has the expected type and dropped (as `None`) when it does not, so an
+/// odd value in a detail never makes the whole transfer list unreadable.
+fn lenient<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(value.and_then(|value| serde_json::from_value(value).ok()))
+}
+
 fn null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
     D: Deserializer<'de>,
@@ -65,7 +76,7 @@ pub enum TransferKind {
     Unknown,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Deserialize)]
 pub struct Transfer {
     pub id: i64,
     #[serde(default, deserialize_with = "null_default")]
@@ -94,6 +105,33 @@ pub struct Transfer {
     /// What the transfer was added from: a magnet link or a URL. Untrusted text.
     #[serde(default)]
     pub source: Option<String>,
+
+    // Details. All optional and read leniently: put.io leaves out what does not apply to a transfer.
+    /// Connected peers.
+    #[serde(default, deserialize_with = "lenient")]
+    pub peers: Option<i64>,
+    /// How much of the content the swarm has, in percent.
+    #[serde(default, deserialize_with = "lenient")]
+    pub availability: Option<i64>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub downloaded: Option<i64>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub uploaded: Option<i64>,
+    /// Uploaded divided by downloaded.
+    #[serde(default, deserialize_with = "lenient")]
+    pub current_ratio: Option<f64>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub seconds_seeding: Option<i64>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub is_private: Option<bool>,
+    /// What the tracker last said. Untrusted text.
+    #[serde(default, deserialize_with = "lenient")]
+    pub tracker_message: Option<String>,
+    /// ISO 8601 timestamps as sent. Untrusted text.
+    #[serde(default, deserialize_with = "lenient")]
+    pub created_at: Option<String>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub finished_at: Option<String>,
 }
 
 impl Transfer {
@@ -198,9 +236,9 @@ pub struct DeviceCode {
 }
 
 /// What an upload turned into. For a `.torrent` put.io starts a transfer.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum UploadOutcome {
-    Transfer(Transfer),
+    Transfer(Box<Transfer>),
     File(File),
 }
 

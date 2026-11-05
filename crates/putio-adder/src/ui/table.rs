@@ -256,6 +256,7 @@ fn empty(ui: &mut egui::Ui, app: &App) {
 /// What a context-menu entry does. Mapped to a core event with the transfer's *id*, never its row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Act {
+    Details,
     Open,
     Stream,
     CopyLink,
@@ -266,8 +267,10 @@ enum Act {
 }
 
 impl Act {
-    fn event(self, id: i64) -> Event {
-        match self {
+    /// The core event for this entry, or `None` for one the UI handles itself (the details panel).
+    fn event(self, id: i64) -> Option<Event> {
+        Some(match self {
+            Self::Details => return None,
             Self::Open => Event::OpenTransferOnPutio(id),
             Self::Stream => Event::StreamRequested(id),
             Self::CopyLink => Event::CopyLinkRequested(id),
@@ -275,7 +278,7 @@ impl Act {
             Self::Retry => Event::RetryRequested(id),
             Self::Cancel => Event::CancelRequested(id),
             Self::Clear => Event::ClearRequested,
-        }
+        })
     }
 }
 
@@ -301,7 +304,10 @@ fn entry(icon: MenuIcon, label: Msg, act: Act) -> Entry {
 fn entries(transfer: &Transfer, clearable: usize) -> Vec<Vec<Entry>> {
     let mut groups = Vec::new();
 
-    let mut open = vec![entry(MenuIcon::External, Msg::MenuOpenOnPutio, Act::Open)];
+    let mut open = vec![
+        entry(MenuIcon::Info, Msg::MenuDetails, Act::Details),
+        entry(MenuIcon::External, Msg::MenuOpenOnPutio, Act::Open),
+    ];
     if transfer.file_id.is_some() {
         open.push(entry(MenuIcon::Play, Msg::MenuStream, Act::Stream));
     }
@@ -549,8 +555,10 @@ fn card(ui: &mut egui::Ui, app: &mut App, transfer: &Transfer, clearable: usize)
     }
     popup.show(|ui| chosen = chosen.or(menu_body(ui, locale, transfer, clearable)));
 
-    if let Some(act) = chosen {
-        action = Some(act.event(transfer.id));
+    match chosen {
+        Some(Act::Details) => app.ui.details = Some(transfer.id),
+        Some(act) => action = act.event(transfer.id),
+        None => {}
     }
     action
 }
@@ -619,7 +627,10 @@ mod tests {
     #[test]
     fn a_running_transfer_can_be_opened_and_cancelled_but_not_streamed() {
         let t = sample(TransferStatus::Downloading, None, None);
-        assert_eq!(acts(&t, 0), [vec![Act::Open], vec![Act::Cancel]]);
+        assert_eq!(
+            acts(&t, 0),
+            [vec![Act::Details, Act::Open], vec![Act::Cancel]]
+        );
         let cancel = &entries(&t, 0)[1][0];
         assert_eq!(cancel.label, Msg::MenuCancelTransfer);
         assert_eq!(cancel.tint, Tint::Danger);
@@ -635,7 +646,7 @@ mod tests {
         assert_eq!(
             acts(&t, 3),
             [
-                vec![Act::Open, Act::Stream],
+                vec![Act::Details, Act::Open, Act::Stream],
                 vec![Act::CopyLink, Act::CopySource],
                 vec![Act::Cancel, Act::Clear],
             ]
@@ -691,19 +702,18 @@ mod tests {
 
     #[test]
     fn every_action_targets_the_transfer_it_was_opened_for() {
-        assert!(matches!(Act::Open.event(9), Event::OpenTransferOnPutio(9)));
-        assert!(matches!(Act::Stream.event(9), Event::StreamRequested(9)));
+        assert!(Act::Details.event(9).is_none());
+        let event = |act: Act| act.event(9).expect("a core event");
+        assert!(matches!(event(Act::Open), Event::OpenTransferOnPutio(9)));
+        assert!(matches!(event(Act::Stream), Event::StreamRequested(9)));
+        assert!(matches!(event(Act::CopyLink), Event::CopyLinkRequested(9)));
         assert!(matches!(
-            Act::CopyLink.event(9),
-            Event::CopyLinkRequested(9)
-        ));
-        assert!(matches!(
-            Act::CopySource.event(9),
+            event(Act::CopySource),
             Event::CopySourceRequested(9)
         ));
-        assert!(matches!(Act::Retry.event(9), Event::RetryRequested(9)));
-        assert!(matches!(Act::Cancel.event(9), Event::CancelRequested(9)));
-        assert!(matches!(Act::Clear.event(9), Event::ClearRequested));
+        assert!(matches!(event(Act::Retry), Event::RetryRequested(9)));
+        assert!(matches!(event(Act::Cancel), Event::CancelRequested(9)));
+        assert!(matches!(event(Act::Clear), Event::ClearRequested));
     }
 
     #[test]

@@ -1,5 +1,6 @@
 //! Drawing. Reads the core [`State`](putio_core::state::State) and reports user actions as events.
 
+pub(crate) mod details;
 pub(crate) mod header;
 pub(crate) mod icons;
 pub(crate) mod login;
@@ -45,6 +46,8 @@ pub(crate) struct UiState {
     pub(crate) open_once: Option<Overlay>,
     /// The transfer last clicked (highlighted).
     pub(crate) selected: Option<i64>,
+    /// The transfer whose details panel is open.
+    pub(crate) details: Option<i64>,
     pub(crate) folders: prefs::FolderPicker,
 }
 
@@ -56,6 +59,7 @@ impl Default for UiState {
             prefs_open: false,
             open_once: None,
             selected: None,
+            details: None,
             folders: prefs::FolderPicker::default(),
         }
     }
@@ -94,4 +98,5 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
             );
         });
     prefs::show(&ctx, app);
+    details::show(&ctx, app);
 }

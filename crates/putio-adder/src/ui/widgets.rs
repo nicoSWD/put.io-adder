@@ -237,6 +237,26 @@ pub(crate) fn centered_text(ui: &egui::Ui, rect: Rect, text: &str, size: f32, co
     );
 }
 
+/// The card of a dialog (Preferences, Details) and the dimmed backdrop behind it.
+pub(crate) fn dialog_frame() -> (egui::Frame, Color32) {
+    let p = theme::pal();
+    let frame = egui::Frame::new()
+        .fill(p.surface)
+        .stroke(Stroke::new(1.0, p.divider))
+        .corner_radius(CornerRadius::same(18))
+        .inner_margin(egui::Margin::same(22))
+        .shadow(egui::Shadow {
+            offset: [0, 8],
+            blur: 28,
+            spread: 0,
+            color: Color32::from_black_alpha(if p.dark { 150 } else { 60 }),
+        });
+    (
+        frame,
+        Color32::from_black_alpha(if p.dark { 150 } else { 80 }),
+    )
+}
+
 /// The rounded card used by every drop-down (the "..." menu, the sort menu).
 pub(crate) fn popup_frame() -> egui::Frame {
     let p = theme::pal();

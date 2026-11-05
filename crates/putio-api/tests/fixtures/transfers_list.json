@@ -1,6 +1,6 @@
 {"status":"OK","transfers":[
  {"id":1,"name":"Big Buck Bunny","status":"DOWNLOADING","type":"TORRENT","percent_done":42,"down_speed":1048576,"up_speed":0,"estimated_time":120,"size":734003200,"file_id":null,"error_message":null,"availability":100,"peers":12,"source":"magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Big+Buck+Bunny"},
- {"id":2,"name":"Sintel","status":"COMPLETED","type":"TORRENT","percent_done":100,"down_speed":0,"estimated_time":null,"size":104857600,"file_id":987654},
+ {"id":2,"name":"Sintel","status":"COMPLETED","type":"TORRENT","percent_done":100,"down_speed":0,"estimated_time":null,"size":104857600,"file_id":987654,"downloaded":104857600,"uploaded":209715200,"current_ratio":2.0,"seconds_seeding":3600,"is_private":false,"tracker_message":"Announce OK","created_at":"2024-05-01T12:34:56","finished_at":"2024-05-01T13:00:00"},
  {"id":3,"name":"Broken","status":"ERROR","type":"URL","percent_done":0,"error_message":"Tracker unreachable","size":0},
  {"id":4,"name":"Future","status":"TELEPORTING","type":"HOLOGRAM","percent_done":7,"size":5}
 ]}

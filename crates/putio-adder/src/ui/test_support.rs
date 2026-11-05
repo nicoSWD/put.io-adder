@@ -21,6 +21,34 @@ fn text_positions(shapes: &[egui::epaint::ClippedShape]) -> Vec<Pos2> {
     out
 }
 
+/// Every piece of text drawn by one frame of `add`, in drawing order.
+pub(crate) fn rendered_text(mut add: impl FnMut(&mut egui::Ui)) -> Vec<String> {
+    fn collect(shape: &egui::Shape, out: &mut Vec<String>) {
+        match shape {
+            egui::Shape::Text(text) => out.push(text.galley.text().to_owned()),
+            egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, out)),
+            _ => {}
+        }
+    }
+    let ctx = egui::Context::default();
+    theme::apply(&ctx, ThemeChoice::Light);
+    let mut out = Vec::new();
+    // Fonts and layout settle over the first frames; the last one is the one kept.
+    for _ in 0..3 {
+        out.clear();
+        let input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(600.0, 800.0))),
+            ..Default::default()
+        };
+        let output = ctx.run_ui(input, |ui| add(ui));
+        for clipped in &output.shapes {
+            collect(&clipped.shape, &mut out);
+        }
+        output.drop_without_applying_deltas();
+    }
+    out
+}
+
 /// One frame of `add` (which returns the widget's rect and whether it is hovered), with the pointer
 /// at `pointer` if given. Returns the rect, the hover state and the position of all text drawn.
 fn frame(

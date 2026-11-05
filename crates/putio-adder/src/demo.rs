@@ -26,6 +26,7 @@ fn transfer(
             .then_some(1000 + id),
         error_message: None,
         source: None,
+        ..Transfer::default()
     }
 }
 
@@ -92,11 +93,7 @@ pub(crate) fn transfers() -> Vec<Transfer> {
         ),
         failed,
     ];
-    for item in &mut list {
-        if item.source.is_none() && item.id != 4 {
-            item.source = Some(format!("magnet:?xt=urn:btih:{:040x}", item.id));
-        }
-    }
+    add_details(&mut list);
     list
 }
 
@@ -111,5 +108,49 @@ pub(crate) fn account() -> Account {
             used: 340_000_000_000,
             avail: 660_000_000_000,
         }),
+    }
+}
+
+/// Peers, ratios, tracker messages and dates, so the details panel has something to show.
+fn add_details(list: &mut [Transfer]) {
+    for item in list {
+        match item.id {
+            1 | 2 => {
+                item.peers = Some(14 - item.id * 3);
+                item.availability = Some(100);
+                item.downloaded = Some(item.size * item.percent_done / 100);
+                item.created_at = Some("2026-11-05T09:12:44".into());
+            }
+            5 => {
+                item.downloaded = Some(item.size);
+                item.uploaded = Some(item.size / 4);
+                item.current_ratio = Some(0.25);
+                item.created_at = Some("2026-11-04T21:03:10".into());
+                item.finished_at = Some("2026-11-04T21:41:52".into());
+            }
+            6 => {
+                item.peers = Some(9);
+                item.availability = Some(100);
+                item.downloaded = Some(item.size);
+                item.uploaded = Some(item.size * 3 / 2);
+                item.current_ratio = Some(1.5);
+                item.seconds_seeding = Some(2 * 3600 + 14 * 60);
+                item.is_private = Some(false);
+                item.tracker_message = Some("Announce OK".into());
+                item.created_at = Some("2026-11-03T18:20:05".into());
+                item.finished_at = Some("2026-11-03T19:02:31".into());
+            }
+            7 => {
+                item.peers = Some(0);
+                item.availability = Some(0);
+                item.tracker_message =
+                    Some("Tracker returned: unregistered torrent (code 1)".into());
+                item.created_at = Some("2026-11-05T10:01:12".into());
+            }
+            _ => {}
+        }
+        if item.source.is_none() && item.id != 4 {
+            item.source = Some(format!("magnet:?xt=urn:btih:{:040x}", item.id));
+        }
     }
 }
