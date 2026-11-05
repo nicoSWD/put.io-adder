@@ -7,6 +7,7 @@ pub(crate) mod prefs;
 pub(crate) mod summary;
 pub(crate) mod table;
 pub(crate) mod theme;
+pub(crate) mod widgets;
 
 use eframe::egui::{self, Frame, Margin};
 use putio_api::ApiError;

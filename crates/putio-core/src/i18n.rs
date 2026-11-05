@@ -141,21 +141,38 @@ pub enum Msg {
     TooltipToggleTransfers,
     // Preferences
     PrefsTitle,
-    PrefsAutoCloseAfter,
-    PrefsAddingMagnet,
-    PrefsUploadingTorrent,
+    PrefsGeneral,
+    PrefsQuitMagnet,
+    PrefsQuitMagnetHint,
+    PrefsQuitTorrent,
+    PrefsQuitTorrentHint,
+    PrefsCheckUpdatesHint,
+    PrefsDownloads,
+    PrefsSaveIn,
+    PrefsSaveInHint,
+    PrefsAccount,
+    PrefsSignedInAs {
+        name: String,
+    },
+    PrefsAbout,
+    PrefsVersion {
+        version: String,
+    },
+    PrefsUnofficial,
+    PrefsChooseFolderTitle,
+    PrefsUseFolder {
+        name: String,
+    },
+    PrefsCancel,
+    PrefsNoSubfolders,
     PrefsCheckUpdates,
     PrefsAppearance,
     ThemeSystem,
     ThemeLight,
     ThemeDark,
-    PrefsShowAvatar,
-    PrefsShowAvatarHint,
-    PrefsDefaultFolder,
     PrefsDefaultFolderNone,
     PrefsChooseFolder,
     PrefsClearFolder,
-    PrefsClose,
     // Account header
     Bandwidth {
         used: String,
@@ -514,28 +531,91 @@ impl Msg {
                 "Mostrar u ocultar transferencias"
             )
             .into(),
+            Self::PrefsGeneral => tr!(l, "General", "Allgemein", "General").into(),
+            Self::PrefsQuitMagnet => tr!(
+                l,
+                "Quit after adding a magnet link",
+                "Nach einem Magnet-Link beenden",
+                "Cerrar tras añadir un enlace magnet"
+            )
+            .into(),
+            Self::PrefsQuitMagnetHint => tr!(
+                l,
+                "Closes the app 5 seconds after the link was sent to put.io.",
+                "Schließt die App 5 Sekunden, nachdem der Link an put.io gesendet wurde.",
+                "Cierra la app 5 segundos después de enviar el enlace a put.io."
+            )
+            .into(),
+            Self::PrefsQuitTorrent => tr!(
+                l,
+                "Quit after uploading a .torrent file",
+                "Nach dem Hochladen einer .torrent-Datei beenden",
+                "Cerrar tras subir un archivo .torrent"
+            )
+            .into(),
+            Self::PrefsQuitTorrentHint => tr!(
+                l,
+                "Closes the app 5 seconds after the upload finished.",
+                "Schließt die App 5 Sekunden nach dem Hochladen.",
+                "Cierra la app 5 segundos después de terminar la subida."
+            )
+            .into(),
+            Self::PrefsCheckUpdatesHint => tr!(
+                l,
+                "Looks for new releases on GitHub. Never installs anything.",
+                "Sucht auf GitHub nach neuen Versionen. Installiert nichts.",
+                "Busca versiones nuevas en GitHub. No instala nada."
+            )
+            .into(),
+            Self::PrefsDownloads => tr!(l, "Downloads", "Downloads", "Descargas").into(),
+            Self::PrefsSaveIn => tr!(
+                l,
+                "Save new transfers in",
+                "Neue Übertragungen speichern in",
+                "Guardar nuevas transferencias en"
+            )
+            .into(),
+            Self::PrefsSaveInHint => tr!(
+                l,
+                "A folder on put.io. Without one, put.io's own default is used.",
+                "Ein Ordner auf put.io. Ohne Auswahl gilt der Standardordner von put.io.",
+                "Una carpeta en put.io. Sin elegir una, se usa la predeterminada de put.io."
+            )
+            .into(),
+            Self::PrefsAccount => tr!(l, "Account", "Konto", "Cuenta").into(),
+            Self::PrefsSignedInAs { name } => tr!(
+                l,
+                format!("Signed in as {name}"),
+                format!("Angemeldet als {name}"),
+                format!("Sesión iniciada como {name}")
+            ),
+            Self::PrefsAbout => tr!(l, "About", "Über", "Acerca de").into(),
+            Self::PrefsVersion { version } => format!("put.io adder {version}"),
+            Self::PrefsUnofficial => tr!(
+                l,
+                "Unofficial app. Not affiliated with put.io.",
+                "Inoffizielle App. Nicht mit put.io verbunden.",
+                "App no oficial. Sin afiliación con put.io."
+            )
+            .into(),
+            Self::PrefsChooseFolderTitle => tr!(
+                l,
+                "Choose a folder",
+                "Ordner auswählen",
+                "Elige una carpeta"
+            )
+            .into(),
+            Self::PrefsUseFolder { name } => tr!(
+                l,
+                format!("Use “{name}”"),
+                format!("„{name}“ verwenden"),
+                format!("Usar «{name}»")
+            ),
+            Self::PrefsCancel => tr!(l, "Cancel", "Abbrechen", "Cancelar").into(),
+            Self::PrefsNoSubfolders => {
+                tr!(l, "No subfolders", "Keine Unterordner", "Sin subcarpetas").into()
+            }
             Self::PrefsTitle => tr!(l, "Preferences", "Einstellungen", "Ajustes").into(),
-            Self::PrefsAutoCloseAfter => tr!(
-                l,
-                "Automatically close the app after:",
-                "App automatisch schließen nach:",
-                "Cerrar la app automáticamente tras:"
-            )
-            .into(),
-            Self::PrefsAddingMagnet => tr!(
-                l,
-                "Adding a new magnet",
-                "Hinzufügen eines Magnet-Links",
-                "Añadir un enlace magnet"
-            )
-            .into(),
-            Self::PrefsUploadingTorrent => tr!(
-                l,
-                "Uploading a new torrent",
-                "Hochladen einer Torrent-Datei",
-                "Subir un archivo torrent"
-            )
-            .into(),
             Self::PrefsCheckUpdates => tr!(
                 l,
                 "Check for updates on startup",
@@ -547,27 +627,6 @@ impl Msg {
             Self::ThemeSystem => tr!(l, "System", "System", "Sistema").into(),
             Self::ThemeLight => tr!(l, "Light", "Hell", "Claro").into(),
             Self::ThemeDark => tr!(l, "Dark", "Dunkel", "Oscuro").into(),
-            Self::PrefsShowAvatar => tr!(
-                l,
-                "Show my Gravatar",
-                "Mein Gravatar anzeigen",
-                "Mostrar mi Gravatar"
-            )
-            .into(),
-            Self::PrefsShowAvatarHint => tr!(
-                l,
-                "Sends a hash of your e-mail address to gravatar.com.",
-                "Sendet einen Hash deiner E-Mail-Adresse an gravatar.com.",
-                "Envía un hash de tu correo a gravatar.com."
-            )
-            .into(),
-            Self::PrefsDefaultFolder => tr!(
-                l,
-                "Save new transfers in:",
-                "Neue Übertragungen speichern in:",
-                "Guardar nuevas transferencias en:"
-            )
-            .into(),
             Self::PrefsDefaultFolderNone => tr!(
                 l,
                 "Your put.io default folder",
@@ -583,7 +642,6 @@ impl Msg {
                 "Usar predeterminada"
             )
             .into(),
-            Self::PrefsClose => tr!(l, "Close", "Schließen", "Cerrar").into(),
             Self::Bandwidth { used } => tr!(
                 l,
                 format!("{used} this month"),

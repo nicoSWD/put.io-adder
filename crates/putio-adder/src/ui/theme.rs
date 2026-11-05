@@ -32,6 +32,9 @@ pub(crate) struct Palette {
     pub(crate) card_selected: Color32,
     /// Empty progress track.
     pub(crate) track: Color32,
+    /// Background of dialogs (Preferences), and the inset groups inside them.
+    pub(crate) surface: Color32,
+    pub(crate) inset: Color32,
     pub(crate) yellow_pressed: Color32,
     /// Soft tints behind icons.
     pub(crate) yellow_soft: Color32,
@@ -62,6 +65,8 @@ const LIGHT: Palette = Palette {
     card_hover: Color32::from_rgb(0xEC, 0xEC, 0xE8),
     card_selected: Color32::from_rgb(0xFF, 0xF3, 0xC8),
     track: Color32::from_rgb(0xDF, 0xDF, 0xDA),
+    surface: Color32::WHITE,
+    inset: Color32::from_rgb(0xF6, 0xF6, 0xF4),
     yellow_pressed: Color32::from_rgb(0xE8, 0xB5, 0x1F),
     yellow_soft: Color32::from_rgb(0xFF, 0xEE, 0xB0),
     neutral_soft: Color32::from_rgb(0xE6, 0xE6, 0xE2),
@@ -88,6 +93,8 @@ const DARK: Palette = Palette {
     card_hover: Color32::from_rgb(0x37, 0x37, 0x3D),
     card_selected: Color32::from_rgb(0x41, 0x3A, 0x22),
     track: Color32::from_rgb(0x52, 0x52, 0x59),
+    surface: Color32::from_rgb(0x2A, 0x2A, 0x2F),
+    inset: Color32::from_rgb(0x36, 0x36, 0x3C),
     yellow_pressed: Color32::from_rgb(0xD9, 0xAE, 0x2E),
     yellow_soft: Color32::from_rgb(0x4A, 0x3F, 0x16),
     neutral_soft: Color32::from_rgb(0x40, 0x40, 0x46),
@@ -189,13 +196,9 @@ fn visuals(p: &Palette) -> egui::Visuals {
         egui::Visuals::light()
     };
     visuals.panel_fill = p.bg;
-    visuals.window_fill = if p.dark {
-        Color32::from_rgb(0x1A, 0x1A, 0x1A)
-    } else {
-        Color32::WHITE
-    };
+    visuals.window_fill = p.surface;
     visuals.extreme_bg_color = if p.dark {
-        Color32::from_rgb(0x0A, 0x0A, 0x0A)
+        Color32::from_rgb(0x16, 0x16, 0x18)
     } else {
         Color32::from_rgb(0xF1, 0xF1, 0xEE)
     };
@@ -223,8 +226,8 @@ fn visuals(p: &Palette) -> egui::Visuals {
     }
     let (rest, hover) = if p.dark {
         (
-            Color32::from_rgb(0x26, 0x26, 0x26),
-            Color32::from_rgb(0x34, 0x34, 0x34),
+            Color32::from_rgb(0x3A, 0x3A, 0x40),
+            Color32::from_rgb(0x4A, 0x4A, 0x51),
         )
     } else {
         (
@@ -313,6 +316,8 @@ mod tests {
                 p.card,
                 p.card_hover,
                 p.card_selected,
+                p.surface,
+                p.inset,
             ] {
                 assert!(
                     contrast(p.text, surface) >= 7.0,

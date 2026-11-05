@@ -7,6 +7,7 @@ PUTIO_ADDER_DEMO=list  cargo run -p putio-adder     # a list with running, queue
 PUTIO_ADDER_DEMO=empty cargo run -p putio-adder     # signed in, nothing yet
 PUTIO_ADDER_DEMO=login cargo run -p putio-adder     # the sign-in panel with a fake code
 PUTIO_ADDER_DEMO=prefs cargo run -p putio-adder     # the list with Preferences open
+PUTIO_ADDER_DEMO=folders cargo run -p putio-adder   # Preferences on the folder chooser page
 PUTIO_ADDER_THEME=dark|light|system                 # override the saved theme (any debug run)
 ```
 

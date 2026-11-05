@@ -22,7 +22,9 @@ use crate::ui::{self, UiState};
 use crate::worker::{Job, WorkerMsg, Workers};
 
 const COLLAPSED_HEIGHT: f32 = 96.0;
-const EXPANDED_HEIGHT: f32 = 480.0;
+const EXPANDED_HEIGHT: f32 = 600.0;
+/// Height while Preferences is open: tall enough for every section without scrolling.
+const PREFS_HEIGHT: f32 = 760.0;
 /// How often the UI wakes up by itself (to advance timers and the status line).
 const FRAME_INTERVAL: Duration = Duration::from_millis(250);
 
@@ -206,7 +208,12 @@ impl App {
         }
         self.dispatch(ctx, Event::Started { has_token: true });
         self.state.transfers_expanded = true;
-        self.ui.prefs_open = view == "prefs";
+        // The demo drops the update check, so show its finished state instead of a spinner.
+        self.state.update = putio_core::update::UpdateStatus::UpToDate;
+        self.ui.prefs_open = view == "prefs" || view == "folders";
+        if view == "folders" {
+            self.ui.folders = crate::ui::prefs::FolderPicker::demo();
+        }
         let transfers = if view == "empty" {
             Vec::new()
         } else {
@@ -352,11 +359,17 @@ impl App {
     }
 
     fn sync_window(&mut self, ctx: &egui::Context) {
-        let needs_room = matches!(
-            self.state.auth,
-            Auth::RequestingCode | Auth::Linking(_) | Auth::SignedOut(_)
-        );
-        let height = window_height(self.state.transfers_expanded, needs_room);
+        // The sign-in panel and the Preferences dialog need the full height, whatever the list is doing.
+        let needs_room = self.ui.prefs_open
+            || matches!(
+                self.state.auth,
+                Auth::RequestingCode | Auth::Linking(_) | Auth::SignedOut(_)
+            );
+        let height = if self.ui.prefs_open {
+            PREFS_HEIGHT
+        } else {
+            window_height(self.state.transfers_expanded, needs_room)
+        };
         self.sync_icon(ctx);
         // The theme preference changed (Preferences): switch the palette and the native title bar.
         if self.state.settings.theme != self.last_theme {
