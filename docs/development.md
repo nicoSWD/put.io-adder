@@ -1,6 +1,6 @@
 # Developing and testing without an account
 
-`make` lists the common tasks (`make check` is what CI runs for Rust, `make ci` adds the release-profile lint, the tool tests and the API-spec digest). `make demo VIEW=<view> THEME=<theme>` runs the views below.
+`make` builds the release binary and `make help` lists the common tasks (`make check` is what CI runs for Rust, `make ci` adds the release-profile lint, the tool tests and the API-spec digest). `make demo VIEW=<view> THEME=<theme>` runs the views below.
 
 Debug builds have a **demo mode**: sample transfers and a sample account, no network, no sign-in.
 

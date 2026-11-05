@@ -1,5 +1,7 @@
-# Common tasks. `make` lists them. Everything uses --locked, like CI.
+# Common tasks. `make` builds the release binary; `make help` lists them all. Everything uses
+# --locked, like CI.
 #
+#   make                the optimised binary: target/release/putio-adder
 #   make check          what CI runs on every change: format, clippy, tests
 #   make run            the app, in a debug build
 #   make demo           the app with sample data (no account, no network, no Keychain)
@@ -16,13 +18,13 @@ UNAME   := $(shell uname -s)
 VIEW  ?= list
 THEME ?= system
 
-.DEFAULT_GOAL := help
+.DEFAULT_GOAL := build-release
 .PHONY: help version build build-release run run-release demo \
         fmt fmt-check lint lint-release test check ci tools-test spec-check \
         app open dmg zip sbom deny audit \
         release-dry-run release-tag clean
 
-help: ## Show this list
+help: ## Show this list (plain `make` builds the release binary)
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  \033[1m%-16s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 version: ## Print the app version (from Cargo.toml)
@@ -33,7 +35,7 @@ version: ## Print the app version (from Cargo.toml)
 build: ## Debug build of every crate
 	$(CARGO) build --workspace --locked
 
-build-release: ## Optimised binary: target/release/putio-adder
+build-release: ## Optimised binary: target/release/putio-adder (the default: plain `make`)
 	$(CARGO) build --release --locked -p $(PACKAGE)
 
 run: ## Run the app (debug build, your real account and Keychain)

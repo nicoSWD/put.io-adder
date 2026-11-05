@@ -66,10 +66,10 @@ Early. Everything has been run on macOS (Apple Silicon) only. The code for Windo
 ## Build from source
 
 ```sh
-make build-release     # the binary: target/release/putio-adder
+make                   # the optimised binary: target/release/putio-adder
 make app               # macOS: target/put.io adder.app (make open also starts it)
 make check             # format, clippy and tests, as CI runs them
-make                   # lists every task
+make help              # lists every task
 ```
 
 Without `make`: `cargo build --release --locked -p putio-adder` and `tools/bundle-macos.sh`.
