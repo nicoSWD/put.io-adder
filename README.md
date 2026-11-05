@@ -31,18 +31,6 @@ Download the file for your system from the [latest release](https://github.com/n
 | Windows (x64 / arm64) | `…-windows-x64-setup.exe` (or the `.zip`) | Installs for your user, no administrator rights. |
 | Linux (x86_64 / aarch64) | `putio-adder-vX.Y.Z-linux-x86_64.tar.gz` | Unpack, run `./install.sh` (add `--set-default` to take over magnet links). Needs a Secret Service (GNOME Keyring, KWallet). |
 
-### Make it your magnet-link handler
-
-The app checks on start whether it is the default for `magnet:` links and `.torrent` files and, if not, asks. Say yes and it registers itself (you can also use **Preferences → Default app → Make default** later, or say *Don't ask again*).
-
-- **macOS:** sets itself through Launch Services. macOS may ask you to confirm.
-- **Linux:** writes its desktop entry and runs `xdg-mime default` (needs `xdg-mime`; `./install.sh --set-default` does the same).
-- **Windows:** registers for your user. Windows protects an app you chose yourself, so if another app already opens these links the app opens *Settings → Default apps* and tells you to pick put.io adder there.
-
-By hand, if you prefer: macOS *Get Info → Open with → Change All…* for `.torrent` (the first magnet link you click asks which app to use); Windows *Settings → Apps → Default apps*; Linux `xdg-mime default es.nico.putio-adder.desktop x-scheme-handler/magnet application/x-bittorrent`.
-
-On first start the app shows a short code. Enter it at [put.io/link](https://put.io/link) to link your account. Your sign-in is kept in the system keychain (Keychain, Credential Manager or Secret Service), never in a file.
-
 <a id="updates"></a>
 ## Updates
 
