@@ -65,15 +65,15 @@ jobs:
           echo "::error::${RELEASE_TAG} is not a verified tag by ${MAINTAINER_EMAIL}. Release with tools/release.sh."
           exit 1
 
-      # `git push origin main vX` starts CI and this workflow at the same moment, so wait for CI on the
+      # `git push origin master vX` starts CI and this workflow at the same moment, so wait for CI on the
       # tagged commit (up to 45 minutes) instead of failing because it has not finished yet.
-      - name: Tag commit is on main and CI passes
+      - name: Tag commit is on master and CI passes
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           sha=$(git rev-list -n 1 "refs/tags/${RELEASE_TAG}")
-          git fetch --no-tags origin main
-          git merge-base --is-ancestor "$sha" origin/main || { echo "::error::${RELEASE_TAG} is not on main"; exit 1; }
+          git fetch --no-tags origin master
+          git merge-base --is-ancestor "$sha" origin/master || { echo "::error::${RELEASE_TAG} is not on master"; exit 1; }
           deadline=$((SECONDS + 2700))
           while :; do
             runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$sha" --json status,conclusion)

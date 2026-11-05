@@ -5,7 +5,7 @@
 #   tools/release.sh 0.2.0-rc.1       pre-release (published as a GitHub pre-release)
 #   tools/release.sh 0.2.0 --dry-run  run every check, change nothing
 #
-# Afterwards: git push origin main v0.2.0   (the tag push starts .github/workflows/release.yml)
+# Afterwards: git push origin master v0.2.0   (the tag push starts .github/workflows/release.yml)
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -24,11 +24,11 @@ current=$(awk '/^\[/ { in_pkg = ($0 == "[workspace.package]") } in_pkg && /^vers
 git rev-parse -q --verify "refs/tags/$tag" >/dev/null && { echo "tag $tag already exists" >&2; exit 1; }
 
 branch=$(git rev-parse --abbrev-ref HEAD)
-[ "$branch" = "main" ] || { echo "release from main (you are on $branch)" >&2; exit 1; }
+[ "$branch" = "master" ] || { echo "release from master (you are on $branch)" >&2; exit 1; }
 [ -z "$(git status --porcelain)" ] || { echo "the working tree is not clean" >&2; exit 1; }
 if git remote get-url origin >/dev/null 2>&1; then
-    git fetch --quiet origin main
-    [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] || { echo "main differs from origin/main: pull or push first" >&2; exit 1; }
+    git fetch --quiet origin master
+    [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/master)" ] || { echo "master differs from origin/master: pull or push first" >&2; exit 1; }
 fi
 # A tag can only be signed when git knows how: fail now, not after the commit.
 git config --get user.signingkey >/dev/null || [ "$(git config --get tag.gpgSign || true)" = "true" ] || \
@@ -64,4 +64,4 @@ git tag -s "$tag" -m "put.io adder $version"
 git tag -v "$tag" >/dev/null 2>&1 || echo "warning: could not verify the tag signature locally"
 echo
 echo "Created $tag. Review it, then publish with:"
-echo "    git push origin main $tag"
+echo "    git push origin master $tag"

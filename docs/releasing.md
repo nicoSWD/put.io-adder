@@ -7,7 +7,7 @@
 2. **Environment `release`** (Settings → Environments) with *Required reviewers*: nothing is published until a human approves the `publish` job.
 3. **Tag signing**: configure git to sign (`git config user.signingkey …`; SSH signing works) and add the
    public key to GitHub as a *signing key* so tags show as *Verified*.
-4. **Branch protection / ruleset on `main`**: require the `CI` checks, block force pushes, and restrict who can create `v*` tags.
+4. **Branch protection / ruleset on `master`**: require the `CI` checks, block force pushes, and restrict who can create `v*` tags.
 5. *(optional)* **Apple signing secrets** for notarized macOS builds: `MACOS_CERTIFICATE_P12_BASE64`,
    `MACOS_CERTIFICATE_PASSWORD`, `MACOS_SIGN_IDENTITY`, `NOTARY_APPLE_ID`, `NOTARY_TEAM_ID`, `NOTARY_PASSWORD`.
    Without them the macOS build is ad-hoc signed and the release notes say so.
@@ -17,11 +17,11 @@
 ```sh
 tools/release.sh 0.2.0 --dry-run     # every check, changes nothing
 tools/release.sh 0.2.0               # bump, commit "Release v0.2.0", signed tag; never pushes
-git push origin main v0.2.0          # starts CI and the release workflow together
+git push origin master v0.2.0          # starts CI and the release workflow together
 ```
 
 The `verify` job waits (up to 45 minutes) for `CI` on the tagged commit, so pushing the commit and the tag in one
-go is fine. If you protect `main` with a "require status checks" ruleset, a direct push of the release commit is
+go is fine. If you protect `master` with a "require status checks" ruleset, a direct push of the release commit is
 blocked unless the maintainer is allowed to bypass it; either allow that, or push the release commit through a
 pull request first and tag the merged commit.
 
@@ -32,7 +32,7 @@ never promoted: the final version is a fresh tag.
 
 | Stage | What happens |
 |---|---|
-| `verify` | The tag is an annotated tag that GitHub verified, signed by `RELEASE_TAGGER_EMAIL`; its commit is on `main` and passed `CI`; the tag equals the version in `Cargo.toml`. |
+| `verify` | The tag is an annotated tag that GitHub verified, signed by `RELEASE_TAGGER_EMAIL`; its commit is on `master` and passed `CI`; the tag equals the version in `Cargo.toml`. |
 | `build` ×6 | macOS arm64 + x64, Windows x64 + arm64, Linux x86_64 + aarch64. Pinned toolchain, `--locked`, **no build cache**, `SOURCE_DATE_EPOCH` and path remapping. Linux is built on Ubuntu 22.04 and `tools/check-glibc.py` enforces glibc ≤ 2.35. |
 | `publish` | Needs approval of the `release` environment. `SHA256SUMS`, Sigstore build-provenance attestations for every file, the release itself. |
 
