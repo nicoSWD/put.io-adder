@@ -134,6 +134,18 @@ pub enum Msg {
     MenuRemoveFromList,
     MenuStream,
     MenuCopyLink,
+    MenuDownload,
+    DownloadPreparing,
+    DownloadStarted,
+    DownloadNotReady,
+    DownloadBusy,
+    DownloadFailed,
+    DownloadZipFailed,
+    DownloadZipTimeout,
+    DownloadBadUrl,
+    DownloadStartedPartial {
+        missing: usize,
+    },
     MenuDetails,
     DetailsTitle,
     DetailStatus,
@@ -586,6 +598,69 @@ impl Msg {
             Self::KindLiveStream => {
                 tr!(l, "Live stream", "Livestream", "Transmisión en vivo").into()
             }
+            Self::MenuDownload => tr!(l, "Download", "Herunterladen", "Descargar").into(),
+            Self::DownloadPreparing => tr!(
+                l,
+                "Preparing download…",
+                "Bereite Download vor…",
+                "Preparando descarga…"
+            )
+            .into(),
+            Self::DownloadStarted => tr!(
+                l,
+                "Download started in your browser",
+                "Download im Browser gestartet",
+                "Descarga iniciada en el navegador"
+            )
+            .into(),
+            Self::DownloadNotReady => tr!(
+                l,
+                "Nothing to download yet",
+                "Noch nichts zum Herunterladen",
+                "Aún no hay nada que descargar"
+            )
+            .into(),
+            Self::DownloadBusy => tr!(
+                l,
+                "A folder is already being prepared",
+                "Ein Ordner wird bereits vorbereitet",
+                "Ya se está preparando una carpeta"
+            )
+            .into(),
+            Self::DownloadFailed => tr!(
+                l,
+                "Couldn't start the download",
+                "Download konnte nicht gestartet werden",
+                "No se pudo iniciar la descarga"
+            )
+            .into(),
+            Self::DownloadZipFailed => tr!(
+                l,
+                "put.io couldn't build the ZIP",
+                "put.io konnte das ZIP nicht erstellen",
+                "put.io no pudo crear el ZIP"
+            )
+            .into(),
+            Self::DownloadZipTimeout => tr!(
+                l,
+                "Building the ZIP takes too long",
+                "Das Erstellen des ZIP dauert zu lange",
+                "Crear el ZIP tarda demasiado"
+            )
+            .into(),
+            Self::DownloadBadUrl => tr!(
+                l,
+                "put.io returned an unexpected download address",
+                "put.io lieferte eine unerwartete Download-Adresse",
+                "put.io devolvió una dirección de descarga inesperada"
+            )
+            .into(),
+            Self::DownloadStartedPartial { missing } => tr!(
+                l,
+                format!("Download started · put.io left out {missing} file(s)"),
+                format!("Download gestartet · put.io hat {missing} Datei(en) ausgelassen"),
+                format!("Descarga iniciada · put.io omitió {missing} archivo(s)")
+            ),
             Self::MenuCopyLink => tr!(
                 l,
                 "Copy put.io link",

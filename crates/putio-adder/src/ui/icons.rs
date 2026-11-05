@@ -68,6 +68,7 @@ pub(crate) enum MenuIcon {
     Link,
     Trash,
     Info,
+    Download,
 }
 
 /// A circular arc as a polyline (angles in degrees, 0 = right, increasing counter-clockwise on screen).
@@ -203,6 +204,15 @@ pub(crate) fn menu_icon(painter: &Painter, center: Pos2, icon: MenuIcon, color: 
                 stroke,
                 StrokeKind::Middle,
             );
+        }
+        MenuIcon::Download => {
+            // An arrow into a tray, like Update, but with the tray closed at the sides.
+            painter.line_segment([at(0.0, -7.0), at(0.0, 2.5)], stroke);
+            painter.line_segment([at(-4.0, -1.5), at(0.0, 2.5)], stroke);
+            painter.line_segment([at(4.0, -1.5), at(0.0, 2.5)], stroke);
+            painter.line_segment([at(-6.5, 3.0), at(-6.5, 7.0)], stroke);
+            painter.line_segment([at(-6.5, 7.0), at(6.5, 7.0)], stroke);
+            painter.line_segment([at(6.5, 7.0), at(6.5, 3.0)], stroke);
         }
         MenuIcon::Info => {
             // A circled "i".

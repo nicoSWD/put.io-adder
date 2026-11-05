@@ -258,6 +258,7 @@ fn empty(ui: &mut egui::Ui, app: &App) {
 enum Act {
     Details,
     Open,
+    Download,
     Stream,
     CopyLink,
     CopySource,
@@ -272,6 +273,7 @@ impl Act {
         Some(match self {
             Self::Details => return None,
             Self::Open => Event::OpenTransferOnPutio(id),
+            Self::Download => Event::DownloadRequested(id),
             Self::Stream => Event::StreamRequested(id),
             Self::CopyLink => Event::CopyLinkRequested(id),
             Self::CopySource => Event::CopySourceRequested(id),
@@ -310,6 +312,7 @@ fn entries(transfer: &Transfer, clearable: usize) -> Vec<Vec<Entry>> {
     ];
     if transfer.file_id.is_some() {
         open.push(entry(MenuIcon::Play, Msg::MenuStream, Act::Stream));
+        open.push(entry(MenuIcon::Download, Msg::MenuDownload, Act::Download));
     }
     groups.push(open);
 
@@ -625,7 +628,7 @@ mod tests {
     }
 
     #[test]
-    fn a_running_transfer_can_be_opened_and_cancelled_but_not_streamed() {
+    fn a_running_transfer_can_be_opened_and_cancelled_but_not_streamed_or_downloaded() {
         let t = sample(TransferStatus::Downloading, None, None);
         assert_eq!(
             acts(&t, 0),
@@ -646,7 +649,7 @@ mod tests {
         assert_eq!(
             acts(&t, 3),
             [
-                vec![Act::Details, Act::Open, Act::Stream],
+                vec![Act::Details, Act::Open, Act::Stream, Act::Download],
                 vec![Act::CopyLink, Act::CopySource],
                 vec![Act::Cancel, Act::Clear],
             ]
@@ -706,6 +709,7 @@ mod tests {
         let event = |act: Act| act.event(9).expect("a core event");
         assert!(matches!(event(Act::Open), Event::OpenTransferOnPutio(9)));
         assert!(matches!(event(Act::Stream), Event::StreamRequested(9)));
+        assert!(matches!(event(Act::Download), Event::DownloadRequested(9)));
         assert!(matches!(event(Act::CopyLink), Event::CopyLinkRequested(9)));
         assert!(matches!(
             event(Act::CopySource),

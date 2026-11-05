@@ -45,6 +45,11 @@ pub fn is_allowed(url: &str) -> bool {
 
 pub trait UrlOpener: Send + Sync {
     fn open(&self, url: &str) -> Result<(), OpenError>;
+
+    /// Open a download address that put.io handed out. It is not one of the fixed pages that
+    /// [`UrlOpener::open`] allows, so it has its own, stricter-about-the-host check
+    /// ([`putio_core::download::is_download_url`]). The address is a credential: never log it.
+    fn open_download(&self, url: &str) -> Result<(), OpenError>;
 }
 
 /// The program and arguments used to open `url` on `os`. Never a shell.
@@ -73,11 +78,8 @@ pub fn command_for(
 #[derive(Debug, Default)]
 pub struct SystemOpener;
 
-impl UrlOpener for SystemOpener {
-    fn open(&self, url: &str) -> Result<(), OpenError> {
-        if !is_allowed(url) {
-            return Err(OpenError::NotAllowed);
-        }
+impl SystemOpener {
+    fn spawn(url: &str) -> Result<(), OpenError> {
         let (program, args) = command_for(Os::current(), url, &crate::paths::process_env);
         Command::new(program)
             .args(args)
@@ -86,6 +88,22 @@ impl UrlOpener for SystemOpener {
             .stderr(Stdio::null())
             .spawn()?;
         Ok(())
+    }
+}
+
+impl UrlOpener for SystemOpener {
+    fn open(&self, url: &str) -> Result<(), OpenError> {
+        if !is_allowed(url) {
+            return Err(OpenError::NotAllowed);
+        }
+        Self::spawn(url)
+    }
+
+    fn open_download(&self, url: &str) -> Result<(), OpenError> {
+        if !putio_core::download::is_download_url(url) {
+            return Err(OpenError::NotAllowed);
+        }
+        Self::spawn(url)
     }
 }
 
@@ -112,11 +130,52 @@ impl UrlOpener for RecordingOpener {
         }
         Ok(())
     }
+
+    fn open_download(&self, url: &str) -> Result<(), OpenError> {
+        if !putio_core::download::is_download_url(url) {
+            return Err(OpenError::NotAllowed);
+        }
+        if let Ok(mut opened) = self.opened.lock() {
+            opened.push(url.to_owned());
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_download_address_is_checked_by_the_download_rule_not_the_page_list() {
+        let opener = RecordingOpener::default();
+        opener
+            .open_download("https://s1.put.io/v2/files/9/download?token=a&b=c")
+            .unwrap();
+        assert_eq!(opener.opened().len(), 1);
+        for bad in [
+            "https://evil.example/x",
+            "https://put.io@evil.example/",
+            "http://s1.put.io/x",
+            "https://s1.put.io/a b",
+            "file:///etc/passwd",
+        ] {
+            assert!(
+                matches!(opener.open_download(bad), Err(OpenError::NotAllowed)),
+                "{bad}"
+            );
+        }
+        assert_eq!(opener.opened().len(), 1, "nothing refused was recorded");
+    }
+
+    #[test]
+    fn a_storage_host_is_not_a_page_the_plain_opener_will_open() {
+        let opener = RecordingOpener::default();
+        assert!(matches!(
+            opener.open("https://s1.put.io/v2/files/9/download"),
+            Err(OpenError::NotAllowed)
+        ));
+    }
 
     #[test]
     fn allows_the_pages_the_app_opens() {

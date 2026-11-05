@@ -7,7 +7,9 @@ use serde_json::Value;
 
 use crate::error::{ApiError, ApiFailure, retry_delay};
 use crate::form::{self, Part};
-use crate::models::{Account, DeviceCode, File, FileType, Release, Transfer, UploadOutcome};
+use crate::models::{
+    Account, DeviceCode, File, FileType, Release, Transfer, UploadOutcome, ZipStatus,
+};
 use crate::token::Token;
 use crate::torrent;
 use crate::transport::{Body, Host, Method, Request, Response, Transport};
@@ -390,6 +392,30 @@ impl<T: Transport> Client<T> {
         }
     }
 
+    /// Ask put.io to build a ZIP of `file_ids` (a folder, say). It is built in the background: poll
+    /// [`Client::zip_status`] with the returned id.
+    pub fn create_zip(&self, file_ids: &[i64]) -> Result<i64, ApiError> {
+        #[derive(serde::Deserialize)]
+        struct Reply {
+            zip_id: i64,
+        }
+        if file_ids.is_empty() {
+            return Err(ApiError::InvalidInput("no file ids"));
+        }
+        let joined = file_ids
+            .iter()
+            .map(i64::to_string)
+            .collect::<Vec<_>>()
+            .join(",");
+        let reply: Reply = self.json(&self.post_form("/zips/create", &[("file_ids", &joined)]))?;
+        Ok(reply.zip_id)
+    }
+
+    /// How far a ZIP is. Its `url` appears once the state is `Done`.
+    pub fn zip_status(&self, zip_id: i64) -> Result<ZipStatus, ApiError> {
+        self.json(&self.get(format!("/zips/{zip_id}")))
+    }
+
     // ---- updates --------------------------------------------------------------------------
 
     /// Latest published (non-draft, non-prerelease) release of this app on GitHub.
@@ -436,6 +462,7 @@ mod tests {
 
     use super::*;
     use crate::models::TransferStatus;
+    use crate::models::ZipState;
     use crate::testing::FakeTransport;
     use crate::transport::TransportError;
 
@@ -824,6 +851,45 @@ mod tests {
             Err(ApiError::InvalidInput(_))
         ));
         assert!(fake.requests().is_empty());
+    }
+
+    #[test]
+    fn creating_a_zip_sends_the_ids_and_returns_the_zip_id() {
+        let fake = FakeTransport::new();
+        fake.push_json(200, r#"{"status":"OK","zip_id":42}"#);
+        let c = client(&fake);
+        assert_eq!(c.create_zip(&[5, 6]).unwrap(), 42);
+        let request = &fake.requests()[0];
+        assert_eq!(request.method, Method::Post);
+        assert_eq!(request.path, "/zips/create");
+        assert_eq!(request.body, Body::Form("file_ids=5%2C6".into()));
+        assert!(matches!(c.create_zip(&[]), Err(ApiError::InvalidInput(_))));
+    }
+
+    #[test]
+    fn zip_status_reads_the_state_the_url_and_the_missing_files() {
+        let fake = FakeTransport::new();
+        fake.push_json(200, r#"{"zip_status":"PROCESSING"}"#);
+        fake.push_json(
+            200,
+            r#"{"zip_status":"DONE","url":"https://s1.put.io/z","size":10,"missing_files":[{"id":1,"name":"a","missing":true}]}"#,
+        );
+        fake.push_json(
+            200,
+            r#"{"zip_status":"EXPLODED","url":7,"missing_files":"x"}"#,
+        );
+        let c = client(&fake);
+        let busy = c.zip_status(42).unwrap();
+        assert_eq!(busy.zip_status, ZipState::Processing);
+        assert_eq!(busy.url, None);
+        assert_eq!(fake.requests()[0].path, "/zips/42");
+        let done = c.zip_status(42).unwrap();
+        assert_eq!(done.zip_status, ZipState::Done);
+        assert_eq!(done.url.as_deref(), Some("https://s1.put.io/z"));
+        assert_eq!(done.missing_count(), 1);
+        let odd = c.zip_status(42).unwrap();
+        assert_eq!(odd.zip_status, ZipState::Unknown);
+        assert_eq!((odd.url.as_deref(), odd.missing_count()), (None, 0));
     }
 
     #[test]

@@ -202,6 +202,8 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     ok(r#"{"files":[],"cursor":"c"}"#); // list_files page 1
     ok(r#"{"files":[]}"#); // list_files continue
     ok(r#"{"url":"https://x.invalid/f"}"#); // file_url
+    ok(r#"{"zip_id":9}"#); // create_zip
+    ok(r#"{"zip_status":"NEW"}"#); // zip_status
 
     let client = Client::with_token(&fake, Token::new("t").unwrap());
     client.oob_code(711, "put.io adder").unwrap();
@@ -222,9 +224,11 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
         .unwrap();
     client.list_files(0, Some(FileType::Folder)).unwrap();
     client.file_url(1).unwrap();
+    client.create_zip(&[1, 2]).unwrap();
+    client.zip_status(9).unwrap();
 
     let requests: Vec<Request> = fake.requests();
-    assert_eq!(requests.len(), 12);
+    assert_eq!(requests.len(), 14);
     for request in &requests {
         let path = template(&request.path);
         let method = match request.method {

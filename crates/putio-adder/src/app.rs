@@ -308,6 +308,17 @@ impl App {
             Effect::CancelTransfer { op, id } => self.send(Job::Cancel { op, id }),
             Effect::RetryTransfer { op, id } => self.send(Job::Retry { op, id }),
             Effect::CleanTransfers { op, ids } => self.send(Job::Clean { op, ids }),
+            Effect::PrepareDownload { op, file_id } => {
+                self.send(Job::PrepareDownload { op, file_id });
+            }
+            Effect::PollZip { op, zip_id } => self.send(Job::PollZip { op, zip_id }),
+            // The address is a credential: on failure say that it failed, never what it was.
+            Effect::OpenDownload(url) if self.is_demo() => drop(url),
+            Effect::OpenDownload(url) => {
+                if self.opener.open_download(&url).is_err() {
+                    eprintln!("could not open the download in the browser");
+                }
+            }
             Effect::CopyText(text) => ctx.copy_text(text),
             Effect::Stream { op, file_id } => self.send(Job::Stream { op, file_id }),
             Effect::FetchLatestRelease => self.send(Job::LatestRelease),

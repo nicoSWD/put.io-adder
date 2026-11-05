@@ -28,7 +28,7 @@ pub use error::{ApiError, ApiFailure};
 pub use http::UreqTransport;
 pub use models::{
     Account, DeviceCode, Disk, File, FileType, Release, Transfer, TransferKind, TransferStatus,
-    UploadOutcome,
+    UploadOutcome, ZipState, ZipStatus,
 };
 pub use token::Token;
 pub use transport::{Body, Host, Method, Request, Response, Transport, TransportError};

@@ -9,8 +9,9 @@
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 
-use putio_api::{Account, ApiError, DeviceCode, Release, Token, Transfer};
+use putio_api::{Account, ApiError, DeviceCode, Release, Token, Transfer, ZipState, ZipStatus};
 
+use crate::download;
 use crate::i18n::{Locale, Msg};
 use crate::intake::{Intake, IntakeError};
 use crate::settings::{Folder, Settings, ThemeChoice};
@@ -24,6 +25,8 @@ pub const POLL_INTERVAL: Millis = 20_000;
 pub const MAX_BACKOFF: Millis = 300_000;
 const LINK_POLL_INTERVAL: Millis = 3_000;
 const LINK_TTL: Millis = 10 * 60_000;
+const ZIP_POLL_INTERVAL: Millis = 2_000;
+const ZIP_TTL: Millis = 10 * 60_000;
 const CLOSE_DELAY: Millis = 5_000;
 const NOTICE_TIME: Millis = 5_000;
 const ERROR_NOTICE_TIME: Millis = 9_000;
@@ -74,7 +77,27 @@ enum Op {
     Cancel,
     Retry,
     Clear,
+    Download,
     Stream,
+}
+
+/// What put.io gave us for a download.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Prepared {
+    /// A file: its signed download address.
+    Url(String),
+    /// A folder: the id of the ZIP put.io is building from it.
+    Zip(i64),
+}
+
+/// A ZIP that put.io is building, polled until it is done.
+#[derive(Debug)]
+struct ZipJob {
+    op: OpId,
+    zip_id: i64,
+    deadline: Millis,
+    next_poll_at: Millis,
+    in_flight: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -149,6 +172,16 @@ pub enum Event {
     CopyLinkRequested(i64),
     /// Copy the magnet link or URL the transfer was added from.
     CopySourceRequested(i64),
+    /// Download the transfer's file or folder to this computer (through the browser).
+    DownloadRequested(i64),
+    DownloadPrepared {
+        op: OpId,
+        result: Result<Prepared, ApiError>,
+    },
+    ZipPolled {
+        op: OpId,
+        result: Result<ZipStatus, ApiError>,
+    },
     StreamRequested(i64),
     StreamFinished {
         op: OpId,
@@ -214,6 +247,17 @@ pub enum Effect {
     },
     /// Put text on the system clipboard. Only ever built here, from validated data.
     CopyText(String),
+    /// Work out what to download: a file's signed address, or a ZIP for a folder.
+    PrepareDownload {
+        op: OpId,
+        file_id: i64,
+    },
+    PollZip {
+        op: OpId,
+        zip_id: i64,
+    },
+    /// Hand a checked put.io download address to the browser. Never logged: it is a credential.
+    OpenDownload(String),
     /// Resolve a playable URL for the file (or the videos inside a folder) and hand it to the player.
     Stream {
         op: OpId,
@@ -256,6 +300,7 @@ pub struct State {
     tracker: Tracker,
     poll_in_flight: bool,
     next_poll_at: Option<Millis>,
+    zip: Option<ZipJob>,
     failures: u32,
     close_at: Option<Millis>,
     badge: Option<u8>,
@@ -284,6 +329,7 @@ impl State {
             tracker: Tracker::new(),
             poll_in_flight: false,
             next_poll_at: None,
+            zip: None,
             failures: 0,
             close_at: None,
             badge: None,
@@ -557,6 +603,47 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
                 state.say(Msg::Copied, now, NOTICE_TIME);
             }
         }
+        Event::DownloadRequested(id) => {
+            let file_id = state
+                .transfers
+                .iter()
+                .find(|t| t.id == id)
+                .and_then(|t| t.file_id)
+                .filter(|file_id| *file_id >= 0);
+            match file_id {
+                _ if !state.is_signed_in() => {}
+                None => state.say(Msg::DownloadNotReady, now, NOTICE_TIME),
+                Some(_) if state.zip.is_some() => state.say(Msg::DownloadBusy, now, NOTICE_TIME),
+                Some(file_id) => {
+                    state.close_at = None;
+                    let op = state.op(Op::Download);
+                    state.say_until_replaced(Msg::DownloadPreparing);
+                    fx.push(Effect::PrepareDownload { op, file_id });
+                }
+            }
+        }
+        Event::DownloadPrepared { op, result } => {
+            if state.ops.get(&op) == Some(&Op::Download) {
+                match result {
+                    Ok(Prepared::Url(url)) => open_download(state, now, op, &url, 0, &mut fx),
+                    Ok(Prepared::Zip(zip_id)) if state.zip.is_none() => {
+                        state.zip = Some(ZipJob {
+                            op,
+                            zip_id,
+                            deadline: now.saturating_add(ZIP_TTL),
+                            next_poll_at: now,
+                            in_flight: false,
+                        });
+                    }
+                    Ok(Prepared::Zip(_)) => {
+                        state.finish(op, &[Op::Download]);
+                        state.say(Msg::DownloadBusy, now, NOTICE_TIME);
+                    }
+                    Err(error) => download_failed(state, now, op, &error, &mut fx),
+                }
+            }
+        }
+        Event::ZipPolled { op, result } => zip_polled(state, now, op, result, &mut fx),
         Event::StreamRequested(id) => {
             if let Some(transfer) = state.transfers.iter().find(|t| t.id == id) {
                 match transfer.file_id {
@@ -682,6 +769,9 @@ fn sign_out(state: &mut State, fx: &mut Vec<Effect>) {
     state.failures = 0;
     state.pending_intake.clear();
     state.close_at = None;
+    if let Some(job) = state.zip.take() {
+        state.finish(job.op, &[Op::Download]);
+    }
     state.base = Msg::AuthRequired;
     fx.push(Effect::DeleteToken);
     if state.badge.take().is_some() {
@@ -702,6 +792,7 @@ fn tick(state: &mut State, now: Millis, fx: &mut Vec<Effect>) {
         state.close_at = None;
         fx.push(Effect::Quit);
     }
+    zip_tick(state, now, fx);
     if let Auth::Linking(link) = &mut state.auth {
         if now >= link.deadline {
             state.auth = Auth::SignedOut(Some(SignedOutReason::CodeExpired));
@@ -711,6 +802,98 @@ fn tick(state: &mut State, now: Millis, fx: &mut Vec<Effect>) {
             fx.push(Effect::PollDeviceCode {
                 code: link.code.clone(),
             });
+        }
+    }
+}
+
+fn zip_tick(state: &mut State, now: Millis, fx: &mut Vec<Effect>) {
+    let Some(job) = &mut state.zip else {
+        return;
+    };
+    if now >= job.deadline {
+        let op = job.op;
+        state.zip = None;
+        state.finish(op, &[Op::Download]);
+        state.say(Msg::DownloadZipTimeout, now, ERROR_NOTICE_TIME);
+    } else if !job.in_flight && now >= job.next_poll_at {
+        job.in_flight = true;
+        fx.push(Effect::PollZip {
+            op: job.op,
+            zip_id: job.zip_id,
+        });
+    }
+}
+
+fn zip_polled(
+    state: &mut State,
+    now: Millis,
+    op: OpId,
+    result: Result<ZipStatus, ApiError>,
+    fx: &mut Vec<Effect>,
+) {
+    let Some(job) = state.zip.as_mut().filter(|job| job.op == op) else {
+        return;
+    };
+    job.in_flight = false;
+    match result {
+        Ok(status) => match (status.zip_status, status.url.clone()) {
+            (ZipState::Done, Some(url)) => {
+                state.zip = None;
+                open_download(state, now, op, &url, status.missing_count(), fx);
+            }
+            (ZipState::Done | ZipState::Error, _) => {
+                state.zip = None;
+                state.finish(op, &[Op::Download]);
+                state.say(Msg::DownloadZipFailed, now, ERROR_NOTICE_TIME);
+            }
+            // Still being built (or a state we do not know yet): ask again shortly.
+            _ => job.next_poll_at = now.saturating_add(ZIP_POLL_INTERVAL),
+        },
+        Err(error) if error.is_transient() => {
+            job.next_poll_at = now.saturating_add(ZIP_POLL_INTERVAL);
+        }
+        Err(error) => {
+            state.zip = None;
+            download_failed(state, now, op, &error, fx);
+        }
+    }
+}
+
+/// Finish the download op and hand the address to the browser, if it is a put.io download address.
+fn open_download(
+    state: &mut State,
+    now: Millis,
+    op: OpId,
+    url: &str,
+    missing: usize,
+    fx: &mut Vec<Effect>,
+) {
+    state.finish(op, &[Op::Download]);
+    if download::is_download_url(url) {
+        fx.push(Effect::OpenDownload(url.to_owned()));
+        let msg = if missing > 0 {
+            Msg::DownloadStartedPartial { missing }
+        } else {
+            Msg::DownloadStarted
+        };
+        state.say(msg, now, NOTICE_TIME);
+    } else {
+        state.say(Msg::DownloadBadUrl, now, ERROR_NOTICE_TIME);
+    }
+}
+
+fn download_failed(
+    state: &mut State,
+    now: Millis,
+    op: OpId,
+    error: &ApiError,
+    fx: &mut Vec<Effect>,
+) {
+    if state.finish(op, &[Op::Download]) {
+        if matches!(error, ApiError::Unauthorized) {
+            session_expired(state, fx);
+        } else {
+            state.say(Msg::DownloadFailed, now, ERROR_NOTICE_TIME);
         }
     }
 }
@@ -975,6 +1158,7 @@ mod tests {
                 | Effect::CancelTransfer { op, .. }
                 | Effect::RetryTransfer { op, .. }
                 | Effect::CleanTransfers { op, .. }
+                | Effect::PrepareDownload { op, .. }
                 | Effect::Stream { op, .. } => Some(*op),
                 _ => None,
             })
@@ -1833,6 +2017,399 @@ mod tests {
         assert!(update(&mut state, 3, Event::CopySourceRequested(2)).is_empty());
         assert!(update(&mut state, 3, Event::CopySourceRequested(404)).is_empty());
         assert!(update(&mut state, 3, Event::CopyLinkRequested(404)).is_empty());
+    }
+
+    // ---- downloads ----------------------------------------------------------------------------
+
+    fn zip_status(state: ZipState, url: Option<&str>, missing: usize) -> ZipStatus {
+        let missing_files =
+            (missing > 0).then(|| vec![putio_api::models::MissingFile::default(); missing]);
+        ZipStatus {
+            zip_status: state,
+            url: url.map(str::to_owned),
+            size: None,
+            missing_files,
+        }
+    }
+
+    /// A signed-in state with one finished transfer (id 1, file 55) and one still running (id 2).
+    fn with_downloadable() -> State {
+        let (mut state, _) = signed_in(no_updates());
+        poll_ok(
+            &mut state,
+            0,
+            vec![
+                transfer(1, "done", TransferStatus::Completed, 100, Some(55)),
+                transfer(2, "running", TransferStatus::Downloading, 5, None),
+            ],
+        );
+        state
+    }
+
+    #[test]
+    fn a_file_is_handed_to_the_browser_once_its_address_is_known() {
+        let mut state = with_downloadable();
+        let fx = update(&mut state, 1, Event::DownloadRequested(1));
+        assert!(matches!(
+            &fx[..],
+            [Effect::PrepareDownload { file_id: 55, .. }]
+        ));
+        assert_eq!(*state.status(1), Msg::DownloadPreparing);
+        assert!(state.is_busy());
+        let op = op_of(&fx);
+        let url = "https://s1.put.io/v2/files/55/download?token=abc";
+        let fx = update(
+            &mut state,
+            2,
+            Event::DownloadPrepared {
+                op,
+                result: Ok(Prepared::Url(url.into())),
+            },
+        );
+        assert_eq!(fx, [Effect::OpenDownload(url.into())]);
+        assert_eq!(*state.status(2), Msg::DownloadStarted);
+        assert!(!state.is_busy());
+    }
+
+    #[test]
+    fn an_address_that_is_not_put_io_is_never_opened() {
+        let mut state = with_downloadable();
+        for url in [
+            "https://evil.example/x",
+            "http://put.io/x",
+            "https://put.io@evil.example/",
+            "file:///etc/passwd",
+        ] {
+            let op = op_of(&update(&mut state, 1, Event::DownloadRequested(1)));
+            let fx = update(
+                &mut state,
+                2,
+                Event::DownloadPrepared {
+                    op,
+                    result: Ok(Prepared::Url(url.into())),
+                },
+            );
+            assert!(fx.is_empty(), "{url}");
+            assert_eq!(*state.status(2), Msg::DownloadBadUrl);
+            assert!(!state.is_busy());
+        }
+    }
+
+    #[test]
+    fn nothing_is_downloaded_for_a_transfer_without_a_file_or_an_unknown_one() {
+        let mut state = with_downloadable();
+        assert!(update(&mut state, 1, Event::DownloadRequested(2)).is_empty());
+        assert_eq!(*state.status(1), Msg::DownloadNotReady);
+        assert!(update(&mut state, 1, Event::DownloadRequested(404)).is_empty());
+        assert!(!state.is_busy());
+        let (mut signed_out, _) = signed_in(no_updates());
+        update(&mut signed_out, 0, Event::SignOutRequested);
+        assert!(update(&mut signed_out, 1, Event::DownloadRequested(1)).is_empty());
+    }
+
+    #[test]
+    fn a_folder_is_zipped_polled_and_then_handed_to_the_browser() {
+        let mut state = with_downloadable();
+        let op = op_of(&update(&mut state, 1_000, Event::DownloadRequested(1)));
+        assert!(
+            update(
+                &mut state,
+                1_000,
+                Event::DownloadPrepared {
+                    op,
+                    result: Ok(Prepared::Zip(9))
+                }
+            )
+            .is_empty()
+        );
+        assert!(state.is_busy());
+        // The first poll is due straight away, then one at a time.
+        assert_eq!(
+            update(&mut state, 1_000, Event::Tick),
+            [Effect::PollZip { op, zip_id: 9 }]
+        );
+        assert!(
+            update(&mut state, 1_500, Event::Tick).is_empty(),
+            "one poll in flight"
+        );
+        let building = zip_status(ZipState::Processing, None, 0);
+        assert!(
+            update(
+                &mut state,
+                1_600,
+                Event::ZipPolled {
+                    op,
+                    result: Ok(building)
+                }
+            )
+            .is_empty()
+        );
+        assert!(update(&mut state, 3_599, Event::Tick).is_empty());
+        assert_eq!(
+            update(&mut state, 3_600, Event::Tick),
+            [Effect::PollZip { op, zip_id: 9 }]
+        );
+        let done = zip_status(ZipState::Done, Some("https://s2.put.io/zip/9?sig=x"), 0);
+        let fx = update(
+            &mut state,
+            3_700,
+            Event::ZipPolled {
+                op,
+                result: Ok(done),
+            },
+        );
+        assert_eq!(
+            fx,
+            [Effect::OpenDownload("https://s2.put.io/zip/9?sig=x".into())]
+        );
+        assert_eq!(*state.status(3_700), Msg::DownloadStarted);
+        assert!(!state.is_busy());
+        assert!(
+            !update(&mut state, 99_000, Event::Tick)
+                .iter()
+                .any(|e| matches!(e, Effect::PollZip { .. })),
+            "no more polling"
+        );
+    }
+
+    #[test]
+    fn files_put_io_left_out_of_a_zip_are_reported() {
+        let mut state = with_downloadable();
+        let op = op_of(&update(&mut state, 0, Event::DownloadRequested(1)));
+        update(
+            &mut state,
+            0,
+            Event::DownloadPrepared {
+                op,
+                result: Ok(Prepared::Zip(9)),
+            },
+        );
+        update(&mut state, 0, Event::Tick);
+        let done = zip_status(ZipState::Done, Some("https://s2.put.io/z"), 3);
+        update(
+            &mut state,
+            1,
+            Event::ZipPolled {
+                op,
+                result: Ok(done),
+            },
+        );
+        assert_eq!(*state.status(1), Msg::DownloadStartedPartial { missing: 3 });
+    }
+
+    #[test]
+    fn a_failed_or_address_less_zip_ends_the_download_with_a_message() {
+        for status in [
+            zip_status(ZipState::Error, None, 0),
+            zip_status(ZipState::Done, None, 0),
+        ] {
+            let mut state = with_downloadable();
+            let op = op_of(&update(&mut state, 0, Event::DownloadRequested(1)));
+            update(
+                &mut state,
+                0,
+                Event::DownloadPrepared {
+                    op,
+                    result: Ok(Prepared::Zip(9)),
+                },
+            );
+            update(&mut state, 0, Event::Tick);
+            let fx = update(
+                &mut state,
+                1,
+                Event::ZipPolled {
+                    op,
+                    result: Ok(status),
+                },
+            );
+            assert!(fx.is_empty());
+            assert_eq!(*state.status(1), Msg::DownloadZipFailed);
+            assert!(!state.is_busy());
+        }
+    }
+
+    #[test]
+    fn a_zip_that_takes_too_long_is_given_up_on() {
+        let mut state = with_downloadable();
+        let op = op_of(&update(&mut state, 0, Event::DownloadRequested(1)));
+        update(
+            &mut state,
+            0,
+            Event::DownloadPrepared {
+                op,
+                result: Ok(Prepared::Zip(9)),
+            },
+        );
+        assert!(
+            update(&mut state, ZIP_TTL - 1, Event::Tick)
+                .contains(&Effect::PollZip { op, zip_id: 9 })
+        );
+        let fx = update(&mut state, ZIP_TTL, Event::Tick);
+        assert!(fx.is_empty());
+        assert_eq!(*state.status(ZIP_TTL), Msg::DownloadZipTimeout);
+        assert!(!state.is_busy());
+    }
+
+    #[test]
+    fn a_temporary_network_problem_does_not_end_a_zip_wait() {
+        let mut state = with_downloadable();
+        let op = op_of(&update(&mut state, 0, Event::DownloadRequested(1)));
+        update(
+            &mut state,
+            0,
+            Event::DownloadPrepared {
+                op,
+                result: Ok(Prepared::Zip(9)),
+            },
+        );
+        update(&mut state, 0, Event::Tick);
+        update(
+            &mut state,
+            1,
+            Event::ZipPolled {
+                op,
+                result: Err(ApiError::Network("down".into())),
+            },
+        );
+        assert!(state.is_busy());
+        assert_eq!(
+            update(&mut state, 2_001, Event::Tick),
+            [Effect::PollZip { op, zip_id: 9 }]
+        );
+        update(
+            &mut state,
+            2_002,
+            Event::ZipPolled {
+                op,
+                result: Err(api_error(404, "gone")),
+            },
+        );
+        assert!(!state.is_busy());
+        assert_eq!(*state.status(2_002), Msg::DownloadFailed);
+    }
+
+    #[test]
+    fn download_errors_are_reported_and_an_expired_session_signs_out() {
+        let mut state = with_downloadable();
+        let op = op_of(&update(&mut state, 0, Event::DownloadRequested(1)));
+        update(
+            &mut state,
+            1,
+            Event::DownloadPrepared {
+                op,
+                result: Err(api_error(500, "x")),
+            },
+        );
+        assert_eq!(*state.status(1), Msg::DownloadFailed);
+        assert!(!state.is_busy());
+        let op = op_of(&update(&mut state, 2, Event::DownloadRequested(1)));
+        let fx = update(
+            &mut state,
+            3,
+            Event::DownloadPrepared {
+                op,
+                result: Err(ApiError::Unauthorized),
+            },
+        );
+        assert!(fx.contains(&Effect::DeleteToken));
+        // And during a zip wait.
+        let mut state = with_downloadable();
+        let op = op_of(&update(&mut state, 0, Event::DownloadRequested(1)));
+        update(
+            &mut state,
+            0,
+            Event::DownloadPrepared {
+                op,
+                result: Ok(Prepared::Zip(9)),
+            },
+        );
+        update(&mut state, 0, Event::Tick);
+        let fx = update(
+            &mut state,
+            1,
+            Event::ZipPolled {
+                op,
+                result: Err(ApiError::Unauthorized),
+            },
+        );
+        assert!(fx.contains(&Effect::DeleteToken));
+        assert!(!state.is_busy());
+    }
+
+    #[test]
+    fn signing_out_drops_a_zip_wait_and_ignores_its_late_answers() {
+        let mut state = with_downloadable();
+        let op = op_of(&update(&mut state, 0, Event::DownloadRequested(1)));
+        update(
+            &mut state,
+            0,
+            Event::DownloadPrepared {
+                op,
+                result: Ok(Prepared::Zip(9)),
+            },
+        );
+        update(&mut state, 0, Event::Tick);
+        update(&mut state, 1, Event::SignOutRequested);
+        assert!(!state.is_busy());
+        let done = zip_status(ZipState::Done, Some("https://s2.put.io/z"), 0);
+        assert!(
+            update(
+                &mut state,
+                2,
+                Event::ZipPolled {
+                    op,
+                    result: Ok(done)
+                }
+            )
+            .is_empty()
+        );
+        assert!(
+            !update(&mut state, 99_000, Event::Tick)
+                .iter()
+                .any(|e| matches!(e, Effect::PollZip { .. }))
+        );
+    }
+
+    #[test]
+    fn only_one_folder_is_prepared_at_a_time_and_stale_answers_are_ignored() {
+        let mut state = with_downloadable();
+        let op = op_of(&update(&mut state, 0, Event::DownloadRequested(1)));
+        update(
+            &mut state,
+            0,
+            Event::DownloadPrepared {
+                op,
+                result: Ok(Prepared::Zip(9)),
+            },
+        );
+        assert!(update(&mut state, 1, Event::DownloadRequested(1)).is_empty());
+        assert_eq!(*state.status(1), Msg::DownloadBusy);
+        // A poll answer for some other op changes nothing.
+        let done = zip_status(ZipState::Done, Some("https://s2.put.io/z"), 0);
+        assert!(
+            update(
+                &mut state,
+                2,
+                Event::ZipPolled {
+                    op: OpId(999),
+                    result: Ok(done)
+                }
+            )
+            .is_empty()
+        );
+        assert!(state.is_busy());
+        // Nor does a duplicate "prepared" for an op that is no longer a download.
+        assert!(
+            update(
+                &mut state,
+                3,
+                Event::DownloadPrepared {
+                    op: OpId(999),
+                    result: Ok(Prepared::Url("https://put.io/x".into()))
+                }
+            )
+            .is_empty()
+        );
     }
 
     #[test]

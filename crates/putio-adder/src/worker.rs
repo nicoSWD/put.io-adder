@@ -17,7 +17,7 @@ use std::thread;
 
 use putio_api::client::FileListing;
 use putio_api::{ApiError, Client, FileType, Token, Transport, UploadOutcome, UreqTransport};
-use putio_core::state::{Event, OpId, StreamFailure};
+use putio_core::state::{Event, OpId, Prepared, StreamFailure};
 use putio_platform::player::{PlayError, PlayerLauncher, VlcLauncher};
 use putio_platform::torrent_file;
 
@@ -53,6 +53,14 @@ pub(crate) enum Job {
     Retry {
         op: OpId,
         id: i64,
+    },
+    PrepareDownload {
+        op: OpId,
+        file_id: i64,
+    },
+    PollZip {
+        op: OpId,
+        zip_id: i64,
     },
     Clean {
         op: OpId,
@@ -203,6 +211,14 @@ fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
             op,
             result: client.retry_transfer(id),
         }),
+        Job::PrepareDownload { op, file_id } => WorkerMsg::Core(Event::DownloadPrepared {
+            op,
+            result: prepare_download(client, file_id),
+        }),
+        Job::PollZip { op, zip_id } => WorkerMsg::Core(Event::ZipPolled {
+            op,
+            result: client.zip_status(zip_id),
+        }),
         Job::Clean { op, ids } => WorkerMsg::Core(Event::ClearFinished {
             op,
             result: client.clean_transfers(&ids),
@@ -216,6 +232,24 @@ fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
             parent,
             result: client.list_files(parent, Some(FileType::Folder)),
         },
+    }
+}
+
+/// Decide how to download `file_id`: a plain file has a signed address of its own, a folder has to be
+/// zipped first (put.io builds the ZIP in the background; the reducer polls for it).
+fn prepare_download<T: Transport>(client: &Client<T>, file_id: i64) -> Result<Prepared, ApiError> {
+    let is_folder = match client.list_files(file_id, None) {
+        Ok(listing) => listing
+            .parent
+            .is_some_and(|parent| parent.file_type == FileType::Folder),
+        Err(ApiError::Unauthorized) => return Err(ApiError::Unauthorized),
+        // Not listable: it is a plain file.
+        Err(_) => false,
+    };
+    if is_folder {
+        client.create_zip(&[file_id]).map(Prepared::Zip)
+    } else {
+        client.file_url(file_id).map(Prepared::Url)
     }
 }
 
@@ -313,6 +347,47 @@ mod tests {
                 .flatten()
                 .all(|url| !url.contains("SECRETTOKEN123"))
         );
+    }
+
+    #[test]
+    fn a_plain_file_is_downloaded_through_its_own_signed_address() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            404,
+            r#"{"error_type":"NotFound","error_message":"not a folder"}"#,
+        );
+        fake.push_json(200, r#"{"url":"https://s1.put.io/f?sig=1"}"#);
+        assert_eq!(
+            prepare_download(&client(&fake), 7).unwrap(),
+            Prepared::Url("https://s1.put.io/f?sig=1".into())
+        );
+    }
+
+    #[test]
+    fn a_folder_is_downloaded_as_a_zip() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            200,
+            r#"{"parent":{"id":5,"name":"Show","file_type":"FOLDER"},"files":[]}"#,
+        );
+        fake.push_json(200, r#"{"zip_id":31}"#);
+        assert_eq!(
+            prepare_download(&client(&fake), 5).unwrap(),
+            Prepared::Zip(31)
+        );
+        let requests = fake.requests();
+        assert_eq!(requests[1].path, "/zips/create");
+        assert_eq!(requests[1].body, putio_api::Body::Form("file_ids=5".into()));
+    }
+
+    #[test]
+    fn a_download_for_an_expired_session_says_so() {
+        let fake = FakeTransport::new();
+        fake.push_json(401, r#"{"error_type":"Unauthorized","error_message":"no"}"#);
+        assert!(matches!(
+            prepare_download(&client(&fake), 7),
+            Err(ApiError::Unauthorized)
+        ));
     }
 
     #[test]

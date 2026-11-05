@@ -142,6 +142,48 @@ impl Transfer {
     }
 }
 
+/// A file put.io could not put into a ZIP.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+pub struct MissingFile {
+    #[serde(default, deserialize_with = "lenient")]
+    pub name: Option<String>,
+}
+
+/// Progress of a ZIP that put.io builds from a folder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ZipState {
+    New,
+    Processing,
+    Done,
+    Error,
+    #[default]
+    #[serde(other)]
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+pub struct ZipStatus {
+    #[serde(default, deserialize_with = "null_default")]
+    pub zip_status: ZipState,
+    /// Where to download the ZIP. Only present once it is done. Untrusted text; check it before use.
+    #[serde(default, deserialize_with = "lenient")]
+    pub url: Option<String>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub size: Option<i64>,
+    /// Files put.io left out of the ZIP. Only the number matters here.
+    #[serde(default, deserialize_with = "lenient")]
+    pub missing_files: Option<Vec<MissingFile>>,
+}
+
+impl ZipStatus {
+    /// How many files are not in the ZIP.
+    #[must_use]
+    pub fn missing_count(&self) -> usize {
+        self.missing_files.as_ref().map_or(0, Vec::len)
+    }
+}
+
 /// Disk quota. The 2.8.14 spec no longer lists it, but the live API may still send it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 pub struct Disk {
