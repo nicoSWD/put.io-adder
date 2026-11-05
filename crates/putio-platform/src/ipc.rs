@@ -468,6 +468,7 @@ fn handle(mut stream: Stream, tx: &Sender<String>) -> Result<(), IpcError> {
 #[cfg(test)]
 mod tests {
     use std::io::Cursor;
+    #[cfg(unix)]
     use std::sync::mpsc;
 
     use super::*;

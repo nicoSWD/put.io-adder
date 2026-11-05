@@ -438,6 +438,8 @@ fn a_real_zip_of_a_bundle_unpacks_with_ditto_and_is_checked() {
     let _ = fs::remove_dir_all(root);
 }
 
+// The bundle strategy is compiled on Unix only (macOS uses it; Linux for the tests).
+#[cfg(unix)]
 #[test]
 fn the_bundle_is_found_from_the_executable_inside_it() {
     let found = |p: &str| super::bundle::bundle_for_executable(Path::new(p));
