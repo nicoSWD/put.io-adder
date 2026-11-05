@@ -326,7 +326,7 @@ impl Msg {
                 l,
                 format!("Couldn't start sign-in: {reason}"),
                 format!("Anmeldung konnte nicht gestartet werden: {reason}"),
-                format!("No se pudo iniciar el acceso: {reason}")
+                format!("No se pudo iniciar sesión: {reason}")
             ),
             Self::Authenticated => tr!(
                 l,
@@ -337,14 +337,14 @@ impl Msg {
             .into(),
             Self::AccountFailed => tr!(
                 l,
-                "Failed to fetch account info",
+                "Couldn't load account info",
                 "Kontoinformationen konnten nicht geladen werden",
                 "No se pudo obtener la información de la cuenta"
             )
             .into(),
             Self::TransfersFailed => tr!(
                 l,
-                "Failed to fetch transfers",
+                "Couldn't load transfers",
                 "Übertragungen konnten nicht geladen werden",
                 "No se pudieron obtener las transferencias"
             )
@@ -385,9 +385,12 @@ impl Msg {
                         1 => format!("1 laufende Übertragung  ·  {finished} fertig"),
                         n => format!("{n} laufende Übertragungen  ·  {finished} fertig"),
                     },
-                    match pending {
-                        1 => format!("1 transferencia pendiente  ·  {finished} terminadas"),
-                        n => format!("{n} transferencias pendientes  ·  {finished} terminadas"),
+                    {
+                        let done = if finished == 1 { "terminada" } else { "terminadas" };
+                        match pending {
+                            1 => format!("1 transferencia pendiente  ·  {finished} {done}"),
+                            n => format!("{n} transferencias pendientes  ·  {finished} {done}"),
+                        }
                     }
                 );
                 if failed == 0 {
@@ -418,14 +421,14 @@ impl Msg {
             Self::AddedClosing => tr!(
                 l,
                 "Added! Closing in 5 seconds…",
-                "Hinzugefügt! Schließe in 5 Sekunden…",
+                "Hinzugefügt! Wird in 5 Sekunden geschlossen…",
                 "¡Añadido! Cerrando en 5 segundos…"
             )
             .into(),
             Self::AddFailed { reason } => tr!(
                 l,
-                format!("Couldn't add it: {reason}"),
-                format!("Konnte nicht hinzugefügt werden: {reason}"),
+                format!("Couldn't add the transfer: {reason}"),
+                format!("Hinzufügen fehlgeschlagen: {reason}"),
                 format!("No se pudo añadir: {reason}")
             ),
             Self::Uploading { name } => tr!(
@@ -444,13 +447,13 @@ impl Msg {
             Self::UploadedClosing => tr!(
                 l,
                 "Torrent uploaded! Closing in 5 seconds…",
-                "Torrent hochgeladen! Schließe in 5 Sekunden…",
+                "Torrent hochgeladen! Wird in 5 Sekunden geschlossen…",
                 "¡Torrent subido! Cerrando en 5 segundos…"
             )
             .into(),
             Self::UploadFailed { reason } => tr!(
                 l,
-                format!("Couldn't upload it: {reason}"),
+                format!("Couldn't upload the torrent: {reason}"),
                 format!("Hochladen fehlgeschlagen: {reason}"),
                 format!("No se pudo subir: {reason}")
             ),
@@ -462,30 +465,30 @@ impl Msg {
             ),
             Self::NotAMagnet => tr!(
                 l,
-                "That magnet link isn't valid.",
-                "Dieser Magnet-Link ist ungültig.",
-                "Ese enlace magnet no es válido."
+                "That magnet link isn't valid",
+                "Dieser Magnet-Link ist ungültig",
+                "Ese enlace magnet no es válido"
             )
             .into(),
             Self::Canceling => tr!(
                 l,
-                "Removing transfer…",
-                "Entferne Übertragung…",
-                "Quitando transferencia…"
+                "Canceling transfer…",
+                "Übertragung wird abgebrochen…",
+                "Cancelando transferencia…"
             )
             .into(),
             Self::Canceled => tr!(
                 l,
-                "Transfer removed",
-                "Übertragung entfernt",
-                "Transferencia quitada"
+                "Transfer canceled",
+                "Übertragung abgebrochen",
+                "Transferencia cancelada"
             )
             .into(),
             Self::CancelFailed => tr!(
                 l,
-                "Couldn't remove the transfer",
-                "Übertragung konnte nicht entfernt werden",
-                "No se pudo quitar la transferencia"
+                "Couldn't cancel the transfer",
+                "Übertragung konnte nicht abgebrochen werden",
+                "No se pudo cancelar la transferencia"
             )
             .into(),
             Self::Streaming => {
@@ -500,16 +503,16 @@ impl Msg {
             .into(),
             Self::StreamNotReady => tr!(
                 l,
-                "This transfer has no files yet.",
-                "Diese Übertragung hat noch keine Dateien.",
-                "Esta transferencia aún no tiene archivos."
+                "This transfer has no files yet",
+                "Diese Übertragung hat noch keine Dateien",
+                "Esta transferencia aún no tiene archivos"
             )
             .into(),
             Self::StreamNothingToPlay => tr!(
                 l,
-                "No video files found to play.",
-                "Keine abspielbaren Videodateien gefunden.",
-                "No hay archivos de vídeo para reproducir."
+                "No video files found to play",
+                "Keine abspielbaren Videodateien gefunden",
+                "No hay archivos de vídeo para reproducir"
             )
             .into(),
             Self::StreamFailed => tr!(
@@ -539,9 +542,9 @@ impl Msg {
             }
             Self::LinkExpired => tr!(
                 l,
-                "That code expired.",
-                "Dieser Code ist abgelaufen.",
-                "Ese código ha caducado."
+                "That code expired",
+                "Dieser Code ist abgelaufen",
+                "Ese código ha caducado"
             )
             .into(),
             Self::ColName => tr!(l, "Name", "Name", "Nombre").into(),
@@ -553,10 +556,10 @@ impl Msg {
                 l,
                 format!("{eta} left"),
                 format!("noch {eta}"),
-                format!("faltan {eta}")
+                format!("quedan {eta}")
             ),
-            Self::StatusQueued => tr!(l, "In queue", "In Warteschlange", "En cola").into(),
-            Self::StatusWaiting => tr!(l, "Waiting…", "Warte…", "Esperando…").into(),
+            Self::StatusQueued => tr!(l, "In queue", "In der Warteschlange", "En cola").into(),
+            Self::StatusWaiting => tr!(l, "Waiting…", "Wartet…", "Esperando…").into(),
             Self::StatusPreparing => tr!(l, "Preparing…", "Bereite vor…", "Preparando…").into(),
             Self::StatusDownloading => tr!(l, "Downloading", "Lädt herunter", "Descargando").into(),
             Self::StatusSeeding => tr!(
@@ -585,8 +588,8 @@ impl Msg {
             .into(),
             Self::EmptyHint => tr!(
                 l,
-                "Click a magnet link or open a .torrent file and it shows up here.",
-                "Klicke einen Magnet-Link oder öffne eine .torrent-Datei, dann erscheint sie hier.",
+                "Click a magnet link or open a .torrent file, and it will show up here.",
+                "Klicke auf einen Magnet-Link oder öffne eine .torrent-Datei. Die Übertragung erscheint dann hier.",
                 "Haz clic en un enlace magnet o abre un archivo .torrent y aparecerá aquí."
             )
             .into(),
@@ -617,7 +620,7 @@ impl Msg {
             Self::DetailType => tr!(l, "Type", "Typ", "Tipo").into(),
             Self::DetailDownloaded => tr!(l, "Downloaded", "Heruntergeladen", "Descargado").into(),
             Self::DetailUploaded => tr!(l, "Uploaded", "Hochgeladen", "Subido").into(),
-            Self::DetailRatio => tr!(l, "Share ratio", "Share-Ratio", "Ratio").into(),
+            Self::DetailRatio => tr!(l, "Share ratio", "Verhältnis", "Ratio").into(),
             Self::DetailSeedingFor => {
                 tr!(l, "Seeding for", "Seed-Dauer", "Tiempo compartiendo").into()
             }
@@ -637,7 +640,7 @@ impl Msg {
             .into(),
             Self::DetailError => tr!(l, "Error", "Fehler", "Error").into(),
             Self::DetailAdded => tr!(l, "Added", "Hinzugefügt", "Añadido").into(),
-            Self::DetailFinished => tr!(l, "Finished", "Fertiggestellt", "Finalizado").into(),
+            Self::DetailFinished => tr!(l, "Finished", "Abgeschlossen", "Finalizado").into(),
             Self::DetailYes => tr!(l, "Yes", "Ja", "Sí").into(),
             Self::DetailNo => tr!(l, "No", "Nein", "No").into(),
             Self::KindTorrent => tr!(l, "Torrent", "Torrent", "Torrent").into(),
@@ -711,7 +714,7 @@ impl Msg {
             ),
             Self::DetailGroupTransfer => tr!(l, "Transfer", "Übertragung", "Transferencia").into(),
             Self::DetailGroupSharing => tr!(l, "Sharing", "Teilen", "Compartir").into(),
-            Self::DetailGroupDates => tr!(l, "Dates", "Daten", "Fechas").into(),
+            Self::DetailGroupDates => tr!(l, "Dates", "Zeitpunkte", "Fechas").into(),
             Self::MenuCopyLink => tr!(
                 l,
                 "Copy put.io link",
@@ -814,8 +817,8 @@ impl Msg {
             Self::PrefsQuitMagnet => tr!(
                 l,
                 "Quit after adding a magnet link",
-                "Nach einem Magnet-Link beenden",
-                "Cerrar tras añadir un enlace magnet"
+                "Nach dem Hinzufügen eines Magnet-Links beenden",
+                "Cerrar la app tras añadir un enlace magnet"
             )
             .into(),
             Self::PrefsQuitMagnetHint => tr!(
@@ -829,7 +832,7 @@ impl Msg {
                 l,
                 "Quit after uploading a .torrent file",
                 "Nach dem Hochladen einer .torrent-Datei beenden",
-                "Cerrar tras subir un archivo .torrent"
+                "Cerrar la app tras subir un archivo .torrent"
             )
             .into(),
             Self::PrefsQuitTorrentHint => tr!(
@@ -868,7 +871,7 @@ impl Msg {
                 format!("Angemeldet als {name}"),
                 format!("Sesión iniciada como {name}")
             ),
-            Self::PrefsAbout => tr!(l, "About", "Über", "Acerca de").into(),
+            Self::PrefsAbout => tr!(l, "About", "Info", "Acerca de").into(),
             Self::PrefsVersion { version } => format!("put.io adder {version}"),
             Self::PrefsUnofficial => tr!(
                 l,
@@ -918,13 +921,13 @@ impl Msg {
                 l,
                 "Use default",
                 "Standard verwenden",
-                "Usar predeterminada"
+                "Usar la predeterminada"
             )
             .into(),
             Self::Bandwidth { used } => tr!(
                 l,
                 format!("{used} this month"),
-                format!("{used} diesen Monat"),
+                format!("{used} in diesem Monat"),
                 format!("{used} este mes")
             ),
             Self::DiskLeft { left } => tr!(
@@ -935,7 +938,7 @@ impl Msg {
             ),
             Self::NotificationTitle => tr!(
                 l,
-                "Finished Download",
+                "Download finished",
                 "Download abgeschlossen",
                 "Descarga terminada"
             )
@@ -978,9 +981,9 @@ impl Msg {
             ),
             Self::UpdateReady { version } => tr!(
                 l,
-                format!("{version} is ready"),
-                format!("{version} ist bereit"),
-                format!("{version} está lista")
+                format!("Version {version} is ready"),
+                format!("Version {version} ist bereit"),
+                format!("La versión {version} está lista")
             ),
             Self::UpdateFailed { reason } => tr!(
                 l,
@@ -1007,7 +1010,7 @@ impl Msg {
                 l,
                 "Yes, make it the default",
                 "Ja, als Standard festlegen",
-                "Sí, usarla por defecto"
+                "Sí, usarla como predeterminada"
             )
             .into(),
             Self::HandlerNotNow => tr!(
@@ -1041,8 +1044,8 @@ impl Msg {
             Self::HandlerMakeDefault => tr!(
                 l,
                 "Make default",
-                "Als Standard",
-                "Usar por defecto"
+                "Als Standard festlegen",
+                "Establecer como predeterminada"
             )
             .into(),
             Self::PrefsDefaultApp => tr!(
@@ -1082,9 +1085,9 @@ impl Msg {
             Self::UpdateOpenPage => tr!(l, "View release", "Release ansehen", "Ver versión").into(),
             Self::UpToDate => tr!(
                 l,
-                "You're up to date.",
-                "Du bist auf dem neuesten Stand.",
-                "Estás al día."
+                "You're up to date",
+                "Du bist auf dem neuesten Stand",
+                "Estás al día"
             )
             .into(),
             Self::DownloadOpenFailed => tr!(
@@ -1110,9 +1113,9 @@ impl Msg {
             .into(),
             Self::SecretLoadFailed => tr!(
                 l,
-                "Couldn't read your saved sign-in.",
-                "Gespeicherte Anmeldung konnte nicht gelesen werden.",
-                "No se pudo leer tu inicio de sesión guardado."
+                "Couldn't read your saved sign-in",
+                "Gespeicherte Anmeldung konnte nicht gelesen werden",
+                "No se pudo leer tu inicio de sesión guardado"
             )
             .into(),
             Self::SecretSaveFailed => tr!(
@@ -1124,16 +1127,16 @@ impl Msg {
             .into(),
             Self::SecretDeleteFailed => tr!(
                 l,
-                "Couldn't remove your saved sign-in from this computer.",
-                "Gespeicherte Anmeldung konnte nicht von diesem Computer entfernt werden.",
-                "No se pudo quitar tu inicio de sesión guardado de este equipo."
+                "Couldn't remove your saved sign-in from this computer",
+                "Gespeicherte Anmeldung konnte nicht von diesem Computer entfernt werden",
+                "No se pudo quitar tu inicio de sesión guardado de este equipo"
             )
             .into(),
             Self::CopyCode => tr!(l, "Copy code", "Code kopieren", "Copiar código").into(),
             Self::HandlerKeptOther => tr!(
                 l,
                 "the system kept another app for some of them",
-                "das System hat für einige davon eine andere App beibehalten",
+                "Das System hat für einige davon eine andere App beibehalten",
                 "el sistema mantuvo otra app para algunas de ellas"
             )
             .into(),
@@ -1144,9 +1147,9 @@ impl Msg {
             }
             Self::UpdateCheckFailed => tr!(
                 l,
-                "Couldn't check for updates.",
-                "Updates konnten nicht geprüft werden.",
-                "No se pudo buscar actualizaciones."
+                "Couldn't check for updates",
+                "Updates konnten nicht geprüft werden",
+                "No se pudo comprobar si hay actualizaciones"
             )
             .into(),
         }
@@ -1192,6 +1195,23 @@ mod tests {
             }
             .text(Locale::De),
             "0 laufende Übertragungen  ·  2 fertig"
+        );
+    }
+
+    #[test]
+    fn the_spanish_summary_agrees_in_number() {
+        let summary = |pending, finished| Msg::Summary {
+            pending,
+            finished,
+            failed: 0,
+        };
+        assert_eq!(
+            summary(1, 1).text(Locale::Es),
+            "1 transferencia pendiente  ·  1 terminada"
+        );
+        assert_eq!(
+            summary(2, 3).text(Locale::Es),
+            "2 transferencias pendientes  ·  3 terminadas"
         );
     }
 

@@ -1759,7 +1759,7 @@ mod tests {
             })
             .collect();
         assert_eq!(notes.len(), 1);
-        assert_eq!(notes[0].title, "Finished Download");
+        assert_eq!(notes[0].title, "Download finished");
         assert_eq!(notes[0].body, "“Sintel” finished downloading");
         assert_eq!(notes[0].file_id, Some(77));
     }
@@ -2132,15 +2132,15 @@ mod tests {
         let cases = [
             (
                 ApiError::Network("x".into()),
-                "Couldn't add it: Can't reach put.io. Check your connection.",
+                "Couldn't add the transfer: Can't reach put.io. Check your connection.",
             ),
             (
                 api_error(400, "Transfer already exists"),
-                "Couldn't add it: Transfer already exists",
+                "Couldn't add the transfer: Transfer already exists",
             ),
             (
                 api_error(502, "<html>"),
-                "Couldn't add it: put.io is having problems. Trying again soon.",
+                "Couldn't add the transfer: put.io is having problems. Trying again soon.",
             ),
         ];
         for (error, expected) in cases {

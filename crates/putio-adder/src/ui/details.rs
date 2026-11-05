@@ -356,7 +356,7 @@ mod tests {
     #[test]
     fn the_panel_is_translated() {
         let text = rendered_text(|ui| body(ui, &seeding(), Locale::De));
-        assert!(has(&text, "Share-Ratio"), "{text:?}");
+        assert!(has(&text, "Verhältnis"), "{text:?}");
         assert!(has(&text, "TRACKER-MELDUNG"), "{text:?}");
         assert!(has(&text, "TEILEN"), "{text:?}");
     }

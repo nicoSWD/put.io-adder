@@ -54,7 +54,7 @@ fn main() {
         log(&format!("notification clicked: {file_id:?}"));
     }));
     notifier.notify(&Notification {
-        title: "Finished Download".into(),
+        title: "Download finished".into(),
         body: "“Probe” finished downloading".into(),
         file_id: Some(42),
     });

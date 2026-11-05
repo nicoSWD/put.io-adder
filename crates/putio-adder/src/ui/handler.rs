@@ -122,7 +122,7 @@ mod tests {
     fn the_question_is_translated() {
         for (locale, yes) in [
             (Locale::De, "Ja, als Standard festlegen"),
-            (Locale::Es, "Sí, usarla por defecto"),
+            (Locale::Es, "Sí, usarla como predeterminada"),
         ] {
             let text = rendered_text(|ui| {
                 body(ui, locale);
