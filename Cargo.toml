@@ -7,7 +7,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.99"
 license = "MIT"
-repository = "https://github.com/nicoSWD/putio-adder-rs"
+repository = "https://github.com/nicoSWD/put.io-adder"
 authors = ["Nicolas Oelgart"]
 
 [workspace.lints.rust]

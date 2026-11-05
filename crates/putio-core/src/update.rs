@@ -14,7 +14,7 @@ use semver::Version;
 /// for a release they published by hand.
 const RELEASE_AUTHORS: [&str; 2] = ["github-actions[bot]", "nicoSWD"];
 /// Where this project's release files live.
-const DOWNLOAD_PREFIX: &str = "https://github.com/nicoSWD/putio-adder-rs/releases/download/";
+const DOWNLOAD_PREFIX: &str = "https://github.com/nicoSWD/put.io-adder/releases/download/";
 /// The largest file the updater will download (the real ones are about 10 MB).
 pub const MAX_ASSET_BYTES: u64 = 128 * 1024 * 1024;
 
@@ -188,7 +188,7 @@ mod tests {
         assert_eq!(asset.name, "putio-adder-v0.2.0-test.zip");
         assert_eq!(
             asset.url,
-            "https://github.com/nicoSWD/putio-adder-rs/releases/download/v0.2.0/putio-adder-v0.2.0-test.zip"
+            "https://github.com/nicoSWD/put.io-adder/releases/download/v0.2.0/putio-adder-v0.2.0-test.zip"
         );
         assert_eq!(asset.size, 10_000_000);
         // A maintainer who published it by hand is accepted too.
@@ -229,11 +229,11 @@ mod tests {
         r.assets[0].name = "putio-adder-v0.2.0-other.zip".into();
         assert!(manual(&r), "wrong file name");
         for url in [
-            "https://evil.example/nicoSWD/putio-adder-rs/releases/download/v0.2.0/putio-adder-v0.2.0-test.zip",
-            "http://github.com/nicoSWD/putio-adder-rs/releases/download/v0.2.0/putio-adder-v0.2.0-test.zip",
-            "https://github.com/nicoSWD/putio-adder-rs-evil/releases/download/v0.2.0/putio-adder-v0.2.0-test.zip",
-            "https://github.com/nicoSWD/putio-adder-rs/releases/download/v0.1.0/putio-adder-v0.2.0-test.zip",
-            "https://github.com/nicoSWD/putio-adder-rs/releases/download/v0.2.0/putio-adder-v0.2.0-test.zip?x=1",
+            "https://evil.example/nicoSWD/put.io-adder/releases/download/v0.2.0/putio-adder-v0.2.0-test.zip",
+            "http://github.com/nicoSWD/put.io-adder/releases/download/v0.2.0/putio-adder-v0.2.0-test.zip",
+            "https://github.com/nicoSWD/put.io-adder-evil/releases/download/v0.2.0/putio-adder-v0.2.0-test.zip",
+            "https://github.com/nicoSWD/put.io-adder/releases/download/v0.1.0/putio-adder-v0.2.0-test.zip",
+            "https://github.com/nicoSWD/put.io-adder/releases/download/v0.2.0/putio-adder-v0.2.0-test.zip?x=1",
             "",
         ] {
             let mut r = installable("v0.2.0");

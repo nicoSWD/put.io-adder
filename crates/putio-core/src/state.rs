@@ -42,7 +42,7 @@ const MAX_QUEUED_INTAKE: usize = 20;
 const MAX_REASON_CHARS: usize = 200;
 
 pub const LINK_URL: &str = "https://put.io/link";
-pub const PROJECT_URL: &str = "https://github.com/nicoSWD/putio-adder-rs";
+pub const PROJECT_URL: &str = "https://github.com/nicoSWD/put.io-adder";
 
 /// Identifies one outstanding operation, so a late result can never be attributed to the wrong request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -3045,7 +3045,7 @@ mod tests {
             }),
             assets: vec![putio_api::ReleaseAsset {
                 browser_download_url: format!(
-                    "https://github.com/nicoSWD/putio-adder-rs/releases/download/{tag}/{name}"
+                    "https://github.com/nicoSWD/put.io-adder/releases/download/{tag}/{name}"
                 ),
                 name,
                 size: 5_000_000,

@@ -17,7 +17,7 @@ use crate::transport::{Body, Host, Method, Request, Response, Transport};
 const JSON: &str = "application/json";
 const GITHUB_JSON: &str = "application/vnd.github+json";
 /// GitHub project the update check reads releases from.
-const GITHUB_REPO: &str = "nicoSWD/putio-adder-rs";
+const GITHUB_REPO: &str = "nicoSWD/put.io-adder";
 /// Page size for file listings (spec maximum is 1000).
 const PER_PAGE: &str = "1000";
 /// Upper bound on pages followed for one listing, so a misbehaving cursor cannot loop forever.
@@ -905,7 +905,7 @@ mod tests {
     #[test]
     fn latest_release_goes_to_github_without_the_put_io_token() {
         let fake = FakeTransport::new();
-        fake.push_json(200, r#"{"tag_name":"v1.2.3","html_url":"https://github.com/nicoSWD/putio-adder-rs/releases/tag/v1.2.3","prerelease":false,"draft":false}"#);
+        fake.push_json(200, r#"{"tag_name":"v1.2.3","html_url":"https://github.com/nicoSWD/put.io-adder/releases/tag/v1.2.3","prerelease":false,"draft":false}"#);
         fake.push_json(
             200,
             r#"{"tag_name":"v9","html_url":"https://evil.example/x"}"#,
@@ -915,10 +915,7 @@ mod tests {
         assert_eq!(release.tag_name, "v1.2.3");
         let request = &fake.requests()[0];
         assert_eq!(request.host, Host::GitHub);
-        assert_eq!(
-            request.path,
-            "/repos/nicoSWD/putio-adder-rs/releases/latest"
-        );
+        assert_eq!(request.path, "/repos/nicoSWD/put.io-adder/releases/latest");
         assert!(
             request.bearer.is_none(),
             "the put.io token must never go to GitHub"

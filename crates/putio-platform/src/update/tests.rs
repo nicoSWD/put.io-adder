@@ -487,8 +487,8 @@ fn the_macos_helper_waits_for_the_old_process_and_only_forwards_what_it_is_given
 #[test]
 fn a_development_build_never_replaces_itself() {
     let error = super::portable::target_for(
-        Path::new("/work/putio-adder-rs/target/debug/putio-adder"),
-        Path::new("/work/putio-adder-rs"),
+        Path::new("/work/put.io-adder/target/debug/putio-adder"),
+        Path::new("/work/put.io-adder"),
     )
     .unwrap_err();
     assert!(error.contains("development build"), "{error}");
@@ -599,7 +599,7 @@ fn the_relaunched_process_gets_the_flag_and_only_the_environment_it_is_given() {
 fn asset(name: &str, size: usize) -> UpdateAsset {
     UpdateAsset {
         name: name.to_owned(),
-        url: format!("https://github.com/nicoSWD/putio-adder-rs/releases/download/v0.2.0/{name}"),
+        url: format!("https://github.com/nicoSWD/put.io-adder/releases/download/v0.2.0/{name}"),
         size: size as u64,
     }
 }

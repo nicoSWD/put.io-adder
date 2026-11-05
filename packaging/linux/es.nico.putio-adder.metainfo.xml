@@ -13,8 +13,8 @@
     </p>
   </description>
   <launchable type="desktop-id">es.nico.putio-adder.desktop</launchable>
-  <url type="homepage">https://github.com/nicoSWD/putio-adder-rs</url>
-  <url type="bugtracker">https://github.com/nicoSWD/putio-adder-rs/issues</url>
+  <url type="homepage">https://github.com/nicoSWD/put.io-adder</url>
+  <url type="bugtracker">https://github.com/nicoSWD/put.io-adder/issues</url>
   <provides><binary>putio-adder</binary></provides>
   <content_rating type="oars-1.1"/>
   <releases/>

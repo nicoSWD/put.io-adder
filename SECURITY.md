@@ -15,7 +15,7 @@ Releases are built by GitHub Actions from a signed tag, by a workflow that refus
 maintainer, not on `main`, or whose CI did not pass, and that waits for a human to approve the publish step.
 Each artifact has a build-provenance attestation:
 
-    gh attestation verify <artifact> --repo nicoSWD/putio-adder-rs
+    gh attestation verify <artifact> --repo nicoSWD/put.io-adder
 
 `SHA256SUMS` and a CycloneDX SBOM (`sbom.cdx.json`) are published with every release. Release builds use no
 build cache, a pinned toolchain, `--locked`, and fixed timestamps and paths. The Linux build is checked against a

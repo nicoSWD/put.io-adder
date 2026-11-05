@@ -7,7 +7,7 @@ finish**. The design follows the updater of the sibling project DegenView, with 
 
 ## How it works
 
-1. **Check.** `GET /repos/nicoSWD/putio-adder-rs/releases/latest` on start-up, then every 6 hours (30 minutes
+1. **Check.** `GET /repos/nicoSWD/put.io-adder/releases/latest` on start-up, then every 6 hours (30 minutes
    after a failed check) while the app stays open, if "Check for updates" is on. GitHub's `latest` is the
    newest published release that is not a draft and not a pre-release, so only the **stable** channel is
    followed. The version is compared with semver (`0.10.0 > 0.9.0`).
@@ -16,7 +16,7 @@ finish**. The design follows the updater of the sibling project DegenView, with 
    - it has the file this build expects, with exactly this name: `putio-adder-<tag>-macos-arm64.zip`,
      `…-macos-x64.zip`, `…-windows-x64.zip`, `…-windows-arm64.zip`, `…-linux-x86_64.tar.gz` or
      `…-linux-aarch64.tar.gz`;
-   - the file's address is exactly `https://github.com/nicoSWD/putio-adder-rs/releases/download/<tag>/<name>`;
+   - the file's address is exactly `https://github.com/nicoSWD/put.io-adder/releases/download/<tag>/<name>`;
    - its size is between 1 byte and 128 MiB;
    - this copy can replace itself (below).
 
@@ -60,7 +60,7 @@ This is a decision, not an oversight. The updater does **not** verify:
 
 So the trust placed in an update is: the TLS connection to GitHub, the fact that the release is published
 under this project's account, and the structural checks above. Anyone who can publish a release or replace an
-asset under `nicoSWD/putio-adder-rs` can ship code to every user who presses *Update now*. Turn on **immutable
+asset under `nicoSWD/put.io-adder` can ship code to every user who presses *Update now*. Turn on **immutable
 releases** in the repository settings, protect the account with a hardware key, and keep the release workflow
 the only thing that uploads assets. If you want the missing checks later, the natural places are
 `putio_platform::update::prepare_with` (compare `asset.size` and a SHA-256 from the release's `digest`

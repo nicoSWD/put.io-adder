@@ -66,10 +66,10 @@ fn with_debug_theme_override(mut settings: Settings) -> Settings {
 fn demo_update(installable: bool) -> putio_core::update::UpdateStatus {
     putio_core::update::UpdateStatus::Available {
         version: "0.2.0".into(),
-        url: "https://github.com/nicoSWD/putio-adder-rs/releases/tag/v0.2.0".into(),
+        url: "https://github.com/nicoSWD/put.io-adder/releases/tag/v0.2.0".into(),
         asset: installable.then(|| putio_core::update::UpdateAsset {
             name: "putio-adder-v0.2.0-macos-arm64.zip".into(),
-            url: "https://github.com/nicoSWD/putio-adder-rs/releases/download/v0.2.0/putio-adder-v0.2.0-macos-arm64.zip".into(),
+            url: "https://github.com/nicoSWD/put.io-adder/releases/download/v0.2.0/putio-adder-v0.2.0-macos-arm64.zip".into(),
             size: 9_400_000,
         }),
     }

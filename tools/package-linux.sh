@@ -27,7 +27,7 @@ put.io adder $version (Linux, $arch)
   ./uninstall.sh               remove it
 
 Needs a desktop session, and a Secret Service (GNOME Keyring, KWallet) to remember your sign-in.
-Verify this download: https://github.com/nicoSWD/putio-adder-rs/blob/main/SECURITY.md
+Verify this download: https://github.com/nicoSWD/put.io-adder/blob/master/SECURITY.md
 TXT
 
 # Reproducible archive: sorted names, fixed owner and time, no gzip timestamp.

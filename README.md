@@ -23,7 +23,7 @@ A small cross-platform app for **macOS, Windows and Linux** (x86-64 and arm64), 
 
 ## Install
 
-Download the file for your system from the [latest release](https://github.com/nicoSWD/putio-adder-rs/releases/latest).
+Download the file for your system from the [latest release](https://github.com/nicoSWD/put.io-adder/releases/latest).
 
 | System | File | Notes |
 |---|---|---|
@@ -44,7 +44,7 @@ Releases are built by GitHub Actions from a signed tag. Every file has a build-p
 
 ```sh
 shasum -a 256 -c SHA256SUMS --ignore-missing
-gh attestation verify <file> --repo nicoSWD/putio-adder-rs
+gh attestation verify <file> --repo nicoSWD/put.io-adder
 ```
 
 ## Status

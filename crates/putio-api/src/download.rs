@@ -159,7 +159,7 @@ mod tests {
     #[test]
     fn only_github_over_https_is_allowed() {
         for url in [
-            "https://github.com/nicoSWD/putio-adder-rs/releases/download/v1/a.zip",
+            "https://github.com/nicoSWD/put.io-adder/releases/download/v1/a.zip",
             "https://release-assets.githubusercontent.com/x?y=1",
             "https://objects.githubusercontent.com/x",
             "https://GitHub.com/x",

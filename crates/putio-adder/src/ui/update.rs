@@ -256,7 +256,7 @@ mod tests {
     fn asset() -> UpdateAsset {
         UpdateAsset {
             name: "putio-adder-v0.2.0-x.zip".into(),
-            url: "https://github.com/nicoSWD/putio-adder-rs/releases/download/v0.2.0/putio-adder-v0.2.0-x.zip".into(),
+            url: "https://github.com/nicoSWD/put.io-adder/releases/download/v0.2.0/putio-adder-v0.2.0-x.zip".into(),
             size: 1_000_000,
         }
     }
@@ -265,7 +265,7 @@ mod tests {
         let mut state = State::new(Settings::default(), Locale::En, "0.1.0");
         state.update = UpdateStatus::Available {
             version: "0.2.0".into(),
-            url: "https://github.com/nicoSWD/putio-adder-rs/releases/tag/v0.2.0".into(),
+            url: "https://github.com/nicoSWD/put.io-adder/releases/tag/v0.2.0".into(),
             asset: with_asset.then(asset),
         };
         state.install_target = target;

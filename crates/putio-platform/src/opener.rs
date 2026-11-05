@@ -9,13 +9,13 @@ use std::process::{Command, Stdio};
 use crate::paths::Os;
 
 /// Prefixes the app may open. Each ends at a path boundary (`/`), so `https://put.io.evil.example/`
-/// and `https://github.com/nicoSWD/putio-adder-rs-evil` do not match.
+/// and `https://github.com/nicoSWD/put.io-adder-evil` do not match.
 const ALLOWED_PREFIXES: [&str; 2] = [
     "https://put.io/",
-    "https://github.com/nicoSWD/putio-adder-rs/",
+    "https://github.com/nicoSWD/put.io-adder/",
 ];
 /// The project page itself, without a trailing slash.
-const PROJECT_PAGE: &str = "https://github.com/nicoSWD/putio-adder-rs";
+const PROJECT_PAGE: &str = "https://github.com/nicoSWD/put.io-adder";
 
 #[derive(Debug, thiserror::Error)]
 pub enum OpenError {
@@ -183,8 +183,8 @@ mod tests {
             "https://put.io/files/123",
             "https://put.io/transfers",
             "https://put.io/link",
-            "https://github.com/nicoSWD/putio-adder-rs",
-            "https://github.com/nicoSWD/putio-adder-rs/releases/tag/v1.2.3",
+            "https://github.com/nicoSWD/put.io-adder",
+            "https://github.com/nicoSWD/put.io-adder/releases/tag/v1.2.3",
         ] {
             assert!(is_allowed(url), "{url}");
         }
@@ -197,7 +197,7 @@ mod tests {
             "https://put.io.evil.example/",
             "https://put.io@evil.example/",
             "https://evilput.io/",
-            "https://github.com/nicoSWD/putio-adder-rs-evil",
+            "https://github.com/nicoSWD/put.io-adder-evil",
             "https://github.com/other/repo",
             "file:///etc/passwd",
             "javascript:alert(1)",
