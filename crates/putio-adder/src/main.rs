@@ -3,6 +3,7 @@
 mod app;
 #[cfg(debug_assertions)]
 mod demo;
+mod keychain;
 mod ui;
 mod worker;
 

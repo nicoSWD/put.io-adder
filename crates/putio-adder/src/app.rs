@@ -9,7 +9,7 @@ use putio_api::Token;
 use putio_core::i18n::Locale;
 use putio_core::intake::Intake;
 use putio_core::settings::Settings;
-use putio_core::state::{Effect, Event, Millis, State, update};
+use putio_core::state::{Auth, Effect, Event, Millis, State, update};
 use putio_platform::badge;
 use putio_platform::ipc::Server;
 use putio_platform::notify::Notifier;
@@ -17,6 +17,7 @@ use putio_platform::opener::{SystemOpener, UrlOpener};
 use putio_platform::secret::SecretStore;
 use putio_platform::settings_store::SettingsFile;
 
+use crate::keychain::Keychain;
 use crate::ui::{self, UiState};
 use crate::worker::{Job, WorkerMsg, Workers};
 
@@ -39,13 +40,18 @@ pub(crate) struct Startup {
     pub(crate) version: &'static str,
 }
 
-/// The window is tall when the list is open, and always when signing in (the code needs room).
-pub(crate) fn window_height(expanded: bool, signed_in: bool) -> f32 {
-    if expanded || !signed_in {
+/// The window is tall when the list is open, and whenever the sign-in panel is showing (the code needs room).
+pub(crate) fn window_height(expanded: bool, needs_room: bool) -> f32 {
+    if expanded || needs_room {
         EXPANDED_HEIGHT
     } else {
         COLLAPSED_HEIGHT
     }
+}
+
+/// Debug builds only: `PUTIO_ADDER_DEMO=1` shows sample data and never talks to put.io.
+fn demo_requested() -> bool {
+    cfg!(debug_assertions) && std::env::var_os("PUTIO_ADDER_DEMO").is_some()
 }
 
 pub(crate) fn title(version: &str, progress: Option<u8>) -> String {
@@ -63,7 +69,9 @@ pub(crate) struct App {
     from_worker: Receiver<WorkerMsg>,
     intake_rx: Receiver<String>,
     click_rx: Receiver<Option<i64>>,
-    secrets: Arc<dyn SecretStore>,
+    keychain: Keychain,
+    /// The saved token, on its way from the keychain thread; `None` once it has arrived.
+    pending_token: Option<Receiver<Option<Token>>>,
     settings_file: Option<SettingsFile>,
     notifier: Arc<dyn Notifier>,
     opener: SystemOpener,
@@ -105,18 +113,18 @@ impl App {
             }
         };
 
-        // Token from the secret store (if any) goes to the worker before the first poll.
-        let token = match secrets.load() {
-            Ok(token) => token,
+        // The saved token comes from the keychain on its own thread: the system may ask the user for
+        // permission, and the window must not wait for that.
+        let (keychain, pending_token) = match Keychain::spawn(secrets, cc.egui_ctx.clone()) {
+            Ok(pair) => pair,
             Err(error) => {
-                eprintln!("could not read the saved sign-in: {error}");
-                None
+                eprintln!("could not start the keychain thread: {error}");
+                std::process::exit(1);
             }
         };
-        let has_token = token.is_some();
-        workers.set_token(token);
+        let demo = demo_requested();
 
-        let height = window_height(settings.transfers_expanded, has_token);
+        let height = window_height(settings.transfers_expanded, false);
         let mut app = Self {
             state: State::new(settings, locale, version),
             ui: UiState::default(),
@@ -125,24 +133,23 @@ impl App {
             from_worker,
             intake_rx,
             click_rx,
-            secrets,
+            keychain,
+            pending_token: (!demo).then_some(pending_token),
             settings_file,
             notifier,
             opener: SystemOpener,
             version,
             badge_percent: None,
             #[cfg(debug_assertions)]
-            demo: std::env::var_os("PUTIO_ADDER_DEMO").is_some(),
+            demo,
             last_height: height,
             last_title: title(version, None),
             _ipc_server: ipc_server,
         };
-        app.dispatch(
-            &cc.egui_ctx,
-            Event::Started {
-                has_token: has_token || app.is_demo(),
-            },
-        );
+        // `Started` is sent when the keychain thread reports (see `pump`), except in demo mode.
+        if demo {
+            app.dispatch(&cc.egui_ctx, Event::Started { has_token: true });
+        }
         #[cfg(debug_assertions)]
         if app.demo {
             app.state.transfers_expanded = true;
@@ -156,6 +163,18 @@ impl App {
             );
         }
         app
+    }
+
+    /// A saved token arrived from the keychain thread: hand it to the workers and start up.
+    fn token_loaded(&mut self, ctx: &egui::Context) {
+        let Some(loaded) = &self.pending_token else {
+            return;
+        };
+        let Ok(token) = loaded.try_recv() else { return };
+        self.pending_token = None;
+        let has_token = token.is_some();
+        self.workers.set_token(token);
+        self.dispatch(ctx, Event::Started { has_token });
     }
 
     fn is_demo(&self) -> bool {
@@ -193,9 +212,7 @@ impl App {
             Effect::PollDeviceCode { code } => self.send(Job::PollCode(code)),
             Effect::StoreToken(token) => self.store_token(token),
             Effect::DeleteToken => {
-                if let Err(error) = self.secrets.delete() {
-                    eprintln!("could not remove the saved sign-in: {error}");
-                }
+                self.keychain.delete();
                 self.workers.set_token(None);
             }
             Effect::SaveSettings(settings) => {
@@ -226,9 +243,7 @@ impl App {
     }
 
     fn store_token(&mut self, token: Token) {
-        if let Err(error) = self.secrets.save(&token) {
-            eprintln!("could not save the sign-in to the secret store: {error}");
-        }
+        self.keychain.save(token.clone());
         self.workers.set_token(Some(token));
     }
 
@@ -249,6 +264,7 @@ impl App {
     }
 
     fn pump(&mut self, ctx: &egui::Context) {
+        self.token_loaded(ctx);
         while let Ok(message) = self.from_worker.try_recv() {
             match message {
                 WorkerMsg::Core(event) => self.dispatch(ctx, event),
@@ -266,7 +282,11 @@ impl App {
 
     /// Resize the window and keep its title current.
     fn sync_window(&mut self, ctx: &egui::Context) {
-        let height = window_height(self.state.transfers_expanded, self.state.is_signed_in());
+        let needs_room = matches!(
+            self.state.auth,
+            Auth::RequestingCode | Auth::Linking(_) | Auth::SignedOut(_)
+        );
+        let height = window_height(self.state.transfers_expanded, needs_room);
         if (height - self.last_height).abs() > f32::EPSILON {
             self.last_height = height;
             ctx.send_viewport_cmd(ViewportCommand::InnerSize(egui::vec2(ui::WIDTH, height)));
