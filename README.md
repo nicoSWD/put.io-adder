@@ -10,6 +10,13 @@ A small cross-platform app for **macOS, Windows and Linux** (x86-64 and arm64), 
 - Optional: choose the put.io folder new transfers are saved in
 - English, German and Spanish
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/screenshot-dark.png">
+    <img src="docs/images/screenshot-light.png" alt="put.io adder showing running, queued, finished and failed transfers" width="420">
+  </picture>
+</p>
+
 This is a ground-up rewrite of the original Objective-C *put.io adder* for macOS.
 
 ## Install

@@ -47,3 +47,9 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
 for t in tools/test_*.py; do python3 -I "$t"; done
 ```
+
+## Screenshots
+
+The README screenshots (`docs/images/screenshot-light.png` and `-dark.png`) are the demo list (`PUTIO_ADDER_DEMO=list`) with
+`PUTIO_ADDER_THEME=light|dark`, captured as a window-only 2x PNG (`screencapture -o -l <window id>`). The demo data is
+fictional (public-domain film titles), so nothing personal is in them. Retake them when the look changes.
