@@ -35,8 +35,11 @@ back-off, auto-close and status-line expiry are all unit-tested without sleeping
 | Server text shown in the UI | Control characters stripped, length bounded | `putio-core::state::reason` |
 | Player | Signed IP-bound URL from `GET /files/{id}/url`, never the account token | `putio-api::client::file_url` |
 
-## Decisions that differ from the old app
+## Design decisions
 
-See the project plan: device (OOB) sign-in instead of the `putio://` implicit grant, specific error
-messages instead of "already in queue?", cancel by transfer id, polling that starts right after
-sign-in, a Gravatar that is opt-in, and update checks that compare semantic versions (installing one is described in docs/updates.md).
+- **Sign-in:** the device (OOB) code flow, with no callback URL scheme to register or to forge.
+- **Errors:** each failure says what went wrong (duplicate, offline, rate limited, signed out, server) instead of one catch-all message.
+- **Operations** (cancel, retry, download, …) act on a transfer's *id*, never on a row position, so a list that changes under the user's hand cannot redirect an action.
+- **Polling** starts right after sign-in and backs off on errors and rate limits.
+- **Avatars:** a Gravatar needs a hash of the account e-mail, so it is opt-in; the default is the initial.
+- **Updates** compare semantic versions; installing one is described in [updates.md](updates.md).

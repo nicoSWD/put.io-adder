@@ -1226,7 +1226,7 @@ fn link_polled(
     match result {
         Ok(Some(token)) => {
             fx.push(Effect::StoreToken(token));
-            // Polling starts right away (the old app only did this after a restart).
+            // Polling starts right away.
             become_signed_in(state, now, Msg::Authenticated, fx);
         }
         Ok(None) => link.next_poll_at = now + LINK_POLL_INTERVAL,

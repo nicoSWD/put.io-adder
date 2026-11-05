@@ -1,7 +1,7 @@
 //! Finding VLC and starting it with a signed put.io URL.
 //!
 //! The URL comes from `GET /files/{id}/url`: it carries its own short-lived, IP-bound credentials,
-//! so the account token never appears on the player's command line (the old app leaked it there).
+//! so the account token never appears on the player's command line.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
