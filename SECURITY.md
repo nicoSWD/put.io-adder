@@ -11,8 +11,19 @@ Please report vulnerabilities privately through GitHub's "Report a vulnerability
 - Anything arriving from the OS (magnet URIs, file paths, command-line arguments, IPC frames) is validated as hostile input.
 
 ## Verifying a release
-Releases are built by GitHub Actions from a signed tag. Each artifact has a build-provenance attestation:
+Releases are built by GitHub Actions from a signed tag, by a workflow that refuses tags not signed by the
+maintainer, not on `main`, or whose CI did not pass, and that waits for a human to approve the publish step.
+Each artifact has a build-provenance attestation:
 
     gh attestation verify <artifact> --repo nicoSWD/putio-adder-rs
 
-`SHA256SUMS` and a CycloneDX SBOM are published with every release.
+`SHA256SUMS` and a CycloneDX SBOM (`sbom.cdx.json`) are published with every release. Release builds use no
+build cache, a pinned toolchain, `--locked`, and fixed timestamps and paths. The Linux build is checked against a
+glibc floor. See docs/releasing.md.
+
+## What the app can and cannot do
+- It talks only to `api.put.io`, `upload.put.io` and (update check) `api.github.com`; redirects are not followed.
+- It never installs updates by itself: it only tells you a newer release exists.
+- It never opens anything but fixed `https://put.io/...` pages and this project's GitHub pages.
+- Magnet links and file paths handed over by the OS or another launch are validated before use. A `.torrent` is read
+  only if it is a regular file below a size limit.

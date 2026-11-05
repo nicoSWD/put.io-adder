@@ -1,20 +1,37 @@
 #!/bin/sh
-# Builds "put.io adder.app" in target/ (release build, ad-hoc signed).
-# Ad-hoc signing is enough to run locally; a distributable build is signed and notarized by the
-# release pipeline with a Developer ID.
+# Builds "put.io adder.app" (release build).
+#
+#   tools/bundle-macos.sh [TARGET_TRIPLE]
+#
+# Output: target/<triple>/release/... is the build; the bundle is written to dist/<triple>/put.io adder.app
+# (or target/put.io adder.app when no triple is given, for local use).
+# Signing is a separate step: tools/sign-macos.sh. Without it the bundle is ad-hoc signed, which is
+# enough to run locally.
 set -eu
 cd "$(dirname "$0")/.."
 
+triple="${1:-}"
 version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)
 [ -n "$version" ] || { echo "could not read the version from Cargo.toml" >&2; exit 1; }
 
-cargo build --locked --release -p putio-adder
+if [ -n "$triple" ]; then
+    cargo build --locked --release -p putio-adder --target "$triple"
+    binary="target/$triple/release/putio-adder"
+    app="dist/$triple/put.io adder.app"
+else
+    cargo build --locked --release -p putio-adder
+    binary="target/release/putio-adder"
+    app="target/put.io adder.app"
+fi
 
-app="target/put.io adder.app"
 rm -rf "$app"
-mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-cp target/release/putio-adder "$app/Contents/MacOS/putio-adder"
-[ -f assets/AppIcon.icns ] && cp assets/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources/Licenses"
+cp "$binary" "$app/Contents/MacOS/putio-adder"
+[ -f assets/AppIcon.icns ] || tools/make-icns.sh
+cp assets/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
+# The font is under the SIL OFL, which wants its text to travel with every copy.
+cp LICENSE "$app/Contents/Resources/Licenses/LICENSE-putio-adder.txt"
+cp assets/fonts/OFL-Montserrat.txt "$app/Contents/Resources/Licenses/OFL-Montserrat.txt"
 
 cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -32,6 +49,7 @@ cat > "$app/Contents/Info.plist" <<PLIST
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>NSHumanReadableCopyright</key><string>Copyright © 2013-2026 Nicolas Oelgart. MIT licence.</string>
   <key>CFBundleURLTypes</key>
   <array><dict>
     <key>CFBundleURLName</key><string>BitTorrent magnet link</string>
@@ -48,5 +66,5 @@ cat > "$app/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-codesign --force --sign - "$app"
+codesign --force --sign - "$app" >/dev/null 2>&1
 echo "built: $app"

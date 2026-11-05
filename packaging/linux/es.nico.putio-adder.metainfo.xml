@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>es.nico.putio-adder</id>
+  <name>put.io adder</name>
+  <summary>Send magnet links and .torrent files to your put.io account</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>
+      put.io adder registers as the handler for magnet links and .torrent files and sends them
+      to your put.io transfer queue. It shows your transfers, notifies you when they finish and
+      can stream finished files in VLC.
+    </p>
+  </description>
+  <launchable type="desktop-id">es.nico.putio-adder.desktop</launchable>
+  <url type="homepage">https://github.com/nicoSWD/putio-adder-rs</url>
+  <url type="bugtracker">https://github.com/nicoSWD/putio-adder-rs/issues</url>
+  <provides><binary>putio-adder</binary></provides>
+  <content_rating type="oars-1.1"/>
+  <releases/>
+</component>

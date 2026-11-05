@@ -109,6 +109,7 @@ fn main() -> eframe::Result {
         .with_inner_size([ui::WIDTH, height])
         .with_resizable(false)
         .with_maximize_button(false)
+        .with_app_id("es.nico.putio-adder")
         .with_title(app::title(VERSION, None));
     if let Some(icon) = window_icon() {
         viewport = viewport.with_icon(icon);
