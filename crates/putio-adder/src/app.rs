@@ -89,8 +89,8 @@ pub(crate) fn demo_requested() -> Option<String> {
 
 pub(crate) fn title(progress: Option<u8>) -> String {
     match progress {
-        Some(percent) => format!("{percent}% · Put.io Adder"),
-        None => "Put.io Adder".to_owned(),
+        Some(percent) => format!("{percent}% · put.io adder"),
+        None => "put.io adder".to_owned(),
     }
 }
 
@@ -538,8 +538,8 @@ mod tests {
 
     #[test]
     fn the_window_title_has_no_version() {
-        assert_eq!(title(None), "Put.io Adder");
-        assert_eq!(title(Some(42)), "42% · Put.io Adder");
+        assert_eq!(title(None), "put.io adder");
+        assert_eq!(title(Some(42)), "42% · put.io adder");
         assert!(!title(None).contains(char::is_numeric));
     }
 }
