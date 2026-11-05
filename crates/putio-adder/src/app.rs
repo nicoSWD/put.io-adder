@@ -119,6 +119,8 @@ pub(crate) struct App {
     last_theme: ThemeChoice,
     /// Whether the icon currently shown is the dark one (`None` until the first frame).
     last_icon_dark: Option<bool>,
+    /// Whether the window's resize behaviour has been set up for the theme being shown.
+    chrome_dark: Option<bool>,
     _ipc_server: Option<Server>,
 }
 
@@ -192,6 +194,7 @@ impl App {
             last_title: title(None),
             last_theme: theme,
             last_icon_dark: None,
+            chrome_dark: None,
             _ipc_server: ipc_server,
         };
         app.state.asset_name = putio_platform::update::asset_name;
@@ -501,6 +504,21 @@ impl App {
         }
     }
 
+    /// Pin the window's content to its corner while it is resized, and paint what is behind it in the
+    /// app's background colour (see `putio_platform::window_chrome`). Retried every frame until the
+    /// renderer's layer exists, then again whenever the theme changes.
+    fn sync_chrome(&mut self, ctx: &egui::Context) {
+        let dark = ctx.theme() == egui::Theme::Dark;
+        if self.chrome_dark == Some(dark) {
+            return;
+        }
+        ui::theme::select(ctx);
+        let bg = ui::theme::pal().bg;
+        if putio_platform::window_chrome::calm_live_resize([bg.r(), bg.g(), bg.b()]) {
+            self.chrome_dark = Some(dark);
+        }
+    }
+
     /// Ease the window to the size its mode calls for, follow the user resizing it, and remember a size
     /// the user settled on.
     fn sync_size(&mut self, ctx: &egui::Context, mode: Mode) {
@@ -547,6 +565,7 @@ impl App {
                 self.last_theme,
             )));
         }
+        self.sync_chrome(ctx);
         self.sync_size(ctx, mode);
         // No Dock badge off macOS: show progress in the title instead.
         let progress = if cfg!(target_os = "macos") {
