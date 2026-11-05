@@ -1,0 +1,51 @@
+# cargo-deny policy. Checked on every PR and weekly (.github/workflows/ci.yml).
+# Every change here is a decision about what may be compiled into a release: review it like code.
+
+[graph]
+targets = [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "aarch64-pc-windows-msvc",
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+]
+
+[advisories]
+version = 2
+yanked = "deny"
+# Each ignore needs a reason and an exit plan.
+ignore = []
+
+[sources]
+# crates.io only: no git dependencies, no other registries, no forks.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+# TLS is rustls only.
+deny = [{ crate = "openssl" }, { crate = "openssl-sys" }, { crate = "native-tls" }]
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "OFL-1.1",
+    "Unicode-3.0",
+    "Zlib",
+]
