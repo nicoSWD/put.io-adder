@@ -554,7 +554,6 @@ mod imp {
         let exe = current_exe()?;
         // Take the classic keys only where the user has not made a choice of their own: Windows ignores
         // them otherwise, and writing them anyway would only hide the real state.
-        let before = windows_status(&windows_read, &exe);
         let user_choice_magnet = windows_read(super::USER_CHOICE_MAGNET, Some("ProgId")).is_some();
         let user_choice_torrent =
             windows_read(super::USER_CHOICE_TORRENT, Some("ProgId")).is_some();
@@ -567,7 +566,6 @@ mod imp {
         if after.is_default() {
             return Ok(after);
         }
-        let _ = before;
         // Windows lets only the user replace an app they chose themselves.
         let _ = std::process::Command::new(format!(
             r"{}\explorer.exe",
