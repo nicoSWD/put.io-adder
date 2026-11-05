@@ -12,7 +12,7 @@ use super::{STRIP_HEIGHT, TOP_HEIGHT, WIDTH, icons, theme};
 use crate::app::App;
 
 const PAD: f32 = 16.0;
-const PILL_WIDTH: f32 = 168.0;
+const PILL_WIDTH: f32 = 156.0;
 const PILL_HEIGHT: f32 = 22.0;
 
 pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
@@ -196,15 +196,21 @@ fn status_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2) {
     // The message, clipped so it never runs under the pill.
     let area = Rect::from_min_max(
         Pos2::new(strip.left() + text_left, strip.top()),
-        Pos2::new(pill.left() - 34.0, strip.bottom()),
+        Pos2::new(pill.left() - 26.0, strip.bottom()),
     );
-    ui.painter().with_clip_rect(area).text(
-        Pos2::new(area.left(), strip.center().y),
-        Align2::LEFT_CENTER,
-        app.state.status_text(now),
-        theme::text(12.0),
-        theme::pal().text,
-    );
+    if matches!(app.state.status(now), Msg::Summary { .. }) {
+        // The standing message is the transfers summary: show it as chips.
+        super::summary::show(ui, app, area);
+    } else {
+        // A notice ("Added!", an error, a sign-in step) takes the row over for a few seconds.
+        ui.painter().with_clip_rect(area).text(
+            Pos2::new(area.left(), strip.center().y),
+            Align2::LEFT_CENTER,
+            app.state.status_text(now),
+            theme::text(12.0),
+            theme::pal().text,
+        );
+    }
 }
 
 /// Disk space used (a filled pill) or, when put.io reports no quota, this month's bandwidth (an outline).

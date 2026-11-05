@@ -4,6 +4,7 @@ pub(crate) mod header;
 pub(crate) mod icons;
 pub(crate) mod login;
 pub(crate) mod prefs;
+pub(crate) mod summary;
 pub(crate) mod table;
 pub(crate) mod theme;
 

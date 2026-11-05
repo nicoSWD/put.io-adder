@@ -44,28 +44,34 @@ fn main() -> eframe::Result {
     // Command line (Windows/Linux, and `open --args` on macOS).
     let args: Vec<String> = std::env::args().skip(1).collect();
 
+    // Debug builds only: a demo run is isolated from the real app. It uses sample data and touches no
+    // keychain, no settings file and no single-instance socket (so it can run next to the real app).
+    let demo = app::demo_requested().is_some();
+
     // Single instance: hand our arguments to a running instance and exit, or become the primary one.
-    let ipc_server = match Endpoint::for_current_user()
-        .and_then(|endpoint| ipc::start_or_forward(&endpoint, &args, intake_tx.clone(), wake_up))
-    {
-        Ok(Instance::Forwarded) => return Ok(()),
-        Ok(Instance::Primary(server)) => {
-            for arg in args {
-                let _ = intake_tx.send(arg);
+    let ipc_server = if demo {
+        None
+    } else {
+        match Endpoint::for_current_user().and_then(|endpoint| {
+            ipc::start_or_forward(&endpoint, &args, intake_tx.clone(), wake_up)
+        }) {
+            Ok(Instance::Forwarded) => return Ok(()),
+            Ok(Instance::Primary(server)) => Some(server),
+            Err(error) => {
+                eprintln!("single-instance forwarding is unavailable: {error}");
+                None
             }
-            Some(server)
-        }
-        Err(error) => {
-            eprintln!("single-instance forwarding is unavailable: {error}");
-            for arg in args {
-                let _ = intake_tx.send(arg);
-            }
-            None
         }
     };
+    for arg in args {
+        let _ = intake_tx.send(arg);
+    }
 
-    let settings_file =
-        paths::config_dir(paths::Os::current(), &paths::process_env).map(SettingsFile::new);
+    let settings_file = if demo {
+        None // never write the real preferences from a demo run
+    } else {
+        paths::config_dir(paths::Os::current(), &paths::process_env).map(SettingsFile::new)
+    };
     let settings = Settings::from_json_or_default(
         settings_file
             .as_ref()
@@ -74,13 +80,10 @@ fn main() -> eframe::Result {
     );
     let locale = sys_locale::get_locale().map_or(Locale::En, |tag| Locale::from_tag(&tag));
 
-    let secrets: Arc<dyn SecretStore> = match KeyringStore::open() {
-        Ok(store) => Arc::new(store),
-        Err(error) => {
-            // No file fallback: without a secret store the token only lives for this session.
-            eprintln!("{error}; you will have to sign in every time the app starts");
-            Arc::new(MemoryStore::new())
-        }
+    let secrets: Arc<dyn SecretStore> = if demo {
+        Arc::new(MemoryStore::new()) // a demo run never touches the OS keychain, so it never prompts
+    } else {
+        open_keychain()
     };
 
     // Created here, before the event loop, so a notification that launches the app is delivered.
@@ -128,4 +131,16 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |cc| Ok(Box::new(app::App::new(cc, startup)))),
     )
+}
+
+/// The OS secret store, or (when there is none) a store that only lives for this session. There is no
+/// file fallback: the token is never written anywhere readable.
+fn open_keychain() -> Arc<dyn SecretStore> {
+    match KeyringStore::open() {
+        Ok(store) => Arc::new(store),
+        Err(error) => {
+            eprintln!("{error}; you will have to sign in every time the app starts");
+            Arc::new(MemoryStore::new())
+        }
+    }
 }

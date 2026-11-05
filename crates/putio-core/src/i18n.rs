@@ -115,6 +115,10 @@ pub enum Msg {
     StatusDownloading,
     StatusSeeding,
     StatusFailed,
+    // Summary chips
+    ChipActive,
+    ChipDone,
+    ChipFailed,
     // Transfers panel
     TransfersTitle,
     SortBy,
@@ -451,6 +455,9 @@ impl Msg {
             .into(),
             Self::StatusFailed => tr!(l, "Failed", "Fehlgeschlagen", "Con error").into(),
             Self::TransfersTitle => tr!(l, "Transfers", "Übertragungen", "Transferencias").into(),
+            Self::ChipActive => tr!(l, "active", "aktiv", "activas").into(),
+            Self::ChipDone => tr!(l, "done", "fertig", "listas").into(),
+            Self::ChipFailed => tr!(l, "failed", "fehlgeschlagen", "con error").into(),
             Self::SortBy => tr!(l, "Sort", "Sortieren", "Ordenar").into(),
             Self::SortStatus => tr!(l, "Status", "Status", "Estado").into(),
             Self::SortProgress => tr!(l, "Progress", "Fortschritt", "Progreso").into(),

@@ -13,6 +13,8 @@ pub struct Summary {
     pub failed: usize,
     /// Mean progress of the pending transfers (integer percent); `None` when nothing is pending.
     pub average_percent: Option<u8>,
+    /// Combined download speed of everything currently downloading, in bytes per second.
+    pub down_speed: i64,
 }
 
 #[must_use]
@@ -20,6 +22,11 @@ pub fn summarize(transfers: &[Transfer]) -> Summary {
     let mut summary = Summary::default();
     let mut percent_sum = 0usize;
     for transfer in transfers {
+        if transfer.status == TransferStatus::Downloading {
+            summary.down_speed = summary
+                .down_speed
+                .saturating_add(transfer.down_speed.max(0));
+        }
         if transfer.status.is_pending() {
             summary.pending += 1;
             percent_sum += usize::from(transfer.percent());
@@ -190,6 +197,29 @@ mod tests {
             (s.pending, s.finished, s.failed, s.average_percent),
             (2, 2, 1, Some(20))
         );
+    }
+
+    #[test]
+    fn the_total_speed_only_counts_running_downloads() {
+        let mut fast = transfer(1, "a", Downloading, 10);
+        fast.down_speed = 3_000;
+        let mut also = transfer(2, "b", Downloading, 20);
+        also.down_speed = 500;
+        let mut queued = transfer(3, "c", Waiting, 0);
+        queued.down_speed = 9_999; // stale value on a transfer that is not downloading
+        let mut negative = transfer(4, "d", Downloading, 5);
+        negative.down_speed = -50;
+        assert_eq!(summarize(&[fast, also, queued, negative]).down_speed, 3_500);
+        assert_eq!(summarize(&[]).down_speed, 0);
+    }
+
+    #[test]
+    fn the_total_speed_cannot_overflow() {
+        let mut a = transfer(1, "a", Downloading, 1);
+        a.down_speed = i64::MAX;
+        let mut b = transfer(2, "b", Downloading, 1);
+        b.down_speed = i64::MAX;
+        assert_eq!(summarize(&[a, b]).down_speed, i64::MAX);
     }
 
     #[test]

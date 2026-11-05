@@ -63,7 +63,7 @@ fn with_debug_theme_override(mut settings: Settings) -> Settings {
 }
 
 /// Debug builds only: `PUTIO_ADDER_DEMO=list|empty|login` shows sample data and never talks to put.io.
-fn demo_requested() -> Option<String> {
+pub(crate) fn demo_requested() -> Option<String> {
     if cfg!(debug_assertions) {
         std::env::var("PUTIO_ADDER_DEMO").ok()
     } else {
@@ -243,6 +243,10 @@ impl App {
     }
 
     pub(crate) fn send(&self, job: Job) {
+        // A demo run never talks to the network (not even for the update check).
+        if self.is_demo() {
+            return;
+        }
         self.workers.send(job);
     }
 

@@ -25,44 +25,32 @@ pub(crate) fn chevron(painter: &Painter, center: Pos2, turn: f32, color: Color32
     painter.line_segment([b, c], stroke);
 }
 
-fn check(painter: &Painter, center: Pos2, color: Color32) {
-    let stroke = Stroke::new(2.0, color);
-    painter.line_segment(
-        [center + Vec2::new(-4.0, 0.5), center + Vec2::new(-1.2, 3.3)],
-        stroke,
-    );
-    painter.line_segment(
-        [center + Vec2::new(-1.2, 3.3), center + Vec2::new(4.2, -3.0)],
-        stroke,
-    );
+/// The small drawn symbols, at `scale` times their normal size (1.0 fits a 24 px badge).
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Glyph {
+    Check,
+    Cross,
+    ArrowDown,
 }
 
-fn cross(painter: &Painter, center: Pos2, color: Color32) {
-    let stroke = Stroke::new(2.0, color);
-    painter.line_segment(
-        [center + Vec2::new(-3.2, -3.2), center + Vec2::new(3.2, 3.2)],
-        stroke,
-    );
-    painter.line_segment(
-        [center + Vec2::new(-3.2, 3.2), center + Vec2::new(3.2, -3.2)],
-        stroke,
-    );
-}
-
-fn arrow_down(painter: &Painter, center: Pos2, color: Color32) {
-    let stroke = Stroke::new(2.0, color);
-    painter.line_segment(
-        [center + Vec2::new(0.0, -4.5), center + Vec2::new(0.0, 3.5)],
-        stroke,
-    );
-    painter.line_segment(
-        [center + Vec2::new(-3.8, 0.0), center + Vec2::new(0.0, 4.0)],
-        stroke,
-    );
-    painter.line_segment(
-        [center + Vec2::new(3.8, 0.0), center + Vec2::new(0.0, 4.0)],
-        stroke,
-    );
+pub(crate) fn glyph(painter: &Painter, center: Pos2, glyph: Glyph, scale: f32, color: Color32) {
+    let stroke = Stroke::new((2.0 * scale).max(1.4), color);
+    let at = |x: f32, y: f32| center + Vec2::new(x, y) * scale;
+    match glyph {
+        Glyph::Check => {
+            painter.line_segment([at(-4.0, 0.5), at(-1.2, 3.3)], stroke);
+            painter.line_segment([at(-1.2, 3.3), at(4.2, -3.0)], stroke);
+        }
+        Glyph::Cross => {
+            painter.line_segment([at(-3.2, -3.2), at(3.2, 3.2)], stroke);
+            painter.line_segment([at(-3.2, 3.2), at(3.2, -3.2)], stroke);
+        }
+        Glyph::ArrowDown => {
+            painter.line_segment([at(0.0, -4.5), at(0.0, 3.5)], stroke);
+            painter.line_segment([at(-3.8, 0.0), at(0.0, 4.0)], stroke);
+            painter.line_segment([at(3.8, 0.0), at(0.0, 4.0)], stroke);
+        }
+    }
 }
 
 /// The round badge at the left of a transfer row, by state.
@@ -71,16 +59,22 @@ pub(crate) fn status_badge(painter: &Painter, center: Pos2, status: TransferStat
     match status {
         TransferStatus::Completed | TransferStatus::Seeding => {
             painter.circle_filled(center, radius, theme::YELLOW);
-            check(painter, center, theme::pal().on_yellow);
+            glyph(painter, center, Glyph::Check, 1.0, theme::pal().on_yellow);
         }
         TransferStatus::Error => {
             painter.circle_filled(center, radius, theme::pal().error_soft);
             painter.circle_stroke(center, radius, Stroke::new(1.0, theme::pal().error));
-            cross(painter, center, theme::pal().error);
+            glyph(painter, center, Glyph::Cross, 1.0, theme::pal().error);
         }
         TransferStatus::Downloading | TransferStatus::Completing => {
             painter.circle_filled(center, radius, theme::pal().yellow_soft);
-            arrow_down(painter, center, theme::pal().accent_text);
+            glyph(
+                painter,
+                center,
+                Glyph::ArrowDown,
+                1.0,
+                theme::pal().accent_text,
+            );
         }
         TransferStatus::Waiting
         | TransferStatus::InQueue
