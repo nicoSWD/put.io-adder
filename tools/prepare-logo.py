@@ -37,12 +37,14 @@ VARIANTS = {
 }
 
 
-def main():
-    if len(sys.argv) != 3 or sys.argv[1] not in VARIANTS:
-        sys.exit(__doc__)
-    variant = VARIANTS[sys.argv[1]]
+def cut_out(source, variant_name, lift=None):
+    """Full-resolution RGBA image of `source` with the border-connected background made transparent.
+
+    `lift` overrides the variant's grey-brightening gamma (1.0 = leave the artwork untouched).
+    """
+    variant = VARIANTS[variant_name]
     score, ink_below, bg_above = variant["score"], variant["ink_below"], variant["bg_above"]
-    source = Image.open(sys.argv[2]).convert("RGB")
+    source = source.convert("RGB")
     width, height = source.size
     pixels = source.load()
 
@@ -63,21 +65,25 @@ def main():
 
     result = Image.new("RGBA", (width, height))
     out = result.load()
+    gamma = LIFT_GAMMA[variant_name] if lift is None else lift
     for y in range(height):
         for x in range(width):
             r, g, b = pixels[x, y]
+            alpha = 255
             if outside[y][x]:
                 value = score((r, g, b))
                 alpha = 0 if value >= bg_above else round(255 * (bg_above - value) / (bg_above - ink_below))
-                out[x, y] = (r, g, b, alpha)
-            else:
-                out[x, y] = (r, g, b, 255)
-            r, g, b, alpha = out[x, y]
-            gamma = LIFT_GAMMA[sys.argv[1]]
             if gamma != 1.0 and max(r, g, b) - min(r, g, b) <= NEUTRAL_SPREAD:
-                lift = lambda v: round(255 * (v / 255) ** gamma)
-                out[x, y] = (lift(r), lift(g), lift(b), alpha)
+                r, g, b = (round(255 * (v / 255) ** gamma) for v in (r, g, b))
+            out[x, y] = (r, g, b, alpha)
+    return result
 
+
+def main():
+    if len(sys.argv) != 3 or sys.argv[1] not in VARIANTS:
+        sys.exit(__doc__)
+    result = cut_out(Image.open(sys.argv[2]), sys.argv[1])
+    width, height = result.size
     scaled = result.resize((WIDTH, round(height * WIDTH / width)), Image.LANCZOS)
     target = BRAND / f"putio-logo-{sys.argv[1]}.png"
     scaled.save(target, optimize=True)

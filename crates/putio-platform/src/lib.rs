@@ -8,6 +8,7 @@
 //! * [`opener`]: opens an allow-listed `https` URL in the browser
 //! * [`torrent_file`]: reads a `.torrent` from disk without trusting the path
 //! * [`player`]: finds VLC and starts it with a signed URL
+//! * [`app_icon`]: the Dock icon while the app runs
 //! * [`notify`] and [`badge`]: completion notifications and the dock badge
 //! * [`ipc`]: single-instance forwarding of magnet links and `.torrent` paths between processes
 //! * `macos_events` (macOS): receives magnet links and files from Launch Services
@@ -15,6 +16,7 @@
 //! This is the only crate allowed to contain `unsafe`, and only in the macOS modules, where every
 //! block carries a `SAFETY` comment.
 
+pub mod app_icon;
 pub mod badge;
 pub mod ipc;
 pub mod notify;

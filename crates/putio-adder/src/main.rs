@@ -1,6 +1,7 @@
 //! put.io adder: send magnet links and `.torrent` files to your put.io account.
 
 mod app;
+mod app_icon;
 #[cfg(debug_assertions)]
 mod demo;
 mod keychain;
@@ -114,7 +115,8 @@ fn main() -> eframe::Result {
         .with_maximize_button(false)
         .with_app_id("es.nico.putio-adder")
         .with_title(app::title(VERSION, None));
-    if let Some(icon) = window_icon() {
+    // Starts with the light icon; the app switches to the dark one when its theme is dark.
+    if let Some(icon) = app_icon::window_icon(false) {
         viewport = viewport.with_icon(icon);
     }
     let options = eframe::NativeOptions {
@@ -126,18 +128,4 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |cc| Ok(Box::new(app::App::new(cc, startup)))),
     )
-}
-
-/// The app icon for the window (Windows/Linux title bar, and the Dock while running unbundled on macOS).
-fn window_icon() -> Option<eframe::egui::IconData> {
-    const ICON_PNG: &[u8] = include_bytes!("../../../assets/icon/icon-256.png");
-    let image = image::load_from_memory_with_format(ICON_PNG, image::ImageFormat::Png)
-        .ok()?
-        .into_rgba8();
-    let (width, height) = image.dimensions();
-    Some(eframe::egui::IconData {
-        rgba: image.into_raw(),
-        width,
-        height,
-    })
 }

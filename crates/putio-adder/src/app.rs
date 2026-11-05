@@ -100,6 +100,8 @@ pub(crate) struct App {
     last_height: f32,
     last_title: String,
     last_theme: ThemeChoice,
+    /// Whether the icon currently shown is the dark one (`None` until the first frame).
+    last_icon_dark: Option<bool>,
     _ipc_server: Option<Server>,
 }
 
@@ -168,6 +170,7 @@ impl App {
             last_height: height,
             last_title: title(version, None),
             last_theme: theme,
+            last_icon_dark: None,
             _ipc_server: ipc_server,
         };
         // `Started` is sent when the keychain thread reports (see `pump`), except in demo mode.
@@ -325,12 +328,32 @@ impl App {
     }
 
     /// Resize the window and keep its title current.
+    /// Keep the app icon in step with the theme being shown.
+    fn sync_icon(&mut self, ctx: &egui::Context) {
+        let dark = ctx.theme() == egui::Theme::Dark;
+        if self.last_icon_dark == Some(dark) {
+            return;
+        }
+        self.last_icon_dark = Some(dark);
+        // macOS sets the Dock icon directly; elsewhere the toolkit sets the window icon.
+        if !putio_platform::app_icon::set_dock_icon(crate::app_icon::dock_png(dark))
+            && let Some(icon) = crate::app_icon::window_icon(dark)
+        {
+            ctx.send_viewport_cmd(ViewportCommand::Icon(Some(icon)));
+        }
+        #[cfg(all(debug_assertions, target_os = "macos"))]
+        if let Some(path) = std::env::var_os("PUTIO_ADDER_ICON_DUMP") {
+            let _ = putio_platform::app_icon::dump_dock_icon(std::path::Path::new(&path));
+        }
+    }
+
     fn sync_window(&mut self, ctx: &egui::Context) {
         let needs_room = matches!(
             self.state.auth,
             Auth::RequestingCode | Auth::Linking(_) | Auth::SignedOut(_)
         );
         let height = window_height(self.state.transfers_expanded, needs_room);
+        self.sync_icon(ctx);
         // The theme preference changed (Preferences): switch the palette and the native title bar.
         if self.state.settings.theme != self.last_theme {
             self.last_theme = self.state.settings.theme;

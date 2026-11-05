@@ -17,8 +17,8 @@ interprocess = "2.4"
 apple-native-keyring-store = { version = "1", default-features = false, features = ["keychain"] }
 block2 = "0.6"
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSDockTile", "NSResponder"] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSObject", "NSString", "NSNotification", "NSAppleEventDescriptor", "NSAppleEventManager", "NSDictionary", "NSError", "NSArray", "NSBundle"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSDockTile", "NSResponder", "NSImage", "NSImageRep"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSObject", "NSString", "NSNotification", "NSAppleEventDescriptor", "NSAppleEventManager", "NSDictionary", "NSError", "NSArray", "NSBundle", "NSData"] }
 objc2-user-notifications = { version = "0.3", default-features = false, features = ["std", "UNNotification", "UNNotificationContent", "UNNotificationRequest", "UNNotificationResponse", "UNNotificationSettings", "UNNotificationSound", "UNNotificationTrigger", "UNUserNotificationCenter", "UNError", "block2"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
