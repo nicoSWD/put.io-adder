@@ -7,6 +7,12 @@ license.workspace = true
 publish = false
 
 [dependencies]
+eframe = "0.36.2"
+egui_extras = { version = "0.36.2", default-features = false }
+putio-api = { version = "0.1.0", path = "../putio-api" }
+putio-core = { version = "0.1.0", path = "../putio-core" }
+putio-platform = { version = "0.1.0", path = "../putio-platform" }
+sys-locale = "0.3.2"
 
 [lints]
 workspace = true

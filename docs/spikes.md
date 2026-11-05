@@ -30,7 +30,7 @@ egui painter. Still to verify on Windows and Linux in CI/manual runs.
 Phase 0 spike 1 is open. Everything the client assumes about behaviour the spec does not state:
 
 1. `GET /account/info`: is `disk` (`size`/`used`/`avail`) still returned? (2.8.14 does not list it.)
-2. `GET /oauth2/oob/code?app_id=711`: does OOB work for the old implicit-grant app id? Otherwise register a new app.
+2. ~~`GET /oauth2/oob/code?app_id=711`: does OOB work for the old implicit-grant app id?~~ **Yes**: the app got a device code with app id 711 on its first launch (observed 2026-11-05; the sign-in itself is still to be completed).
 3. **What does `GET /oauth2/oob/code/{code}` return before the user has linked the code?** The client
    assumes `200 {"oauth_token": null}` (or no field). If put.io answers with a 4xx instead, sign-in would be
    aborted on the first poll (`link_polled` treats a non-transient error as "code expired").
