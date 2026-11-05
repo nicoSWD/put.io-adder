@@ -151,6 +151,8 @@ impl App {
         let demo = demo_requested();
 
         let height = window_height(settings.transfers_expanded, false);
+        #[cfg_attr(not(debug_assertions), allow(unused_mut))]
+        // only the debug-only demo start mutates it
         let mut app = Self {
             state: State::new(settings, locale, version),
             ui: UiState::default(),
