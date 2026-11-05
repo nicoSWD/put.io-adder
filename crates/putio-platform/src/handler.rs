@@ -133,11 +133,14 @@ fn desktop_exec(exe: &Path) -> Result<String, String> {
 /// The desktop entry for the app installed at `exe`: the packaged one with an absolute `Exec`.
 fn desktop_entry(exe: &Path) -> Result<String, String> {
     let exec = desktop_exec(exe)?;
+    // A desktop entry has Unix line endings. The template is read from the source tree at build time,
+    // and a checkout with Windows line endings must not put carriage returns into the file.
+    let template = DESKTOP_TEMPLATE.replace("\r\n", "\n");
     let template_line = "Exec=putio-adder %U";
-    if !DESKTOP_TEMPLATE.contains(template_line) {
+    if !template.contains(template_line) {
         return Err("the packaged desktop entry has no Exec line to fill in".to_owned());
     }
-    Ok(DESKTOP_TEMPLATE.replace(template_line, &format!("Exec={exec} %U")))
+    Ok(template.replace(template_line, &format!("Exec={exec} %U")))
 }
 
 /// Whether `xdg-mime`'s answer names this app.

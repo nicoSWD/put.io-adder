@@ -1,0 +1,6 @@
+# Text files are checked out with Unix line endings on every system: scripts run in Git Bash on Windows
+# runners, packaged files (desktop entry, metainfo) are Linux files, and tests compare text with "\n".
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
