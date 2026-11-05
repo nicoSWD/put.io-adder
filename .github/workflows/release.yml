@@ -65,15 +65,29 @@ jobs:
           echo "::error::${RELEASE_TAG} is not a verified tag by ${MAINTAINER_EMAIL}. Release with tools/release.sh."
           exit 1
 
-      - name: Tag commit is on main and passed CI
+      # `git push origin main vX` starts CI and this workflow at the same moment, so wait for CI on the
+      # tagged commit (up to 45 minutes) instead of failing because it has not finished yet.
+      - name: Tag commit is on main and CI passes
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           sha=$(git rev-list -n 1 "refs/tags/${RELEASE_TAG}")
           git fetch --no-tags origin main
           git merge-base --is-ancestor "$sha" origin/main || { echo "::error::${RELEASE_TAG} is not on main"; exit 1; }
-          ok=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$sha" --status success --json databaseId --jq length)
-          [ "$ok" -ge 1 ] || { echo "::error::CI has not passed for $sha"; exit 1; }
+          deadline=$((SECONDS + 2700))
+          while :; do
+            runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$sha" --json status,conclusion)
+            if echo "$runs" | jq -e 'any(.[]; .conclusion == "success")' >/dev/null; then
+              echo "CI passed for $sha"; break
+            fi
+            if echo "$runs" | jq -e 'length > 0 and all(.[]; .status == "completed")' >/dev/null; then
+              echo "::error::CI finished without succeeding for $sha"; exit 1
+            fi
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::Timed out waiting for CI on $sha"; exit 1
+            fi
+            echo "waiting for CI on $sha…"; sleep 30
+          done
 
       - name: Tag matches Cargo.toml
         id: version
@@ -86,9 +100,36 @@ jobs:
           fi
           echo "version=$tag_version" >> "$GITHUB_OUTPUT"
 
+  sbom:
+    name: SBOM and licence list
+    needs: verify
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
+      - name: Install the pinned toolchain
+        run: |
+          toolchain=$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$toolchain" --profile minimal
+          echo "RUSTUP_TOOLCHAIN=$toolchain" >> "$GITHUB_ENV"
+      - run: |
+          mkdir -p dist
+          python3 tools/sbom.py --out dist/sbom.cdx.json --licenses dist/THIRD_PARTY.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist-sbom
+          path: |
+            dist/sbom.cdx.json
+            dist/THIRD_PARTY.txt
+          if-no-files-found: error
+
   build:
     name: Build ${{ matrix.name }}
-    needs: verify
+    needs: [verify, sbom]
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -122,6 +163,20 @@ jobs:
           echo "RUSTUP_TOOLCHAIN=$toolchain" >> "$GITHUB_ENV"
           echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
 
+      - name: Install Linux build dependencies
+        if: matrix.kind == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
+            libx11-dev libxcursor-dev libxrandr-dev libxi-dev \
+            libgl1-mesa-dev libegl1-mesa-dev pkg-config
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist-sbom
+          path: dist
+
       - name: Build
         shell: bash
         run: |
@@ -129,8 +184,6 @@ jobs:
           # Windows: link the C runtime statically so the zip runs without the VC++ redistributable.
           [ "${{ matrix.kind }}" = "windows" ] && flags="$flags -C target-feature=+crt-static"
           RUSTFLAGS="$flags" cargo build --locked --release -p putio-adder --target "$TARGET"
-          mkdir -p dist
-          python3 tools/sbom.py --out dist/sbom.cdx.json --licenses dist/THIRD_PARTY.txt
 
       # ---- Linux ----
       - name: Check the glibc floor
@@ -141,9 +194,10 @@ jobs:
         run: tools/package-linux.sh "target/$TARGET/release/putio-adder" "$VERSION" "${{ matrix.arch }}"
 
       # ---- macOS ----
+      # Bundles the binary built above (with its reproducibility flags); it does not build again.
       - name: Bundle (macOS)
         if: matrix.kind == 'macos'
-        run: tools/bundle-macos.sh "$TARGET"
+        run: PUTIO_BINARY="target/$TARGET/release/putio-adder" tools/bundle-macos.sh "$TARGET"
       - name: Sign and notarize (macOS)
         if: matrix.kind == 'macos'
         env:
@@ -166,15 +220,14 @@ jobs:
         run: tools/make-dmg.sh "dist/$TARGET/put.io adder.app" "dist/putio-adder-v$VERSION-macos-${{ matrix.arch }}.dmg"
 
       # ---- Windows ----
+      - name: Install Inno Setup (Windows)
+        if: matrix.kind == 'windows'
+        shell: bash
+        run: tools/install-inno-setup.sh
       - name: Package (Windows)
         if: matrix.kind == 'windows'
         shell: bash
         run: tools/package-windows.sh "target/$TARGET/release/putio-adder.exe" "$VERSION" "${{ matrix.arch }}"
-
-      - name: Keep only the SBOM from one runner
-        if: matrix.name != 'linux-x64'
-        shell: bash
-        run: rm -f dist/sbom.cdx.json
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -185,12 +238,11 @@ jobs:
             dist/*.tar.gz
             dist/*-setup.exe
             dist/signing-*.txt
-            dist/sbom.cdx.json
           if-no-files-found: error
 
   publish:
     name: Publish
-    needs: [verify, build]
+    needs: [verify, sbom, build]
     runs-on: ubuntu-22.04
     # Create a protected environment named "release" with required reviewers: nothing is published
     # until a human approves.

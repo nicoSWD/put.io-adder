@@ -1,7 +1,7 @@
 #!/bin/sh
 # Builds "put.io adder.app" (release build).
 #
-#   tools/bundle-macos.sh [TARGET_TRIPLE]
+#   tools/bundle-macos.sh [TARGET_TRIPLE]       (set PUTIO_BINARY=path to skip the build)
 #
 # Output: target/<triple>/release/... is the build; the bundle is written to dist/<triple>/put.io adder.app
 # (or target/put.io adder.app when no triple is given, for local use).
@@ -15,13 +15,21 @@ version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)
 [ -n "$version" ] || { echo "could not read the version from Cargo.toml" >&2; exit 1; }
 
 if [ -n "$triple" ]; then
-    cargo build --locked --release -p putio-adder --target "$triple"
     binary="target/$triple/release/putio-adder"
     app="dist/$triple/put.io adder.app"
+    build="cargo build --locked --release -p putio-adder --target $triple"
 else
-    cargo build --locked --release -p putio-adder
     binary="target/release/putio-adder"
     app="target/put.io adder.app"
+    build="cargo build --locked --release -p putio-adder"
+fi
+# PUTIO_BINARY: bundle a binary that was already built (the release workflow builds once, with its
+# reproducibility flags, and must ship exactly that binary rather than rebuild without them).
+if [ -n "${PUTIO_BINARY:-}" ]; then
+    binary="$PUTIO_BINARY"
+    [ -f "$binary" ] || { echo "no such binary: $binary" >&2; exit 1; }
+else
+    $build
 fi
 
 rm -rf "$app"

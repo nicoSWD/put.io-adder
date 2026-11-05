@@ -1,0 +1,67 @@
+name: Windows installer
+
+# Builds the installer around a stub exe, installs it silently, checks what it leaves behind
+# (files, registry), and uninstalls it. Kept out of ci.yml so a flaky runner image cannot block a
+# release; run it whenever packaging/windows or the packaging scripts change.
+on:
+  pull_request:
+    paths:
+      - "packaging/windows/**"
+      - "tools/package-windows.sh"
+      - "tools/install-inno-setup.sh"
+      - ".github/workflows/windows-installer-check.yml"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  installer:
+    name: Build, install, uninstall (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x64,   os: windows-latest }
+          - { arch: arm64, os: windows-11-arm }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Inno Setup
+        shell: bash
+        run: tools/install-inno-setup.sh
+      - name: The zip tool is there
+        shell: bash
+        run: command -v 7z
+      - name: Build the installer around a stub exe
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          mkdir -p dist stub
+          cp /c/Windows/System32/ping.exe stub/putio-adder.exe
+          tools/package-windows.sh stub/putio-adder.exe 0.0.0 "$ARCH"
+          ls -l dist
+      - name: Install silently and check the result
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          dir="$RUNNER_TEMP/putio-adder-install"
+          MSYS2_ARG_CONV_EXCL='*' "dist/putio-adder-v0.0.0-windows-$ARCH-setup.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART "/DIR=$(cygpath -w "$dir")" "/LOG=$(cygpath -w "$RUNNER_TEMP/install.log")"
+          test -f "$dir/putio-adder.exe"
+          test -f "$dir/licenses/OFL-Montserrat.txt"
+          MSYS2_ARG_CONV_EXCL='*' reg query 'HKCU\Software\Classes\putio-adder.magnet\shell\open\command'
+          MSYS2_ARG_CONV_EXCL='*' reg query 'HKCU\Software\RegisteredApplications' /v putio-adder
+      - name: Uninstall and check nothing is left
+        shell: bash
+        run: |
+          dir="$RUNNER_TEMP/putio-adder-install"
+          MSYS2_ARG_CONV_EXCL='*' "$dir/unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+          sleep 5
+          test ! -e "$dir/putio-adder.exe"
+          if MSYS2_ARG_CONV_EXCL='*' reg query 'HKCU\Software\Classes\putio-adder.magnet' >/dev/null 2>&1; then echo "registry key left behind"; exit 1; fi
