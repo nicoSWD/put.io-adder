@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Update notice for the old (v3, Objective-C) app. DO NOT DELETE OR MOVE.
+
+  Every v3 release checks this exact path on the master branch at launch:
+    https://raw.github.com/nicoSWD/put.io-adder/master/put.io%20adder/put.io%20adder-Info.plist
+  and, if CFBundleShortVersionString differs from its own version (a plain string comparison),
+  tells the user that a new version is available and opens this repository.
+
+  This file is not part of the current app (that is the Rust app under crates/; its version is in
+  Cargo.toml). Keep any value that no v3 release used (v3 versions are 3.x); there is no need to
+  change it for later releases. If this file goes away, v3 users are never told about the new app.
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleShortVersionString</key>
+	<string>4.0.0</string>
+</dict>
+</plist>
