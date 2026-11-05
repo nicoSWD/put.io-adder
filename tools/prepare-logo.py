@@ -7,6 +7,10 @@
 Needs Pillow. It is not part of the build or of CI: the results (assets/brand/putio-logo-light.png and
 -dark.png) are committed, and their sources and digests are recorded in assets/PROVENANCE.md.
 
+The dark variant's letters are very dark grey (about #2C2C2C), which nearly disappears on a dark window.
+`LIFT_GAMMA` brightens neutral (grey) pixels only: the yellow shadow and the red magnet keep their colours.
+Set it to 1.0 to leave the supplied artwork untouched.
+
 Only background that is connected to the image border becomes transparent (a flood fill), so areas of the
 same colour *inside* letters (the counters of "p" and "o") are kept. A short alpha ramp softens the edge.
 """
@@ -17,6 +21,9 @@ from pathlib import Path
 from PIL import Image
 
 BRAND = Path(__file__).resolve().parent.parent / "assets" / "brand"
+# Dark variant: gamma applied to neutral greys (below 1 = brighter). 0.45 turns #2C into about #73.
+LIFT_GAMMA = {"light": 1.0, "dark": 0.45}
+NEUTRAL_SPREAD = 18  # a pixel is "neutral" when its channels differ by no more than this
 WIDTH = 900  # shown at ~40 logical px tall; 900 px wide stays sharp up to 3x displays
 
 # For each variant: how "background-like" a pixel is (higher = more background), and the ramp.
@@ -65,6 +72,11 @@ def main():
                 out[x, y] = (r, g, b, alpha)
             else:
                 out[x, y] = (r, g, b, 255)
+            r, g, b, alpha = out[x, y]
+            gamma = LIFT_GAMMA[sys.argv[1]]
+            if gamma != 1.0 and max(r, g, b) - min(r, g, b) <= NEUTRAL_SPREAD:
+                lift = lambda v: round(255 * (v / 255) ** gamma)
+                out[x, y] = (lift(r), lift(g), lift(b), alpha)
 
     scaled = result.resize((WIDTH, round(height * WIDTH / width)), Image.LANCZOS)
     target = BRAND / f"putio-logo-{sys.argv[1]}.png"
