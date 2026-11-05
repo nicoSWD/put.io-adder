@@ -12,6 +12,15 @@ file="${RUNNER_TEMP:-/tmp}/innosetup-$version.exe"
 
 curl -fsSL --retry 3 -o "$file" "https://github.com/jrsoftware/issrc/releases/download/$tag/innosetup-$version.exe"
 echo "$sha256  $file" | sha256sum -c -
-# Per-user install: no administrator rights needed.
-"$file" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /CURRENTUSER
+# Git Bash rewrites arguments that start with "/" into Windows paths for native programs, so the installer
+# would receive "C:/Program Files/Git/VERYSILENT" and open its wizard (and wait for a click). Switch that off.
+export MSYS2_ARG_CONV_EXCL='*'
+log="${RUNNER_TEMP:-/tmp}/innosetup-$version.log"
+# Per-user install: no administrator rights needed. A silent install takes seconds: give it five minutes,
+# then fail with the installer's own log instead of hanging until the job is cancelled.
+if ! timeout 300 "$file" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /CURRENTUSER "/LOG=$log"; then
+    echo "Inno Setup did not install (or took more than five minutes)." >&2
+    [ -f "$log" ] && tail -40 "$log" >&2
+    exit 1
+fi
 echo "Inno Setup $version installed"
