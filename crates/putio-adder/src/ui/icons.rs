@@ -71,32 +71,32 @@ pub(crate) fn status_badge(painter: &Painter, center: Pos2, status: TransferStat
     match status {
         TransferStatus::Completed | TransferStatus::Seeding => {
             painter.circle_filled(center, radius, theme::YELLOW);
-            check(painter, center, theme::TEXT);
+            check(painter, center, theme::pal().on_yellow);
         }
         TransferStatus::Error => {
-            painter.circle_filled(center, radius, theme::ERROR_SOFT);
-            painter.circle_stroke(center, radius, Stroke::new(1.0, theme::ERROR));
-            cross(painter, center, theme::ERROR);
+            painter.circle_filled(center, radius, theme::pal().error_soft);
+            painter.circle_stroke(center, radius, Stroke::new(1.0, theme::pal().error));
+            cross(painter, center, theme::pal().error);
         }
         TransferStatus::Downloading | TransferStatus::Completing => {
-            painter.circle_filled(center, radius, theme::YELLOW_SOFT);
-            arrow_down(painter, center, theme::TEXT);
+            painter.circle_filled(center, radius, theme::pal().yellow_soft);
+            arrow_down(painter, center, theme::pal().accent_text);
         }
         TransferStatus::Waiting
         | TransferStatus::InQueue
         | TransferStatus::PreparingDownload
         | TransferStatus::Unknown => {
-            painter.circle_filled(center, radius, theme::NEUTRAL_SOFT);
-            painter.circle_stroke(center, 4.5, Stroke::new(1.6, theme::MUTED));
+            painter.circle_filled(center, radius, theme::pal().neutral_soft);
+            painter.circle_stroke(center, 4.5, Stroke::new(1.6, theme::pal().muted));
         }
     }
 }
 
 /// A big round badge for the empty state.
 pub(crate) fn empty_badge(painter: &Painter, center: Pos2) {
-    painter.circle_filled(center, 26.0, theme::YELLOW_SOFT);
-    painter.circle_stroke(center, 26.0, Stroke::new(1.5, theme::YELLOW));
-    let stroke = Stroke::new(3.0, theme::TEXT);
+    painter.circle_filled(center, 26.0, theme::pal().yellow_soft);
+    painter.circle_stroke(center, 26.0, Stroke::new(1.5, theme::pal().badge_border));
+    let stroke = Stroke::new(3.0, theme::pal().accent_text);
     painter.line_segment(
         [center + Vec2::new(0.0, -9.0), center + Vec2::new(0.0, 8.0)],
         stroke,
@@ -114,7 +114,7 @@ pub(crate) fn empty_badge(painter: &Painter, center: Pos2) {
 /// A slim rounded progress bar: `fraction` in `0.0..=1.0` painted over an empty track.
 pub(crate) fn progress_bar(painter: &Painter, rect: Rect, fraction: f32, fill: Color32) {
     let radius = rect.height() / 2.0;
-    painter.rect_filled(rect, radius, theme::TRACK);
+    painter.rect_filled(rect, radius, theme::pal().track);
     let fraction = fraction.clamp(0.0, 1.0);
     if fraction > 0.0 {
         // Never narrower than the bar is tall, so a tiny fraction still shows as a dot.

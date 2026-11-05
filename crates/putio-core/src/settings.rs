@@ -10,6 +10,17 @@ use serde::{Deserialize, Serialize};
 pub const CURRENT_VERSION: u32 = 1;
 const MAX_FOLDER_NAME: usize = 255;
 
+/// Which colour scheme to use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ThemeChoice {
+    /// Follow the operating system.
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
 /// A put.io folder chosen as the destination for new transfers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Folder {
@@ -33,6 +44,7 @@ pub struct Settings {
     pub default_folder: Option<Folder>,
     /// Whether the transfers list was open when the app last ran.
     pub transfers_expanded: bool,
+    pub theme: ThemeChoice,
 }
 
 impl Default for Settings {
@@ -45,6 +57,7 @@ impl Default for Settings {
             show_avatar: false,
             default_folder: None,
             transfers_expanded: false,
+            theme: ThemeChoice::System,
         }
     }
 }
@@ -183,6 +196,41 @@ mod tests {
                 .name
                 .len(),
             MAX_FOLDER_NAME
+        );
+    }
+
+    #[test]
+    fn theme_defaults_to_the_system_and_round_trips() {
+        assert_eq!(Settings::default().theme, ThemeChoice::System);
+        for theme in [ThemeChoice::System, ThemeChoice::Light, ThemeChoice::Dark] {
+            let settings = Settings {
+                theme,
+                ..Settings::default()
+            };
+            assert_eq!(
+                Settings::from_json_or_default(Some(&settings.to_json())).theme,
+                theme
+            );
+        }
+        assert!(
+            Settings::default()
+                .to_json()
+                .contains("\"theme\": \"system\"")
+        );
+    }
+
+    #[test]
+    fn old_files_without_a_theme_follow_the_system() {
+        let s = Settings::from_json_or_default(Some(r#"{"close_after_magnet": true}"#));
+        assert_eq!(s.theme, ThemeChoice::System);
+    }
+
+    #[test]
+    fn an_unknown_theme_value_falls_back_to_the_defaults_instead_of_failing() {
+        // Same rule as every other bad value: a settings file must never stop the app from starting.
+        assert_eq!(
+            Settings::from_json_or_default(Some(r#"{"theme": "neon"}"#)),
+            Settings::default()
         );
     }
 

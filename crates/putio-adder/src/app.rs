@@ -8,7 +8,7 @@ use eframe::egui::{self, ViewportCommand};
 use putio_api::Token;
 use putio_core::i18n::Locale;
 use putio_core::intake::Intake;
-use putio_core::settings::Settings;
+use putio_core::settings::{Settings, ThemeChoice};
 use putio_core::state::{Auth, Effect, Event, Millis, State, update};
 use putio_platform::badge;
 use putio_platform::ipc::Server;
@@ -49,6 +49,19 @@ pub(crate) fn window_height(expanded: bool, needs_room: bool) -> f32 {
     }
 }
 
+/// Debug builds only: `PUTIO_ADDER_THEME=light|dark|system` overrides the saved theme, for previews.
+fn with_debug_theme_override(mut settings: Settings) -> Settings {
+    if cfg!(debug_assertions) {
+        match std::env::var("PUTIO_ADDER_THEME").as_deref() {
+            Ok("light") => settings.theme = ThemeChoice::Light,
+            Ok("dark") => settings.theme = ThemeChoice::Dark,
+            Ok("system") => settings.theme = ThemeChoice::System,
+            _ => {}
+        }
+    }
+    settings
+}
+
 /// Debug builds only: `PUTIO_ADDER_DEMO=list|empty|login` shows sample data and never talks to put.io.
 fn demo_requested() -> Option<String> {
     if cfg!(debug_assertions) {
@@ -86,6 +99,7 @@ pub(crate) struct App {
     demo: Option<String>,
     last_height: f32,
     last_title: String,
+    last_theme: ThemeChoice,
     _ipc_server: Option<Server>,
 }
 
@@ -104,7 +118,12 @@ impl App {
             version,
         } = startup;
         let _ = wake.set(cc.egui_ctx.clone());
-        ui::theme::apply(&cc.egui_ctx);
+        let settings = with_debug_theme_override(settings);
+        let theme = settings.theme;
+        ui::theme::apply(&cc.egui_ctx, theme);
+        // The native title bar follows the choice too (it cannot be set when the window is created).
+        cc.egui_ctx
+            .send_viewport_cmd(ViewportCommand::SetTheme(ui::theme::window_theme(theme)));
 
         let (out_tx, from_worker) = mpsc::channel();
         let workers = match Workers::spawn(&cc.egui_ctx, &out_tx, &format!("putio-adder/{version}"))
@@ -148,6 +167,7 @@ impl App {
             demo,
             last_height: height,
             last_title: title(version, None),
+            last_theme: theme,
             _ipc_server: ipc_server,
         };
         // `Started` is sent when the keychain thread reports (see `pump`), except in demo mode.
@@ -183,6 +203,7 @@ impl App {
         }
         self.dispatch(ctx, Event::Started { has_token: true });
         self.state.transfers_expanded = true;
+        self.ui.prefs_open = view == "prefs";
         let transfers = if view == "empty" {
             Vec::new()
         } else {
@@ -310,6 +331,14 @@ impl App {
             Auth::RequestingCode | Auth::Linking(_) | Auth::SignedOut(_)
         );
         let height = window_height(self.state.transfers_expanded, needs_room);
+        // The theme preference changed (Preferences): switch the palette and the native title bar.
+        if self.state.settings.theme != self.last_theme {
+            self.last_theme = self.state.settings.theme;
+            ctx.set_theme(ui::theme::preference(self.last_theme));
+            ctx.send_viewport_cmd(ViewportCommand::SetTheme(ui::theme::window_theme(
+                self.last_theme,
+            )));
+        }
         if (height - self.last_height).abs() > f32::EPSILON {
             self.last_height = height;
             ctx.send_viewport_cmd(ViewportCommand::InnerSize(egui::vec2(ui::WIDTH, height)));

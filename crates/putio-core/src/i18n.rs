@@ -141,6 +141,10 @@ pub enum Msg {
     PrefsAddingMagnet,
     PrefsUploadingTorrent,
     PrefsCheckUpdates,
+    PrefsAppearance,
+    ThemeSystem,
+    ThemeLight,
+    ThemeDark,
     PrefsShowAvatar,
     PrefsShowAvatarHint,
     PrefsDefaultFolder,
@@ -532,6 +536,10 @@ impl Msg {
                 "Buscar actualizaciones al iniciar"
             )
             .into(),
+            Self::PrefsAppearance => tr!(l, "Appearance", "Darstellung", "Apariencia").into(),
+            Self::ThemeSystem => tr!(l, "System", "System", "Sistema").into(),
+            Self::ThemeLight => tr!(l, "Light", "Hell", "Claro").into(),
+            Self::ThemeDark => tr!(l, "Dark", "Dunkel", "Oscuro").into(),
             Self::PrefsShowAvatar => tr!(
                 l,
                 "Show my Gravatar",

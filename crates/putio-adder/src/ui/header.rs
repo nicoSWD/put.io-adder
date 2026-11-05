@@ -2,7 +2,7 @@
 //! current message and the quota pill.
 
 use eframe::egui::{
-    self, Align2, Color32, CornerRadius, Pos2, Rect, RectAlign, Sense, Stroke, StrokeKind, Vec2,
+    self, Align2, CornerRadius, Pos2, Rect, RectAlign, Sense, Stroke, StrokeKind, Vec2,
 };
 use putio_core::format;
 use putio_core::i18n::Msg;
@@ -28,10 +28,10 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
 fn top_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2) {
     let top = Rect::from_min_size(origin, Vec2::new(WIDTH, TOP_HEIGHT));
     ui.painter()
-        .rect_filled(top, CornerRadius::ZERO, theme::HEADER);
+        .rect_filled(top, CornerRadius::ZERO, theme::pal().header);
     ui.painter().line_segment(
         [top.left_bottom(), top.right_bottom()],
-        Stroke::new(1.0, theme::DIVIDER),
+        Stroke::new(1.0, theme::pal().divider),
     );
 
     // Logo (white with a gold shadow, so it lives on the black row).
@@ -40,7 +40,7 @@ fn top_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2) {
         origin + Vec2::new(PAD, (TOP_HEIGHT - logo_height) / 2.0),
         Vec2::new(logo_height * theme::LOGO_ASPECT, logo_height),
     );
-    egui::Image::from_bytes("bytes://putio-logo.png", theme::LOGO_PNG)
+    egui::Image::from_bytes(theme::pal().logo_uri, theme::pal().logo)
         .fit_to_exact_size(logo.size())
         .paint_at(ui, logo);
 
@@ -54,15 +54,15 @@ fn top_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2) {
         .on_hover_cursor(egui::CursorIcon::PointingHand);
     if menu.hovered() {
         ui.painter()
-            .rect_filled(menu_rect, CornerRadius::same(8), theme::CARD_HOVER);
+            .rect_filled(menu_rect, CornerRadius::same(8), theme::pal().card_hover);
     }
     icons::dots(
         ui.painter(),
         menu_rect.center(),
         if menu.hovered() {
-            theme::TEXT
+            theme::pal().text
         } else {
-            theme::MUTED
+            theme::pal().muted
         },
     );
     menu_popup(&menu, app);
@@ -82,14 +82,14 @@ fn top_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2) {
             Align2::CENTER_CENTER,
             initial,
             theme::bold(13.0),
-            Color32::BLACK,
+            theme::pal().on_yellow,
         );
         ui.painter().text(
             Pos2::new(avatar.x - 22.0, top.center().y),
             Align2::RIGHT_CENTER,
             &account.username,
             theme::bold(13.0),
-            theme::TEXT,
+            theme::pal().text,
         );
     }
 }
@@ -134,10 +134,10 @@ fn status_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2) {
     let now = app.now();
     let strip = Rect::from_min_size(origin, Vec2::new(WIDTH, STRIP_HEIGHT));
     ui.painter()
-        .rect_filled(strip, CornerRadius::ZERO, theme::SUBHEADER);
+        .rect_filled(strip, CornerRadius::ZERO, theme::pal().subheader);
     ui.painter().line_segment(
         [strip.left_bottom(), strip.right_bottom()],
-        Stroke::new(1.0, theme::DIVIDER),
+        Stroke::new(1.0, theme::pal().divider),
     );
 
     // The list toggle.
@@ -162,9 +162,9 @@ fn status_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2) {
             center,
             turn,
             if hit.hovered() {
-                theme::TEXT
+                theme::pal().text
             } else {
-                theme::MUTED
+                theme::pal().muted
             },
         );
         if hit.clicked() {
@@ -185,7 +185,12 @@ fn status_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2) {
             Pos2::new(pill.left() - 18.0, strip.center().y),
             Vec2::splat(14.0),
         );
-        ui.put(spinner, egui::Spinner::new().size(14.0).color(theme::TEXT));
+        ui.put(
+            spinner,
+            egui::Spinner::new()
+                .size(14.0)
+                .color(theme::pal().accent_text),
+        );
     }
 
     // The message, clipped so it never runs under the pill.
@@ -198,7 +203,7 @@ fn status_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2) {
         Align2::LEFT_CENTER,
         app.state.status_text(now),
         theme::text(12.0),
-        theme::TEXT,
+        theme::pal().text,
     );
 }
 
@@ -218,7 +223,7 @@ fn quota_pill(ui: &egui::Ui, app: &App, pill: Rect) {
         let shown = ui
             .ctx()
             .animate_value_with_time(egui::Id::new("quota"), used, 1.2);
-        painter.rect_filled(pill, radius, theme::TRACK);
+        painter.rect_filled(pill, radius, theme::pal().track);
         let fill = Rect::from_min_size(
             pill.min,
             Vec2::new((pill.width() * shown).max(PILL_HEIGHT), pill.height()),
@@ -227,21 +232,33 @@ fn quota_pill(ui: &egui::Ui, app: &App, pill: Rect) {
         let left = account
             .disk
             .map_or(0, |disk| disk.avail.max(disk.size - disk.used));
-        painter.text(
+        // Black over the yellow part, the normal text colour over the rest, so it reads wherever the
+        // edge falls (on the light palette both are black).
+        let label = Msg::DiskLeft {
+            left: format::bytes(left),
+        }
+        .text(locale);
+        let font = theme::bold(10.5);
+        let rest = Rect::from_min_max(Pos2::new(fill.right(), pill.top()), pill.right_bottom());
+        painter.with_clip_rect(fill).text(
             pill.center(),
             Align2::CENTER_CENTER,
-            Msg::DiskLeft {
-                left: format::bytes(left),
-            }
-            .text(locale),
-            theme::bold(10.5),
-            theme::TEXT,
+            &label,
+            font.clone(),
+            theme::pal().on_yellow,
+        );
+        painter.with_clip_rect(rest).text(
+            pill.center(),
+            Align2::CENTER_CENTER,
+            &label,
+            font,
+            theme::pal().text,
         );
     } else {
         painter.rect_stroke(
             pill,
             radius,
-            Stroke::new(1.5, theme::YELLOW_PRESSED),
+            Stroke::new(1.5, theme::pal().outline),
             StrokeKind::Inside,
         );
         painter.text(
@@ -252,7 +269,7 @@ fn quota_pill(ui: &egui::Ui, app: &App, pill: Rect) {
             }
             .text(locale),
             theme::bold(10.5),
-            theme::TEXT,
+            theme::pal().accent_text,
         );
     }
 }

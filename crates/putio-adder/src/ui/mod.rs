@@ -52,8 +52,14 @@ impl UiState {
 
 pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
     let ctx = ui.ctx().clone();
+    // One palette for the whole frame, whatever the theme resolves to right now.
+    theme::select(&ctx);
     egui::CentralPanel::default()
-        .frame(Frame::new().fill(theme::BG).inner_margin(Margin::ZERO))
+        .frame(
+            Frame::new()
+                .fill(theme::pal().bg)
+                .inner_margin(Margin::ZERO),
+        )
         .show(ui, |ui| {
             header::show(ui, app);
             let below = ui.available_rect_before_wrap();

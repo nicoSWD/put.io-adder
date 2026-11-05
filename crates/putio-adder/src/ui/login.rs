@@ -14,14 +14,18 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
     ui.vertical_centered(|ui| match app.state.auth.clone() {
         Auth::Starting | Auth::RequestingCode => {
             ui.add_space(60.0);
-            ui.add(egui::Spinner::new().size(22.0).color(theme::TEXT));
-            ui.label(RichText::new(Msg::FetchingInfo.text(locale)).color(theme::MUTED));
+            ui.add(
+                egui::Spinner::new()
+                    .size(22.0)
+                    .color(theme::pal().accent_text),
+            );
+            ui.label(RichText::new(Msg::FetchingInfo.text(locale)).color(theme::pal().muted));
         }
         Auth::Linking(link) => {
             ui.label(
                 RichText::new(Msg::LinkInstructions.text(locale))
                     .font(theme::text(12.5))
-                    .color(theme::MUTED),
+                    .color(theme::pal().muted),
             );
             ui.add_space(10.0);
             code_card(ui, &link.code);
@@ -38,7 +42,11 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
             });
             ui.add_space(16.0);
             // The status row already says what we are waiting for; a spinner is enough here.
-            ui.add(egui::Spinner::new().size(16.0).color(theme::TEXT));
+            ui.add(
+                egui::Spinner::new()
+                    .size(16.0)
+                    .color(theme::pal().accent_text),
+            );
         }
         Auth::SignedOut(reason) => {
             ui.add_space(48.0);
@@ -65,7 +73,7 @@ fn code_card(ui: &mut egui::Ui, code: &str) {
     let size = Vec2::new(300.0, 84.0);
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     ui.painter()
-        .rect_filled(rect, CornerRadius::same(14), theme::CARD);
+        .rect_filled(rect, CornerRadius::same(14), theme::pal().card);
     ui.painter().rect_stroke(
         rect,
         CornerRadius::same(14),
@@ -84,7 +92,7 @@ fn code_card(ui: &mut egui::Ui, code: &str) {
             Align2::CENTER_CENTER,
             letter.to_string(),
             theme::bold(36.0),
-            theme::TEXT,
+            theme::pal().accent_text,
         );
     }
 }

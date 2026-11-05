@@ -62,7 +62,7 @@ fn toolbar(ui: &mut egui::Ui, app: &mut App, ctx: &egui::Context) {
             ui.label(
                 RichText::new(Msg::TransfersTitle.text(locale))
                     .font(theme::bold(13.0))
-                    .color(theme::TEXT),
+                    .color(theme::pal().text),
             );
             count_pill(ui, app.state.transfers.len());
             if let UpdateStatus::Available { version, .. } = app.state.update.clone() {
@@ -70,7 +70,7 @@ fn toolbar(ui: &mut egui::Ui, app: &mut App, ctx: &egui::Context) {
                 ui.label(
                     RichText::new(Msg::UpdateAvailable { version }.text(locale))
                         .font(theme::bold(11.5))
-                        .color(theme::TEXT),
+                        .color(theme::pal().text),
                 );
                 if ui
                     .link(RichText::new(Msg::UpdateOpenPage.text(locale)).font(theme::text(11.5)))
@@ -88,15 +88,18 @@ fn toolbar(ui: &mut egui::Ui, app: &mut App, ctx: &egui::Context) {
 
 /// A small rounded number next to the title.
 fn count_pill(ui: &mut egui::Ui, count: usize) {
-    let galley = ui
-        .painter()
-        .layout_no_wrap(count.to_string(), theme::bold(10.5), theme::TEXT);
+    let galley =
+        ui.painter()
+            .layout_no_wrap(count.to_string(), theme::bold(10.5), theme::pal().on_yellow);
     let size = Vec2::new((galley.size().x + 14.0).max(22.0), 18.0);
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     ui.painter()
         .rect_filled(rect, CornerRadius::same(9), theme::YELLOW);
-    ui.painter()
-        .galley(rect.center() - galley.size() / 2.0, galley, theme::TEXT);
+    ui.painter().galley(
+        rect.center() - galley.size() / 2.0,
+        galley,
+        theme::pal().on_yellow,
+    );
 }
 
 fn sort_label(key: SortKey) -> Msg {
@@ -122,7 +125,7 @@ fn sort_menu(ui: &mut egui::Ui, app: &mut App) {
         egui::Button::new(
             RichText::new(current)
                 .font(theme::text(11.0))
-                .color(theme::MUTED),
+                .color(theme::pal().muted),
         )
         .fill(Color32::TRANSPARENT)
         .stroke(egui::Stroke::NONE),
@@ -177,16 +180,16 @@ fn empty(ui: &mut egui::Ui, app: &App) {
         Align2::CENTER_CENTER,
         Msg::EmptyTitle.text(locale),
         theme::bold(15.0),
-        theme::TEXT,
+        theme::pal().text,
     );
     let hint = ui.painter().layout(
         Msg::EmptyHint.text(locale),
         theme::text(11.5),
-        theme::MUTED,
+        theme::pal().muted,
         340.0,
     );
     let pos = Pos2::new(center.x - hint.size().x / 2.0, center.y + 64.0);
-    ui.painter().galley(pos, hint, theme::MUTED);
+    ui.painter().galley(pos, hint, theme::pal().muted);
 }
 
 /// One transfer. Returns the action the user asked for, if any. Everything is keyed by the transfer
@@ -204,9 +207,9 @@ fn card(ui: &mut egui::Ui, app: &mut App, transfer: &Transfer) -> Option<Event> 
         ui.ctx()
             .animate_bool_with_time(response.id.with("hover"), response.hovered(), 0.12);
     let fill = if selected {
-        theme::CARD_SELECTED
+        theme::pal().card_selected
     } else {
-        mix(theme::CARD, theme::CARD_HOVER, hover)
+        mix(theme::pal().card, theme::pal().card_hover, hover)
     };
 
     let painter = ui.painter_at(rect);
@@ -243,11 +246,15 @@ fn card(ui: &mut egui::Ui, app: &mut App, transfer: &Transfer) -> Option<Event> 
         Align2::LEFT_TOP,
         name,
         theme::bold(12.5),
-        theme::TEXT,
+        theme::pal().text,
     );
 
     let failed = transfer.status == TransferStatus::Error;
-    let detail_color = if failed { theme::ERROR } else { theme::MUTED };
+    let detail_color = if failed {
+        theme::pal().error
+    } else {
+        theme::pal().muted
+    };
     painter.with_clip_rect(name_area).text(
         Pos2::new(text_left, rect.top() + 30.0),
         Align2::LEFT_TOP,
@@ -263,7 +270,7 @@ fn card(ui: &mut egui::Ui, app: &mut App, transfer: &Transfer) -> Option<Event> 
         Align2::RIGHT_TOP,
         format::bytes(transfer.size),
         theme::text(11.0),
-        theme::MUTED,
+        theme::pal().muted,
     );
     let running = transfer.status.is_pending();
     if running {
@@ -283,7 +290,7 @@ fn card(ui: &mut egui::Ui, app: &mut App, transfer: &Transfer) -> Option<Event> 
                 Align2::RIGHT_TOP,
                 format!("{percent:.0}%"),
                 theme::bold(12.0),
-                theme::TEXT,
+                theme::pal().accent_text,
             );
         }
         let bar = Rect::from_min_max(

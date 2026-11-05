@@ -13,7 +13,7 @@ use putio_api::{Account, ApiError, DeviceCode, Release, Token, Transfer};
 
 use crate::i18n::{Locale, Msg};
 use crate::intake::{Intake, IntakeError};
-use crate::settings::{Folder, Settings};
+use crate::settings::{Folder, Settings, ThemeChoice};
 use crate::transfers::{self, Summary, Tracker};
 use crate::update::{self, UpdateStatus};
 
@@ -90,6 +90,7 @@ pub enum SettingsChange {
     CheckForUpdates(bool),
     ShowAvatar(bool),
     DefaultFolder(Option<Folder>),
+    Theme(ThemeChoice),
 }
 
 #[derive(Debug)]
@@ -525,6 +526,7 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
                 SettingsChange::CheckForUpdates(on) => state.settings.check_for_updates = on,
                 SettingsChange::ShowAvatar(on) => state.settings.show_avatar = on,
                 SettingsChange::DefaultFolder(folder) => state.settings.default_folder = folder,
+                SettingsChange::Theme(theme) => state.settings.theme = theme,
             }
             fx.push(Effect::SaveSettings(state.settings.clone()));
         }
@@ -1721,6 +1723,19 @@ mod tests {
             Event::SettingsChanged(SettingsChange::ShowAvatar(true)),
         );
         assert!(state.settings.show_avatar);
+    }
+
+    #[test]
+    fn the_theme_choice_is_applied_and_saved() {
+        let (mut state, _) = signed_in(no_updates());
+        assert_eq!(state.settings.theme, ThemeChoice::System);
+        let fx = update(
+            &mut state,
+            0,
+            Event::SettingsChanged(SettingsChange::Theme(ThemeChoice::Dark)),
+        );
+        assert_eq!(state.settings.theme, ThemeChoice::Dark);
+        assert!(matches!(&fx[..], [Effect::SaveSettings(s)] if s.theme == ThemeChoice::Dark));
     }
 
     #[test]

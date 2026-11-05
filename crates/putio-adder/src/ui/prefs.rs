@@ -3,8 +3,8 @@
 use eframe::egui::{self, Align2, RichText};
 use putio_api::client::FileListing;
 use putio_api::{ApiError, File};
-use putio_core::i18n::Msg;
-use putio_core::settings::Folder;
+use putio_core::i18n::{Locale, Msg};
+use putio_core::settings::{Folder, ThemeChoice};
 use putio_core::state::{Event, SettingsChange};
 
 use super::theme;
@@ -86,6 +86,11 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
             {
                 change = Some(SettingsChange::CheckForUpdates(updates));
             }
+            ui.add_space(6.0);
+            if let Some(theme_change) = appearance_row(ui, settings.theme, locale) {
+                change = Some(theme_change);
+            }
+            ui.add_space(6.0);
             let mut avatar = settings.show_avatar;
             if ui
                 .checkbox(&mut avatar, Msg::PrefsShowAvatar.text(locale))
@@ -96,7 +101,7 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
             ui.label(
                 RichText::new(Msg::PrefsShowAvatarHint.text(locale))
                     .small()
-                    .color(theme::MUTED),
+                    .color(theme::pal().muted),
             );
 
             ui.add_space(8.0);
@@ -140,6 +145,32 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
     folder_window(ctx, app);
 }
 
+/// The System / Light / Dark choice. Returns the change when the user picks a different one.
+fn appearance_row(
+    ui: &mut egui::Ui,
+    current: ThemeChoice,
+    locale: Locale,
+) -> Option<SettingsChange> {
+    let mut picked = None;
+    ui.label(Msg::PrefsAppearance.text(locale));
+    ui.horizontal(|ui| {
+        for (choice, label) in [
+            (ThemeChoice::System, Msg::ThemeSystem),
+            (ThemeChoice::Light, Msg::ThemeLight),
+            (ThemeChoice::Dark, Msg::ThemeDark),
+        ] {
+            if ui
+                .selectable_label(current == choice, label.text(locale))
+                .clicked()
+                && current != choice
+            {
+                picked = Some(SettingsChange::Theme(choice));
+            }
+        }
+    });
+    picked
+}
+
 fn folder_window(ctx: &egui::Context, app: &mut App) {
     if !app.ui.folders.open {
         return;
@@ -169,7 +200,7 @@ fn folder_window(ctx: &egui::Context, app: &mut App) {
                         ui.spinner();
                     }
                     if picker.failed {
-                        ui.colored_label(theme::ERROR, Msg::TransfersFailed.text(locale));
+                        ui.colored_label(theme::pal().error, Msg::TransfersFailed.text(locale));
                     }
                     for folder in &picker.folders {
                         if ui.button(format!("📁 {}", folder.name)).clicked() {
