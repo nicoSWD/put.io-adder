@@ -96,12 +96,11 @@ fn file_url_to_path(url: &str) -> Result<PathBuf, IntakeError> {
     } else {
         format!("/{decoded}")
     };
-    let path = PathBuf::from(full);
-    if path.is_absolute() || windows_drive {
-        Ok(path)
-    } else {
-        Err(IntakeError::BadFileUrl)
-    }
+    // Whether the path exists, is a regular file and is small enough is the platform layer's job
+    // (`torrent_file::read_torrent`). It is deliberately not decided with `Path::is_absolute` here:
+    // that answers for the running OS (`/tmp/x` is not absolute on Windows), and this crate behaves
+    // the same on every OS.
+    Ok(PathBuf::from(full))
 }
 
 fn percent_decode_path(input: &str) -> Option<String> {
