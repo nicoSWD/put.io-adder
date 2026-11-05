@@ -127,7 +127,7 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
             });
 
             ui.add_space(8.0);
-            if ui.button(Msg::PrefsClose.text(locale)).clicked() {
+            if theme::primary_button(ui, Msg::PrefsClose.text(locale)).clicked() {
                 app.ui.prefs_open = false;
             }
             if let Some(change) = change {

@@ -1,6 +1,8 @@
 //! put.io adder: send magnet links and `.torrent` files to your put.io account.
 
 mod app;
+#[cfg(debug_assertions)]
+mod demo;
 mod ui;
 mod worker;
 

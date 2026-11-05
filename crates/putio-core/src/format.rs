@@ -1,6 +1,6 @@
 //! Human-readable numbers for the transfers table and header.
 
-use putio_api::TransferStatus;
+use putio_api::{Transfer, TransferStatus};
 
 use crate::i18n::{Locale, Msg};
 
@@ -68,9 +68,128 @@ pub fn eta(status: TransferStatus, estimated_seconds: Option<i64>, locale: Local
     }
 }
 
+/// Longest error text shown on a row.
+const MAX_ERROR_CHARS: usize = 80;
+
+/// The second line of a transfer row: what it is doing right now.
+///
+/// `Downloading · 1.5 MB/s · 4m 07s left`, `Done`, `In queue`, or the error text for a failed transfer
+/// (control characters removed and shortened: it comes from the server).
+#[must_use]
+pub fn detail(transfer: &Transfer, locale: Locale) -> String {
+    match transfer.status {
+        TransferStatus::Downloading => {
+            let mut parts = vec![Msg::StatusDownloading.text(locale)];
+            if transfer.down_speed > 0 {
+                parts.push(speed(transfer.down_speed));
+            }
+            if let Some(seconds) = transfer.estimated_time.filter(|seconds| *seconds >= 0) {
+                parts.push(
+                    Msg::EtaLeft {
+                        eta: duration(seconds),
+                    }
+                    .text(locale),
+                );
+            }
+            parts.join(" · ")
+        }
+        TransferStatus::Completing => Msg::EtaFinishing.text(locale),
+        TransferStatus::Completed => Msg::EtaDone.text(locale),
+        TransferStatus::Seeding => Msg::StatusSeeding.text(locale),
+        TransferStatus::Waiting => Msg::StatusWaiting.text(locale),
+        TransferStatus::InQueue => Msg::StatusQueued.text(locale),
+        TransferStatus::PreparingDownload => Msg::StatusPreparing.text(locale),
+        TransferStatus::Error => match transfer
+            .error_message
+            .as_deref()
+            .map(clean_error)
+            .filter(|text| !text.is_empty())
+        {
+            Some(text) => text,
+            None => Msg::StatusFailed.text(locale),
+        },
+        TransferStatus::Unknown => "–".into(),
+    }
+}
+
+fn clean_error(message: &str) -> String {
+    let cleaned: String = message.chars().filter(|c| !c.is_control()).collect();
+    let cleaned = cleaned.trim();
+    let mut out: String = cleaned.chars().take(MAX_ERROR_CHARS).collect();
+    if cleaned.chars().count() > MAX_ERROR_CHARS {
+        out.push('…');
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn transfer(status: TransferStatus) -> Transfer {
+        let mut transfer: Transfer = serde_json::from_str(r#"{"id": 1, "name": "x"}"#).unwrap();
+        transfer.status = status;
+        transfer
+    }
+
+    #[test]
+    fn detail_for_a_running_download() {
+        let mut t = transfer(TransferStatus::Downloading);
+        t.down_speed = 1_572_864;
+        t.estimated_time = Some(247);
+        assert_eq!(
+            detail(&t, Locale::En),
+            "Downloading · 1.5 MB/s · 4m 07s left"
+        );
+        assert_eq!(
+            detail(&t, Locale::De),
+            "Lädt herunter · 1.5 MB/s · noch 4m 07s"
+        );
+    }
+
+    #[test]
+    fn detail_leaves_out_what_is_unknown() {
+        let mut t = transfer(TransferStatus::Downloading);
+        assert_eq!(detail(&t, Locale::En), "Downloading");
+        t.down_speed = 2048;
+        assert_eq!(detail(&t, Locale::En), "Downloading · 2.0 KB/s");
+        t.estimated_time = Some(-1);
+        assert_eq!(detail(&t, Locale::En), "Downloading · 2.0 KB/s");
+    }
+
+    #[test]
+    fn detail_for_every_other_state() {
+        let cases = [
+            (TransferStatus::Completed, "Done"),
+            (TransferStatus::Seeding, "Done · seeding"),
+            (TransferStatus::Completing, "Finishing"),
+            (TransferStatus::Waiting, "Waiting…"),
+            (TransferStatus::InQueue, "In queue"),
+            (TransferStatus::PreparingDownload, "Preparing…"),
+            (TransferStatus::Error, "Failed"),
+            (TransferStatus::Unknown, "–"),
+        ];
+        for (status, expected) in cases {
+            assert_eq!(
+                detail(&transfer(status), Locale::En),
+                expected,
+                "{status:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_failed_transfer_shows_the_server_message_sanitised_and_bounded() {
+        let mut t = transfer(TransferStatus::Error);
+        t.error_message = Some("Tracker\u{1b}[31m unreachable".into());
+        assert_eq!(detail(&t, Locale::En), "Tracker[31m unreachable");
+        t.error_message = Some("x".repeat(500));
+        let text = detail(&t, Locale::En);
+        assert_eq!(text.chars().count(), MAX_ERROR_CHARS + 1);
+        assert!(text.ends_with('…'));
+        t.error_message = Some("   ".into());
+        assert_eq!(detail(&t, Locale::En), "Failed");
+    }
 
     #[test]
     fn bytes_cover_units_and_edges() {

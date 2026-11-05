@@ -1,6 +1,6 @@
 //! The sign-in panel (device code flow).
 
-use eframe::egui::{self, RichText};
+use eframe::egui::{self, Align2, CornerRadius, RichText, Sense, Vec2};
 use putio_core::i18n::Msg;
 use putio_core::state::{Auth, Event, SignedOutReason};
 
@@ -10,47 +10,88 @@ use crate::app::App;
 pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
     let ctx = ui.ctx().clone();
     let locale = app.state.locale;
-    ui.add_space(6.0);
+    ui.add_space(14.0);
     ui.vertical_centered(|ui| match app.state.auth.clone() {
         Auth::Starting | Auth::RequestingCode => {
-            ui.add_space(30.0);
-            ui.spinner();
-            ui.label(Msg::FetchingInfo.text(locale));
+            ui.add_space(60.0);
+            ui.add(egui::Spinner::new().size(22.0).color(theme::YELLOW));
+            ui.label(RichText::new(Msg::FetchingInfo.text(locale)).color(theme::MUTED));
         }
         Auth::Linking(link) => {
-            ui.label(Msg::LinkInstructions.text(locale));
-            ui.add_space(8.0);
-            ui.label(RichText::new(&link.code).monospace().size(34.0).strong());
-            ui.add_space(8.0);
+            ui.label(
+                RichText::new(Msg::LinkInstructions.text(locale))
+                    .font(theme::text(12.5))
+                    .color(theme::MUTED),
+            );
+            ui.add_space(10.0);
+            code_card(ui, &link.code);
+            ui.add_space(14.0);
             ui.horizontal(|ui| {
-                ui.add_space(ui.available_width() / 2.0 - 100.0);
-                if ui.button(Msg::LinkOpenButton.text(locale)).clicked() {
+                let width = 150.0 + 110.0 + ui.spacing().item_spacing.x;
+                ui.add_space(((ui.available_width() - width) / 2.0).max(0.0));
+                if theme::primary_button(ui, Msg::LinkOpenButton.text(locale)).clicked() {
                     app.dispatch(&ctx, Event::OpenLinkPage);
                 }
-                if ui.button("Copy code").clicked() {
+                if theme::secondary_button(ui, "Copy code").clicked() {
                     ctx.copy_text(link.code.clone());
                 }
             });
-            ui.add_space(10.0);
-            ui.label(
-                RichText::new(Msg::SigningIn.text(locale))
-                    .color(theme::MUTED)
-                    .small(),
-            );
+            ui.add_space(14.0);
+            ui.horizontal(|ui| {
+                ui.add_space((ui.available_width() / 2.0 - 120.0).max(0.0));
+                ui.add(egui::Spinner::new().size(12.0).color(theme::YELLOW));
+                ui.label(
+                    RichText::new(Msg::SigningIn.text(locale))
+                        .font(theme::text(11.0))
+                        .color(theme::MUTED),
+                );
+            });
         }
         Auth::SignedOut(reason) => {
-            ui.add_space(20.0);
+            ui.add_space(48.0);
             let note = match reason {
                 Some(SignedOutReason::SessionExpired) => Some(Msg::AuthExpired),
                 Some(SignedOutReason::CodeExpired) => Some(Msg::LinkExpired),
                 Some(SignedOutReason::CodeRequestFailed) | None => None,
             };
-            ui.label(note.unwrap_or(Msg::AuthRequired).text(locale));
-            ui.add_space(10.0);
-            if ui.button(Msg::LinkRetryButton.text(locale)).clicked() {
+            ui.label(
+                RichText::new(note.unwrap_or(Msg::AuthRequired).text(locale))
+                    .font(theme::text(13.0)),
+            );
+            ui.add_space(14.0);
+            if theme::primary_button(ui, Msg::LinkRetryButton.text(locale)).clicked() {
                 app.dispatch(&ctx, Event::SignInRequested);
             }
         }
         Auth::SignedIn => {}
     });
+}
+
+/// The device code, big and yellow on a card, one letter at a time so it is easy to read out.
+fn code_card(ui: &mut egui::Ui, code: &str) {
+    let size = Vec2::new(300.0, 84.0);
+    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+    ui.painter()
+        .rect_filled(rect, CornerRadius::same(14), theme::CARD);
+    ui.painter().rect_stroke(
+        rect,
+        CornerRadius::same(14),
+        egui::Stroke::new(1.0, theme::DIVIDER),
+        egui::StrokeKind::Inside,
+    );
+    let letters: Vec<char> = code.chars().collect();
+    let advance = 34.0;
+    let count = f32::from(u8::try_from(letters.len()).unwrap_or(8));
+    let start = rect.center().x - advance * (count - 1.0) / 2.0;
+    for (index, letter) in letters.iter().enumerate() {
+        let offset = f32::from(u8::try_from(index).unwrap_or(0));
+        let center = egui::pos2(start + advance * offset, rect.center().y);
+        ui.painter().text(
+            center,
+            Align2::CENTER_CENTER,
+            letter.to_string(),
+            theme::bold(36.0),
+            theme::YELLOW,
+        );
+    }
 }

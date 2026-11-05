@@ -1062,7 +1062,7 @@ mod tests {
         );
         assert_eq!(fx, [Effect::SetBadge(Some(40))]);
         assert_eq!(state.account.as_ref().unwrap().username, "nico");
-        assert_eq!(state.status_text(10), "1 pending transfer  |  1 finished");
+        assert_eq!(state.status_text(10), "1 pending transfer  ·  1 finished");
         assert_eq!(
             state.transfers.first().unwrap().id,
             1,

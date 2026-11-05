@@ -1,201 +1,273 @@
-//! Top of the window: logo and account, then the black strip with the chevron, the gold quota bar
-//! and the status line.
+//! The top of the window: logo and account on black, then a status row with the list toggle, the
+//! current message and the quota pill.
 
-use eframe::egui::{self, Align2, Color32, CornerRadius, FontId, Pos2, Rect, Sense, Stroke, Vec2};
+use eframe::egui::{
+    self, Align2, Color32, CornerRadius, Pos2, Rect, RectAlign, Sense, Stroke, StrokeKind, Vec2,
+};
 use putio_core::format;
 use putio_core::i18n::Msg;
 use putio_core::state::Event;
 
-use super::{STRIP_HEIGHT, TOP_HEIGHT, WIDTH, theme};
+use super::{STRIP_HEIGHT, TOP_HEIGHT, WIDTH, icons, theme};
 use crate::app::App;
 
-const BAR_X: f32 = 35.0;
-const BAR_WIDTH: f32 = 150.0;
+const PAD: f32 = 16.0;
+const PILL_WIDTH: f32 = 168.0;
+const PILL_HEIGHT: f32 = 22.0;
 
-#[allow(clippy::too_many_lines)] // immediate-mode drawing reads best as one top-to-bottom function
 pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
-    let ctx = ui.ctx().clone();
     let origin = ui.max_rect().min;
-    let now = app.now();
-    let locale = app.state.locale;
-
-    // ---- top row: logo on the left, account and menu on the right (dark: the logo is white and gold) ----
-    let top = Rect::from_min_size(origin, Vec2::new(WIDTH, TOP_HEIGHT));
-    ui.painter()
-        .rect_filled(top, CornerRadius::ZERO, theme::TOP);
-    let logo_height = 22.0;
-    let logo = Rect::from_min_size(
-        origin + Vec2::new(14.0, (TOP_HEIGHT - logo_height) / 2.0),
-        Vec2::new(logo_height * theme::LOGO_ASPECT, logo_height),
-    );
-    egui::Image::from_bytes("bytes://putio-logo.png", theme::LOGO_PNG)
-        .fit_to_exact_size(logo.size())
-        .paint_at(ui, logo);
-    ui.scope_builder(
-        egui::UiBuilder::new().max_rect(top.shrink2(Vec2::new(10.0, 6.0))),
-        |ui| {
-            ui.visuals_mut().override_text_color = Some(Color32::WHITE);
-            ui.visuals_mut().widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                menu(ui, app);
-                if let Some(account) = &app.state.account {
-                    ui.label(egui::RichText::new(&account.username).font(theme::bold(13.0)));
-                }
-            });
-        },
-    );
-
-    // ---- the black strip ----
-    let strip = Rect::from_min_size(
-        origin + Vec2::new(0.0, TOP_HEIGHT),
-        Vec2::new(WIDTH, STRIP_HEIGHT),
-    );
-    ui.painter()
-        .rect_filled(strip, CornerRadius::ZERO, theme::STRIP);
-
-    // Chevron (rotates when the list opens). Only while signed in; signing in needs no list.
-    let center = Pos2::new(strip.left() + 17.0, strip.center().y);
-    let open = app.state.transfers_expanded;
-    let turn = ctx.animate_bool_with_time(egui::Id::new("chevron"), open, 0.4);
-    let angle = turn * std::f32::consts::PI;
-    let rotate = |v: Vec2| {
-        Vec2::new(
-            v.x * angle.cos() - v.y * angle.sin(),
-            v.x * angle.sin() + v.y * angle.cos(),
-        )
-    };
-    let points = [
-        center + rotate(Vec2::new(-5.0, -3.0)),
-        center + rotate(Vec2::new(0.0, 3.0)),
-        center + rotate(Vec2::new(5.0, -3.0)),
-    ];
-    let stroke = Stroke::new(2.0, Color32::WHITE);
-    ui.painter().line_segment([points[0], points[1]], stroke);
-    ui.painter().line_segment([points[1], points[2]], stroke);
-    if app.state.is_signed_in() {
-        let click = ui.interact(
-            Rect::from_center_size(center, Vec2::splat(26.0)),
-            egui::Id::new("toggle"),
-            Sense::click(),
-        );
-        let click = click
-            .on_hover_cursor(egui::CursorIcon::PointingHand)
-            .on_hover_text(Msg::TooltipToggleTransfers.text(locale));
-        if click.clicked() {
-            app.dispatch(&ctx, Event::ToggleTransfers);
-        }
-    }
-
-    // Gold bar: how much of the disk quota is left, or this month's bandwidth when no quota is known.
-    let bar = Rect::from_min_size(
-        Pos2::new(strip.left() + BAR_X, strip.top()),
-        Vec2::new(BAR_WIDTH, STRIP_HEIGHT),
-    );
-    let (fraction, label) = match &app.state.account {
-        Some(account) => match account
-            .disk
-            .as_ref()
-            .and_then(putio_api::Disk::used_fraction)
-        {
-            Some(used) => {
-                let left = account
-                    .disk
-                    .map_or(0, |disk| disk.avail.max(disk.size - disk.used));
-                (
-                    used,
-                    Msg::DiskLeft {
-                        left: format::bytes(left),
-                    }
-                    .text(locale),
-                )
-            }
-            None => (
-                1.0,
-                Msg::Bandwidth {
-                    used: format::bytes(account.monthly_bandwidth_usage),
-                }
-                .text(locale),
-            ),
-        },
-        None => (0.0, String::new()),
-    };
-    let shown = ctx.animate_value_with_time(egui::Id::new("quota"), fraction, 2.0);
-    ui.painter()
-        .rect_filled(bar, CornerRadius::ZERO, theme::GOLD_BACK);
-    ui.painter().rect_filled(
-        Rect::from_min_size(bar.min, Vec2::new(bar.width() * shown, bar.height())),
-        CornerRadius::ZERO,
-        theme::GOLD_FILL,
-    );
-    ui.painter().text(
-        bar.center(),
-        Align2::CENTER_CENTER,
-        label,
-        FontId::proportional(11.5),
-        Color32::BLACK,
-    );
-
-    // Status line, clipped so a long message never runs under the spinner.
-    let text_left = bar.right() + 8.0;
-    let text_area = Rect::from_min_max(
-        Pos2::new(text_left, strip.top()),
-        Pos2::new(strip.right() - 30.0, strip.bottom()),
-    );
-    ui.painter().with_clip_rect(text_area).text(
-        Pos2::new(text_left, strip.center().y),
-        Align2::LEFT_CENTER,
-        app.state.status_text(now),
-        FontId::proportional(11.0),
-        Color32::WHITE,
-    );
-    if app.state.is_busy() {
-        let spinner = Rect::from_center_size(
-            Pos2::new(strip.right() - 16.0, strip.center().y),
-            Vec2::splat(14.0),
-        );
-        ui.put(
-            spinner,
-            egui::Spinner::new().size(14.0).color(Color32::WHITE),
-        );
-    }
-
+    top_row(ui, app, origin);
+    status_row(ui, app, origin + Vec2::new(0.0, TOP_HEIGHT));
     ui.allocate_rect(
         Rect::from_min_size(origin, Vec2::new(WIDTH, TOP_HEIGHT + STRIP_HEIGHT)),
         Sense::hover(),
     );
 }
 
-fn menu(ui: &mut egui::Ui, app: &mut App) {
+fn top_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2) {
+    let top = Rect::from_min_size(origin, Vec2::new(WIDTH, TOP_HEIGHT));
+    ui.painter()
+        .rect_filled(top, CornerRadius::ZERO, theme::HEADER);
+
+    // Logo (white with a gold shadow, so it lives on the black row).
+    let logo_height = 26.0;
+    let logo = Rect::from_min_size(
+        origin + Vec2::new(PAD, (TOP_HEIGHT - logo_height) / 2.0),
+        Vec2::new(logo_height * theme::LOGO_ASPECT, logo_height),
+    );
+    egui::Image::from_bytes("bytes://putio-logo.png", theme::LOGO_PNG)
+        .fit_to_exact_size(logo.size())
+        .paint_at(ui, logo);
+
+    // Menu button, at the far right.
+    let menu_rect = Rect::from_center_size(
+        Pos2::new(top.right() - PAD - 14.0, top.center().y),
+        Vec2::splat(32.0),
+    );
+    let menu = ui
+        .interact(menu_rect, egui::Id::new("menu-button"), Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
+    if menu.hovered() {
+        ui.painter().rect_filled(
+            menu_rect,
+            CornerRadius::same(8),
+            Color32::from_rgb(0x24, 0x24, 0x24),
+        );
+    }
+    icons::dots(
+        ui.painter(),
+        menu_rect.center(),
+        if menu.hovered() {
+            theme::YELLOW
+        } else {
+            theme::TEXT
+        },
+    );
+    menu_popup(&menu, app);
+
+    // Account: name, then a yellow avatar with the initial. (A Gravatar would need your e-mail hash
+    // sent to a third party, so the initial is the default.)
+    if let Some(account) = &app.state.account {
+        let avatar = Pos2::new(menu_rect.left() - 10.0 - 14.0, top.center().y);
+        ui.painter().circle_filled(avatar, 14.0, theme::YELLOW);
+        let initial = account
+            .username
+            .chars()
+            .next()
+            .map_or_else(|| "?".into(), |c| c.to_uppercase().to_string());
+        ui.painter().text(
+            avatar + Vec2::new(0.0, 0.5),
+            Align2::CENTER_CENTER,
+            initial,
+            theme::bold(13.0),
+            Color32::BLACK,
+        );
+        ui.painter().text(
+            Pos2::new(avatar.x - 22.0, top.center().y),
+            Align2::RIGHT_CENTER,
+            &account.username,
+            theme::bold(13.0),
+            theme::TEXT,
+        );
+    }
+}
+
+fn menu_popup(button: &egui::Response, app: &mut App) {
+    let ctx = button.ctx.clone();
+    let locale = app.state.locale;
+    egui::Popup::menu(button)
+        .align(RectAlign::BOTTOM_END)
+        .width(210.0)
+        .show(|ui| {
+            if ui.button(Msg::MenuPreferences.text(locale)).clicked() {
+                app.ui.prefs_open = true;
+            }
+            if ui.button(Msg::MenuCheckUpdates.text(locale)).clicked() {
+                app.dispatch(
+                    &ctx,
+                    Event::CheckForUpdates {
+                        user_initiated: true,
+                    },
+                );
+            }
+            if ui.button(Msg::MenuProjectPage.text(locale)).clicked() {
+                app.dispatch(&ctx, Event::OpenProjectPage);
+            }
+            if app.state.is_signed_in() {
+                ui.separator();
+                if ui.button(Msg::MenuSignOut.text(locale)).clicked() {
+                    app.dispatch(&ctx, Event::SignOutRequested);
+                }
+            }
+            ui.separator();
+            if ui.button("Quit").clicked() {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+        });
+}
+
+fn status_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2) {
     let ctx = ui.ctx().clone();
     let locale = app.state.locale;
-    ui.menu_button("…", |ui| {
-        if ui.button(Msg::MenuPreferences.text(locale)).clicked() {
-            app.ui.prefs_open = true;
-            ui.close();
+    let now = app.now();
+    let strip = Rect::from_min_size(origin, Vec2::new(WIDTH, STRIP_HEIGHT));
+    ui.painter()
+        .rect_filled(strip, CornerRadius::ZERO, theme::SUBHEADER);
+    ui.painter().line_segment(
+        [strip.left_bottom(), strip.right_bottom()],
+        Stroke::new(1.0, theme::DIVIDER),
+    );
+
+    // The list toggle.
+    let mut text_left = PAD;
+    if app.state.is_signed_in() {
+        let center = Pos2::new(strip.left() + PAD + 8.0, strip.center().y);
+        let hit = ui.interact(
+            Rect::from_center_size(center, Vec2::splat(28.0)),
+            egui::Id::new("toggle"),
+            Sense::click(),
+        );
+        let hit = hit
+            .on_hover_cursor(egui::CursorIcon::PointingHand)
+            .on_hover_text(Msg::TooltipToggleTransfers.text(locale));
+        let turn = ctx.animate_bool_with_time(
+            egui::Id::new("chevron"),
+            app.state.transfers_expanded,
+            0.25,
+        );
+        icons::chevron(
+            ui.painter(),
+            center,
+            turn,
+            if hit.hovered() {
+                theme::YELLOW
+            } else {
+                theme::TEXT
+            },
+        );
+        if hit.clicked() {
+            app.dispatch(&ctx, Event::ToggleTransfers);
         }
-        if ui.button(Msg::MenuCheckUpdates.text(locale)).clicked() {
-            app.dispatch(
-                &ctx,
-                Event::CheckForUpdates {
-                    user_initiated: true,
-                },
-            );
-            ui.close();
+        text_left += 28.0;
+    }
+
+    // The quota pill on the right.
+    let pill = Rect::from_center_size(
+        Pos2::new(strip.right() - PAD - PILL_WIDTH / 2.0, strip.center().y),
+        Vec2::new(PILL_WIDTH, PILL_HEIGHT),
+    );
+    quota_pill(ui, app, pill);
+
+    if app.state.is_busy() {
+        let spinner = Rect::from_center_size(
+            Pos2::new(pill.left() - 18.0, strip.center().y),
+            Vec2::splat(14.0),
+        );
+        ui.put(
+            spinner,
+            egui::Spinner::new().size(14.0).color(theme::YELLOW),
+        );
+    }
+
+    // The message, clipped so it never runs under the pill.
+    let area = Rect::from_min_max(
+        Pos2::new(strip.left() + text_left, strip.top()),
+        Pos2::new(pill.left() - 34.0, strip.bottom()),
+    );
+    ui.painter().with_clip_rect(area).text(
+        Pos2::new(area.left(), strip.center().y),
+        Align2::LEFT_CENTER,
+        app.state.status_text(now),
+        theme::text(12.0),
+        theme::TEXT,
+    );
+}
+
+/// Disk space used (a filled pill) or, when put.io reports no quota, this month's bandwidth (an outline).
+fn quota_pill(ui: &egui::Ui, app: &App, pill: Rect) {
+    let Some(account) = &app.state.account else {
+        return;
+    };
+    let locale = app.state.locale;
+    let painter = ui.painter();
+    let radius = CornerRadius::same(11);
+    if let Some(used) = account
+        .disk
+        .as_ref()
+        .and_then(putio_api::Disk::used_fraction)
+    {
+        let shown = ui
+            .ctx()
+            .animate_value_with_time(egui::Id::new("quota"), used, 1.2);
+        painter.rect_filled(pill, radius, theme::TRACK);
+        let fill = Rect::from_min_size(
+            pill.min,
+            Vec2::new((pill.width() * shown).max(PILL_HEIGHT), pill.height()),
+        );
+        painter.rect_filled(fill, radius, theme::YELLOW);
+        let left = account
+            .disk
+            .map_or(0, |disk| disk.avail.max(disk.size - disk.used));
+        // Black over the yellow part, white over the dark part, so the text reads wherever
+        // the edge falls.
+        let label = Msg::DiskLeft {
+            left: format::bytes(left),
         }
-        if ui.button(Msg::MenuProjectPage.text(locale)).clicked() {
-            app.dispatch(&ctx, Event::OpenProjectPage);
-            ui.close();
-        }
-        if app.state.is_signed_in() {
-            ui.separator();
-            if ui.button(Msg::MenuSignOut.text(locale)).clicked() {
-                app.dispatch(&ctx, Event::SignOutRequested);
-                ui.close();
+        .text(locale);
+        let font = theme::bold(10.5);
+        let dark_part =
+            Rect::from_min_max(Pos2::new(fill.right(), pill.top()), pill.right_bottom());
+        painter.with_clip_rect(fill).text(
+            pill.center(),
+            Align2::CENTER_CENTER,
+            &label,
+            font.clone(),
+            Color32::BLACK,
+        );
+        painter.with_clip_rect(dark_part).text(
+            pill.center(),
+            Align2::CENTER_CENTER,
+            &label,
+            font,
+            theme::TEXT,
+        );
+    } else {
+        painter.rect_stroke(
+            pill,
+            radius,
+            Stroke::new(1.0, theme::YELLOW),
+            StrokeKind::Inside,
+        );
+        painter.text(
+            pill.center(),
+            Align2::CENTER_CENTER,
+            Msg::Bandwidth {
+                used: format::bytes(account.monthly_bandwidth_usage),
             }
-        }
-        ui.separator();
-        if ui.button("Quit").clicked() {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-        }
-    });
+            .text(locale),
+            theme::bold(10.5),
+            theme::YELLOW,
+        );
+    }
 }

@@ -1,6 +1,7 @@
 //! Drawing. Reads the core [`State`](putio_core::state::State) and reports user actions as events.
 
 pub(crate) mod header;
+pub(crate) mod icons;
 pub(crate) mod login;
 pub(crate) mod prefs;
 pub(crate) mod table;
@@ -14,11 +15,11 @@ use putio_core::transfers::SortKey;
 
 use crate::app::App;
 
-pub(crate) const WIDTH: f32 = 550.0;
-/// Height of the black strip.
-pub(crate) const STRIP_HEIGHT: f32 = 36.0;
-/// Space above the strip for the logo and account name.
-pub(crate) const TOP_HEIGHT: f32 = 40.0;
+pub(crate) const WIDTH: f32 = 560.0;
+/// Height of the status row.
+pub(crate) const STRIP_HEIGHT: f32 = 40.0;
+/// Height of the logo row.
+pub(crate) const TOP_HEIGHT: f32 = 56.0;
 
 /// State that only the UI cares about.
 #[derive(Debug)]
@@ -26,6 +27,8 @@ pub(crate) struct UiState {
     pub(crate) sort: SortKey,
     pub(crate) ascending: bool,
     pub(crate) prefs_open: bool,
+    /// The transfer last clicked (highlighted).
+    pub(crate) selected: Option<i64>,
     pub(crate) folders: prefs::FolderPicker,
 }
 
@@ -35,6 +38,7 @@ impl Default for UiState {
             sort: SortKey::Default,
             ascending: true,
             prefs_open: false,
+            selected: None,
             folders: prefs::FolderPicker::default(),
         }
     }
@@ -49,7 +53,7 @@ impl UiState {
 pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
     let ctx = ui.ctx().clone();
     egui::CentralPanel::default()
-        .frame(Frame::new().fill(theme::BODY).inner_margin(Margin::ZERO))
+        .frame(Frame::new().fill(theme::BG).inner_margin(Margin::ZERO))
         .show(ui, |ui| {
             header::show(ui, app);
             let below = ui.available_rect_before_wrap();

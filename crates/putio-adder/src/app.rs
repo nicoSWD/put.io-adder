@@ -20,8 +20,8 @@ use putio_platform::settings_store::SettingsFile;
 use crate::ui::{self, UiState};
 use crate::worker::{Job, WorkerMsg, Workers};
 
-const COLLAPSED_HEIGHT: f32 = 86.0;
-const EXPANDED_HEIGHT: f32 = 300.0;
+const COLLAPSED_HEIGHT: f32 = 96.0;
+const EXPANDED_HEIGHT: f32 = 480.0;
 /// How often the UI wakes up by itself (to advance timers and the status line).
 const FRAME_INTERVAL: Duration = Duration::from_millis(250);
 
@@ -69,6 +69,9 @@ pub(crate) struct App {
     opener: SystemOpener,
     version: &'static str,
     badge_percent: Option<u8>,
+    /// Debug builds only: show sample data and never talk to put.io.
+    #[cfg(debug_assertions)]
+    demo: bool,
     last_height: f32,
     last_title: String,
     _ipc_server: Option<Server>,
@@ -128,12 +131,38 @@ impl App {
             opener: SystemOpener,
             version,
             badge_percent: None,
+            #[cfg(debug_assertions)]
+            demo: std::env::var_os("PUTIO_ADDER_DEMO").is_some(),
             last_height: height,
             last_title: title(version, None),
             _ipc_server: ipc_server,
         };
-        app.dispatch(&cc.egui_ctx, Event::Started { has_token });
+        app.dispatch(
+            &cc.egui_ctx,
+            Event::Started {
+                has_token: has_token || app.is_demo(),
+            },
+        );
+        #[cfg(debug_assertions)]
+        if app.demo {
+            app.state.transfers_expanded = true;
+            let (account, transfers) = (crate::demo::account(), crate::demo::transfers());
+            app.dispatch(
+                &cc.egui_ctx,
+                Event::Polled {
+                    account: Ok(account),
+                    transfers: Ok(transfers),
+                },
+            );
+        }
         app
+    }
+
+    fn is_demo(&self) -> bool {
+        #[cfg(debug_assertions)]
+        return self.demo;
+        #[cfg(not(debug_assertions))]
+        false
     }
 
     pub(crate) fn now(&self) -> Millis {
@@ -176,6 +205,7 @@ impl App {
                     eprintln!("could not save settings: {error}");
                 }
             }
+            Effect::Poll if self.is_demo() => {}
             Effect::Poll => self.send(Job::Poll),
             Effect::AddMagnet { op, uri, parent } => self.send(Job::AddMagnet { op, uri, parent }),
             Effect::UploadTorrent { op, path, parent } => {

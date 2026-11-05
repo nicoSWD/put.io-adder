@@ -99,12 +99,29 @@ pub enum Msg {
     LinkExpired,
     // Table
     ColName,
-    ColProgress,
     ColSpeed,
     ColEta,
     ColSize,
     EtaDone,
     EtaFinishing,
+    /// "3m 07s left"
+    EtaLeft {
+        eta: String,
+    },
+    // Transfer states shown on a row
+    StatusQueued,
+    StatusWaiting,
+    StatusPreparing,
+    StatusDownloading,
+    StatusSeeding,
+    StatusFailed,
+    // Transfers panel
+    TransfersTitle,
+    SortBy,
+    SortStatus,
+    SortProgress,
+    EmptyTitle,
+    EmptyHint,
     // Menus & context menu
     MenuCancelTransfer {
         name: String,
@@ -242,16 +259,16 @@ impl Msg {
                 let base = tr!(
                     l,
                     match pending {
-                        1 => format!("1 pending transfer  |  {finished} finished"),
-                        n => format!("{n} pending transfers  |  {finished} finished"),
+                        1 => format!("1 pending transfer  ·  {finished} finished"),
+                        n => format!("{n} pending transfers  ·  {finished} finished"),
                     },
                     match pending {
-                        1 => format!("1 laufende Übertragung  |  {finished} fertig"),
-                        n => format!("{n} laufende Übertragungen  |  {finished} fertig"),
+                        1 => format!("1 laufende Übertragung  ·  {finished} fertig"),
+                        n => format!("{n} laufende Übertragungen  ·  {finished} fertig"),
                     },
                     match pending {
-                        1 => format!("1 transferencia pendiente  |  {finished} terminadas"),
-                        n => format!("{n} transferencias pendientes  |  {finished} terminadas"),
+                        1 => format!("1 transferencia pendiente  ·  {finished} terminadas"),
+                        n => format!("{n} transferencias pendientes  ·  {finished} terminadas"),
                     }
                 );
                 if failed == 0 {
@@ -263,7 +280,7 @@ impl Msg {
                         format!("{failed} fehlgeschlagen"),
                         format!("{failed} con error")
                     );
-                    format!("{base}  |  {extra}")
+                    format!("{base}  ·  {extra}")
                 }
             }
             Self::Adding { name } => tr!(
@@ -407,11 +424,46 @@ impl Msg {
             )
             .into(),
             Self::ColName => tr!(l, "Name", "Name", "Nombre").into(),
-            Self::ColProgress => tr!(l, "Status", "Status", "Estado").into(),
             Self::ColSpeed => tr!(l, "↓ Speed", "↓ Tempo", "↓ Velocidad").into(),
             Self::ColEta => tr!(l, "ETA", "Restzeit", "Restante").into(),
             Self::ColSize => tr!(l, "Size", "Größe", "Tamaño").into(),
             Self::EtaDone => tr!(l, "Done", "Fertig", "Listo").into(),
+            Self::EtaLeft { eta } => tr!(
+                l,
+                format!("{eta} left"),
+                format!("noch {eta}"),
+                format!("faltan {eta}")
+            ),
+            Self::StatusQueued => tr!(l, "In queue", "In Warteschlange", "En cola").into(),
+            Self::StatusWaiting => tr!(l, "Waiting…", "Warte…", "Esperando…").into(),
+            Self::StatusPreparing => tr!(l, "Preparing…", "Bereite vor…", "Preparando…").into(),
+            Self::StatusDownloading => tr!(l, "Downloading", "Lädt herunter", "Descargando").into(),
+            Self::StatusSeeding => tr!(
+                l,
+                "Done · seeding",
+                "Fertig · seedet",
+                "Listo · compartiendo"
+            )
+            .into(),
+            Self::StatusFailed => tr!(l, "Failed", "Fehlgeschlagen", "Con error").into(),
+            Self::TransfersTitle => tr!(l, "Transfers", "Übertragungen", "Transferencias").into(),
+            Self::SortBy => tr!(l, "Sort", "Sortieren", "Ordenar").into(),
+            Self::SortStatus => tr!(l, "Status", "Status", "Estado").into(),
+            Self::SortProgress => tr!(l, "Progress", "Fortschritt", "Progreso").into(),
+            Self::EmptyTitle => tr!(
+                l,
+                "No transfers yet",
+                "Noch keine Übertragungen",
+                "Aún no hay transferencias"
+            )
+            .into(),
+            Self::EmptyHint => tr!(
+                l,
+                "Click a magnet link or open a .torrent file and it shows up here.",
+                "Klicke einen Magnet-Link oder öffne eine .torrent-Datei, dann erscheint sie hier.",
+                "Haz clic en un enlace magnet o abre un archivo .torrent y aparecerá aquí."
+            )
+            .into(),
             Self::EtaFinishing => tr!(l, "Finishing", "Schließe ab", "Terminando").into(),
             Self::MenuCancelTransfer { name } => tr!(
                 l,
@@ -588,7 +640,7 @@ mod tests {
             finished: 4,
             failed: 0,
         };
-        assert_eq!(one.text(Locale::En), "1 pending transfer  |  4 finished");
+        assert_eq!(one.text(Locale::En), "1 pending transfer  ·  4 finished");
         let many = Msg::Summary {
             pending: 3,
             finished: 0,
@@ -596,7 +648,7 @@ mod tests {
         };
         assert_eq!(
             many.text(Locale::En),
-            "3 pending transfers  |  0 finished  |  2 failed"
+            "3 pending transfers  ·  0 finished  ·  2 failed"
         );
         assert_eq!(
             Msg::Summary {
@@ -605,7 +657,7 @@ mod tests {
                 failed: 0
             }
             .text(Locale::De),
-            "0 laufende Übertragungen  |  2 fertig"
+            "0 laufende Übertragungen  ·  2 fertig"
         );
     }
 
