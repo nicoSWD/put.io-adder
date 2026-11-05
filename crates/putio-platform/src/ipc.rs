@@ -374,9 +374,13 @@ pub fn start_or_wait(
         let waiting = Instant::now() < deadline;
         // While waiting, nothing but a focus request may reach the old instance.
         let sent: &[String] = if waiting { &[] } else { messages };
-        match start_or_forward(endpoint, sent, tx.clone(), on_message.clone())? {
-            Instance::Forwarded if waiting => thread::sleep(Duration::from_millis(250)),
-            other => return Ok(other),
+        match start_or_forward(endpoint, sent, tx.clone(), on_message.clone()) {
+            // Still there (it answered) or quitting in the middle of our focus request (a half-read
+            // frame, a refused connection): either way that is what is being waited for.
+            Ok(Instance::Forwarded) | Err(_) if waiting => {
+                thread::sleep(Duration::from_millis(250));
+            }
+            other => return other,
         }
     }
 }

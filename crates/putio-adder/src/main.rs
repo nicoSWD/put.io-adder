@@ -6,6 +6,7 @@ mod app_icon;
 mod demo;
 mod keychain;
 mod ui;
+mod window;
 mod worker;
 
 use std::sync::mpsc;
@@ -124,10 +125,13 @@ fn main() -> eframe::Result {
         ipc_server,
         version: VERSION,
     };
-    let height = app::window_height(startup.settings.transfers_expanded, false);
+    let window = window::Window::new(&startup.settings, app::initial_mode(&startup.settings));
+    let (min_size, max_size) = window.initial_limits();
     let mut viewport = eframe::egui::ViewportBuilder::default()
-        .with_inner_size([ui::WIDTH, height])
-        .with_resizable(false)
+        .with_inner_size(window.initial_size())
+        .with_min_inner_size(min_size)
+        .with_max_inner_size(max_size)
+        .with_resizable(true)
         .with_maximize_button(false)
         .with_app_id("es.nico.putio-adder")
         .with_title(app::title(None));

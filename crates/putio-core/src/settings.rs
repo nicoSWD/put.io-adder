@@ -21,6 +21,31 @@ pub enum ThemeChoice {
     Dark,
 }
 
+/// The window's size when the transfers list is open, remembered between runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WindowSize {
+    pub width: u32,
+    pub height: u32,
+}
+
+impl WindowSize {
+    /// The layout is designed for this width: the window cannot be made narrower.
+    pub const MIN_WIDTH: u32 = 560;
+    pub const MAX_WIDTH: u32 = 1400;
+    pub const MIN_HEIGHT: u32 = 360;
+    pub const MAX_HEIGHT: u32 = 3000;
+
+    /// The same size, brought into the range the window supports. A preferences file is untrusted
+    /// input: `0` or `4294967295` must not make a window nobody can use.
+    #[must_use]
+    pub fn clamped(self) -> Self {
+        Self {
+            width: self.width.clamp(Self::MIN_WIDTH, Self::MAX_WIDTH),
+            height: self.height.clamp(Self::MIN_HEIGHT, Self::MAX_HEIGHT),
+        }
+    }
+}
+
 /// A put.io folder chosen as the destination for new transfers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Folder {
@@ -45,6 +70,8 @@ pub struct Settings {
     /// Whether the transfers list was open when the app last ran.
     pub transfers_expanded: bool,
     pub theme: ThemeChoice,
+    /// How big the user made the window (with the list open). `None` until they resize it.
+    pub window_size: Option<WindowSize>,
 }
 
 impl Default for Settings {
@@ -58,6 +85,7 @@ impl Default for Settings {
             default_folder: None,
             transfers_expanded: false,
             theme: ThemeChoice::System,
+            window_size: None,
         }
     }
 }
@@ -80,6 +108,7 @@ impl Settings {
 
     fn sanitised(mut self) -> Self {
         self.version = CURRENT_VERSION;
+        self.window_size = self.window_size.map(WindowSize::clamped);
         if let Some(folder) = &mut self.default_folder {
             let name: String = folder
                 .name
@@ -132,6 +161,56 @@ mod tests {
             ..Settings::default()
         };
         assert_eq!(Settings::from_json_or_default(Some(&s.to_json())), s);
+    }
+
+    #[test]
+    fn the_window_size_round_trips_and_is_optional() {
+        assert_eq!(Settings::default().window_size, None);
+        let s = Settings {
+            window_size: Some(WindowSize {
+                width: 700,
+                height: 800,
+            }),
+            ..Settings::default()
+        };
+        assert_eq!(Settings::from_json_or_default(Some(&s.to_json())), s);
+        // A document from before the window could be resized has no such field.
+        let old = Settings::from_json_or_default(Some(r#"{"close_after_magnet": true}"#));
+        assert_eq!(old.window_size, None);
+    }
+
+    #[test]
+    fn a_hostile_window_size_is_brought_into_range() {
+        for (width, height) in [
+            (0, 0),
+            (1, 1),
+            (u32::MAX, u32::MAX),
+            (559, 359),
+            (100_000, 100_000),
+        ] {
+            let text = format!(r#"{{"window_size": {{"width": {width}, "height": {height}}}}}"#);
+            let size = Settings::from_json_or_default(Some(&text))
+                .window_size
+                .unwrap();
+            assert!(
+                (WindowSize::MIN_WIDTH..=WindowSize::MAX_WIDTH).contains(&size.width),
+                "{width}"
+            );
+            assert!(
+                (WindowSize::MIN_HEIGHT..=WindowSize::MAX_HEIGHT).contains(&size.height),
+                "{height}"
+            );
+        }
+        let fine = WindowSize {
+            width: 640,
+            height: 700,
+        };
+        assert_eq!(fine.clamped(), fine);
+        // Negative or fractional numbers are not sizes: the whole setting falls back to the defaults.
+        assert_eq!(
+            Settings::from_json_or_default(Some(r#"{"window_size": {"width": -5, "height": 10}}"#)),
+            Settings::default()
+        );
     }
 
     #[test]

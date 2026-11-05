@@ -16,7 +16,7 @@ use crate::update::UpdateAsset;
 use crate::download;
 use crate::i18n::{Locale, Msg};
 use crate::intake::{Intake, IntakeError};
-use crate::settings::{Folder, Settings, ThemeChoice};
+use crate::settings::{Folder, Settings, ThemeChoice, WindowSize};
 use crate::transfers::{self, Summary, Tracker};
 use crate::update::{self, UpdateStatus};
 
@@ -157,6 +157,8 @@ pub enum SettingsChange {
     ShowAvatar(bool),
     DefaultFolder(Option<Folder>),
     Theme(ThemeChoice),
+    /// The user resized the window.
+    WindowSize(WindowSize),
 }
 
 #[derive(Debug)]
@@ -782,6 +784,9 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
                 SettingsChange::ShowAvatar(on) => state.settings.show_avatar = on,
                 SettingsChange::DefaultFolder(folder) => state.settings.default_folder = folder,
                 SettingsChange::Theme(theme) => state.settings.theme = theme,
+                SettingsChange::WindowSize(size) => {
+                    state.settings.window_size = Some(size.clamped());
+                }
             }
             fx.push(Effect::SaveSettings(state.settings.clone()));
         }
@@ -2719,6 +2724,27 @@ mod tests {
     }
 
     // ---- settings, window, updates --------------------------------------------------------------
+
+    #[test]
+    fn a_window_size_is_clamped_and_saved() {
+        let (mut state, _) = signed_in(no_updates());
+        let fx = update(
+            &mut state,
+            0,
+            Event::SettingsChanged(SettingsChange::WindowSize(WindowSize {
+                width: 9,
+                height: 99_999,
+            })),
+        );
+        let size = state.settings.window_size.unwrap();
+        assert_eq!(
+            (size.width, size.height),
+            (WindowSize::MIN_WIDTH, WindowSize::MAX_HEIGHT)
+        );
+        assert!(
+            matches!(&fx[..], [Effect::SaveSettings(saved)] if saved.window_size == Some(size))
+        );
+    }
 
     #[test]
     fn settings_changes_are_saved() {

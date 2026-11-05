@@ -6,7 +6,7 @@ use putio_core::format;
 use putio_core::i18n::Msg;
 use putio_core::state::Event;
 
-use super::{STRIP_HEIGHT, TOP_HEIGHT, WIDTH, icons, theme};
+use super::{STRIP_HEIGHT, TOP_HEIGHT, icons, theme};
 use crate::app::App;
 
 const PAD: f32 = 16.0;
@@ -15,16 +15,18 @@ const PILL_HEIGHT: f32 = 22.0;
 
 pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
     let origin = ui.max_rect().min;
-    top_row(ui, app, origin);
-    status_row(ui, app, origin + Vec2::new(0.0, TOP_HEIGHT));
+    // The window can be resized: the rows are as wide as the window is now.
+    let width = ui.max_rect().width();
+    top_row(ui, app, origin, width);
+    status_row(ui, app, origin + Vec2::new(0.0, TOP_HEIGHT), width);
     ui.allocate_rect(
-        Rect::from_min_size(origin, Vec2::new(WIDTH, TOP_HEIGHT + STRIP_HEIGHT)),
+        Rect::from_min_size(origin, Vec2::new(width, TOP_HEIGHT + STRIP_HEIGHT)),
         Sense::hover(),
     );
 }
 
-fn top_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2) {
-    let top = Rect::from_min_size(origin, Vec2::new(WIDTH, TOP_HEIGHT));
+fn top_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2, width: f32) {
+    let top = Rect::from_min_size(origin, Vec2::new(width, TOP_HEIGHT));
     ui.painter()
         .rect_filled(top, CornerRadius::ZERO, theme::pal().header);
     ui.painter().line_segment(
@@ -101,11 +103,11 @@ fn top_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2) {
     }
 }
 
-fn status_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2) {
+fn status_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2, width: f32) {
     let ctx = ui.ctx().clone();
     let locale = app.state.locale;
     let now = app.now();
-    let strip = Rect::from_min_size(origin, Vec2::new(WIDTH, STRIP_HEIGHT));
+    let strip = Rect::from_min_size(origin, Vec2::new(width, STRIP_HEIGHT));
     ui.painter()
         .rect_filled(strip, CornerRadius::ZERO, theme::pal().subheader);
     ui.painter().line_segment(

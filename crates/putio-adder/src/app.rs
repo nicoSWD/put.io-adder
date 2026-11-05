@@ -19,12 +19,9 @@ use putio_platform::settings_store::SettingsFile;
 
 use crate::keychain::Keychain;
 use crate::ui::{self, UiState};
+use crate::window::{Mode, Window};
 use crate::worker::{Job, WorkerMsg, Workers};
 
-const COLLAPSED_HEIGHT: f32 = 96.0;
-const EXPANDED_HEIGHT: f32 = 600.0;
-/// Height while Preferences is open: tall enough for every section without scrolling.
-const PREFS_HEIGHT: f32 = 760.0;
 /// How often the UI wakes up by itself (to advance timers and the status line).
 const FRAME_INTERVAL: Duration = Duration::from_millis(250);
 
@@ -42,12 +39,12 @@ pub(crate) struct Startup {
     pub(crate) version: &'static str,
 }
 
-/// The window is tall when the list is open, and whenever the sign-in panel is showing (the code needs room).
-pub(crate) fn window_height(expanded: bool, needs_room: bool) -> f32 {
-    if expanded || needs_room {
-        EXPANDED_HEIGHT
+/// The mode the window starts in (before anything is known about the sign-in).
+pub(crate) fn initial_mode(settings: &Settings) -> Mode {
+    if settings.transfers_expanded {
+        Mode::List
     } else {
-        COLLAPSED_HEIGHT
+        Mode::Collapsed
     }
 }
 
@@ -114,7 +111,10 @@ pub(crate) struct App {
     /// Debug builds only: show sample data and never talk to put.io.
     #[cfg(debug_assertions)]
     demo: Option<String>,
-    last_height: f32,
+    /// Debug builds only: how many `PUTIO_ADDER_DEMO_TOGGLE` periods have passed.
+    #[cfg(debug_assertions)]
+    demo_round: u64,
+    window: Window,
     last_title: String,
     last_theme: ThemeChoice,
     /// Whether the icon currently shown is the dark one (`None` until the first frame).
@@ -166,7 +166,7 @@ impl App {
         };
         let demo = demo_requested();
 
-        let height = window_height(settings.transfers_expanded, false);
+        let window = Window::new(&settings, initial_mode(&settings));
         #[cfg_attr(not(debug_assertions), allow(unused_mut))]
         // only the debug-only demo start mutates it
         let mut app = Self {
@@ -186,7 +186,9 @@ impl App {
             prepared_update: None,
             #[cfg(debug_assertions)]
             demo,
-            last_height: height,
+            #[cfg(debug_assertions)]
+            demo_round: 0,
+            window,
             last_title: title(None),
             last_theme: theme,
             last_icon_dark: None,
@@ -229,7 +231,7 @@ impl App {
             return;
         }
         self.dispatch(ctx, Event::Started { has_token: true });
-        self.state.transfers_expanded = true;
+        self.state.transfers_expanded = view != "collapsed";
         // The demo drops the update check, so show its finished state instead of a spinner.
         self.state.update = putio_core::update::UpdateStatus::UpToDate;
         self.ui.prefs_open = matches!(view, "prefs" | "folders" | "prefs-update");
@@ -457,6 +459,26 @@ impl App {
             self.dispatch(ctx, Event::NotificationClicked { file_id });
         }
         self.dispatch(ctx, Event::Tick);
+        #[cfg(debug_assertions)]
+        self.demo_toggle(ctx);
+    }
+
+    /// Debug builds only: `PUTIO_ADDER_DEMO_TOGGLE=<ms>` opens and closes the list every `<ms>`
+    /// milliseconds, to look at the window animation without clicking.
+    #[cfg(debug_assertions)]
+    fn demo_toggle(&mut self, ctx: &egui::Context) {
+        let Some(every) = std::env::var("PUTIO_ADDER_DEMO_TOGGLE")
+            .ok()
+            .and_then(|ms| ms.parse::<u64>().ok())
+            .filter(|ms| *ms >= 200 && self.demo.is_some())
+        else {
+            return;
+        };
+        let round = self.now() / every;
+        if round > 0 && round != self.demo_round {
+            self.demo_round = round;
+            self.dispatch(ctx, Event::ToggleTransfers);
+        }
     }
 
     /// Resize the window and keep its title current.
@@ -479,17 +501,42 @@ impl App {
         }
     }
 
-    fn sync_window(&mut self, ctx: &egui::Context) {
-        // The sign-in panel and the Preferences dialog need the full height, whatever the list is doing.
-        let needs_room = self.ui.prefs_open
-            || matches!(
-                self.state.auth,
-                Auth::RequestingCode | Auth::Linking(_) | Auth::SignedOut(_)
+    /// Ease the window to the size its mode calls for, follow the user resizing it, and remember a size
+    /// the user settled on.
+    fn sync_size(&mut self, ctx: &egui::Context, mode: Mode) {
+        let now = Instant::now();
+        let actual = ctx.input(|input| input.viewport().inner_rect.map(|rect| rect.size()));
+        let step = self.window.step(mode, actual, now);
+        for command in step.commands {
+            ctx.send_viewport_cmd(command);
+        }
+        if step.animating {
+            ctx.request_repaint();
+        }
+        if let Some(wait) = self.window.save_due_in(now) {
+            ctx.request_repaint_after(wait);
+        }
+        if let Some(size) = step.save {
+            self.dispatch(
+                ctx,
+                Event::SettingsChanged(putio_core::state::SettingsChange::WindowSize(size)),
             );
-        let height = if self.ui.prefs_open {
-            PREFS_HEIGHT
+        }
+    }
+
+    fn sync_window(&mut self, ctx: &egui::Context) {
+        // The sign-in panel and the Preferences dialog need a fixed height, whatever the list is doing.
+        let mode = if self.ui.prefs_open {
+            Mode::Prefs
+        } else if matches!(
+            self.state.auth,
+            Auth::RequestingCode | Auth::Linking(_) | Auth::SignedOut(_)
+        ) {
+            Mode::Login
+        } else if self.state.transfers_expanded {
+            Mode::List
         } else {
-            window_height(self.state.transfers_expanded, needs_room)
+            Mode::Collapsed
         };
         self.sync_icon(ctx);
         // The theme preference changed (Preferences): switch the palette and the native title bar.
@@ -500,10 +547,7 @@ impl App {
                 self.last_theme,
             )));
         }
-        if (height - self.last_height).abs() > f32::EPSILON {
-            self.last_height = height;
-            ctx.send_viewport_cmd(ViewportCommand::InnerSize(egui::vec2(ui::WIDTH, height)));
-        }
+        self.sync_size(ctx, mode);
         // No Dock badge off macOS: show progress in the title instead.
         let progress = if cfg!(target_os = "macos") {
             None

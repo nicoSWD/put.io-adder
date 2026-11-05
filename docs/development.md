@@ -5,6 +5,7 @@ Debug builds have a **demo mode**: sample transfers and a sample account, no net
 ```sh
 PUTIO_ADDER_DEMO=list  cargo run -p putio-adder     # a list with running, queued, done and failed transfers
 PUTIO_ADDER_DEMO=empty cargo run -p putio-adder     # signed in, nothing yet
+PUTIO_ADDER_DEMO=collapsed cargo run -p putio-adder # the list closed (header only)
 PUTIO_ADDER_DEMO=login cargo run -p putio-adder     # the sign-in panel with a fake code
 PUTIO_ADDER_DEMO=prefs cargo run -p putio-adder     # the list with Preferences open
 PUTIO_ADDER_DEMO=folders cargo run -p putio-adder   # Preferences on the folder chooser page
@@ -13,6 +14,7 @@ PUTIO_ADDER_DEMO=sort cargo run -p putio-adder      # the sort drop-down open
 PUTIO_ADDER_DEMO=card-menu cargo run -p putio-adder   # a card's "⋯" menu open (also card-menu-seeding, -failed, -done)
 PUTIO_ADDER_DEMO=details cargo run -p putio-adder     # the details panel (also details-downloading, details-failed, details-long)
 PUTIO_ADDER_DEMO=update cargo run -p putio-adder    # an installable update on offer (also update-installing, -ready, -failed, -manual, prefs-update)
+PUTIO_ADDER_DEMO_TOGGLE=3000 PUTIO_ADDER_DEMO=list cargo run -p putio-adder   # opens and closes the list every 3 s (the window animation)
 PUTIO_ADDER_THEME=dark|light|system                 # override the saved theme (any debug run)
 ```
 
