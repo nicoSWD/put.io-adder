@@ -608,7 +608,7 @@ fn asset(name: &str, size: usize) -> UpdateAsset {
 #[cfg(not(any(windows, target_os = "macos")))]
 fn prepare_linux(
     exe: &Path,
-    bytes: Vec<u8>,
+    bytes: &[u8],
     declared: usize,
     progress: &dyn Fn(UpdateStage, f32),
 ) -> Result<Prepared, String> {
@@ -616,7 +616,7 @@ fn prepare_linux(
     prepare_with(exe, &asset, progress, &|_url, _max, report| {
         report(bytes.len() as u64 / 2);
         report(bytes.len() as u64);
-        Ok(bytes.clone())
+        Ok(bytes.to_vec())
     })
 }
 
@@ -628,7 +628,7 @@ fn preparing_downloads_unpacks_and_leaves_the_running_app_alone() {
     fs::write(&exe, "old").unwrap();
     let bytes = tarball(&[(ENTRY, &this_cpu_elf())]);
     let seen = std::cell::RefCell::new(Vec::new());
-    let prepared = prepare_linux(&exe, bytes.clone(), bytes.len(), &|stage, fraction| {
+    let prepared = prepare_linux(&exe, &bytes, bytes.len(), &|stage, fraction| {
         seen.borrow_mut().push((stage, fraction));
     })
     .unwrap();
@@ -663,7 +663,7 @@ fn a_cut_off_a_bad_or_foreign_download_is_refused_and_cleaned_up() {
     let staging = dir.join(STAGING_NAME);
     let none = &|_: UpdateStage, _: f32| {};
 
-    let error = prepare_linux(&exe, good.clone(), good.len() + 1, none).unwrap_err();
+    let error = prepare_linux(&exe, &good, good.len() + 1, none).unwrap_err();
     assert!(error.contains("incomplete"), "{error}");
     assert!(
         !staging.exists(),
@@ -671,12 +671,12 @@ fn a_cut_off_a_bad_or_foreign_download_is_refused_and_cleaned_up() {
     );
 
     let junk = b"definitely not an archive".to_vec();
-    assert!(prepare_linux(&exe, junk.clone(), junk.len(), none).is_err());
+    assert!(prepare_linux(&exe, &junk, junk.len(), none).is_err());
     let wrong_cpu = tarball(&[(ENTRY, &elf_bytes(0x28))]);
-    let error = prepare_linux(&exe, wrong_cpu.clone(), wrong_cpu.len(), none).unwrap_err();
+    let error = prepare_linux(&exe, &wrong_cpu, wrong_cpu.len(), none).unwrap_err();
     assert!(error.contains("different kind of processor"), "{error}");
     let script = tarball(&[(ENTRY, b"#!/bin/sh\necho owned\n#...............")]);
-    assert!(prepare_linux(&exe, script.clone(), script.len(), none).is_err());
+    assert!(prepare_linux(&exe, &script, script.len(), none).is_err());
     assert!(!staging.exists());
     assert_eq!(fs::read_to_string(&exe).unwrap(), "old");
 

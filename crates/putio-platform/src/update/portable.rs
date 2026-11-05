@@ -156,6 +156,7 @@ pub(super) enum Environment {
     /// Everything this process has (Linux). It must carry `DISPLAY`/`WAYLAND_DISPLAY`/
     /// `XDG_RUNTIME_DIR`/`DBUS_SESSION_BUS_ADDRESS` (the Secret Service) or the new process would
     /// start broken, and nothing is put on the command line.
+    #[cfg_attr(windows, allow(dead_code))]
     Inherit,
 }
 

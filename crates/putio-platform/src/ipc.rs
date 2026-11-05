@@ -165,6 +165,7 @@ impl Endpoint {
 }
 
 /// Makes probe-file names unique within a process (several launches can be tested in one).
+#[cfg(unix)]
 static PROBE_SERIAL: AtomicUsize = AtomicUsize::new(0);
 
 /// Create `dir` (mode `0700`) if needed and refuse to use it unless it is a real directory, owned by
@@ -205,6 +206,7 @@ fn ensure_private_dir(dir: &Path) -> Result<(), IpcError> {
 }
 
 #[cfg(not(unix))]
+#[allow(clippy::unnecessary_wraps)] // the same signature as the Unix version
 fn ensure_private_dir(_dir: &Path) -> Result<(), IpcError> {
     Ok(())
 }
