@@ -211,6 +211,13 @@ impl App {
         // The demo drops the update check, so show its finished state instead of a spinner.
         self.state.update = putio_core::update::UpdateStatus::UpToDate;
         self.ui.prefs_open = view == "prefs" || view == "folders";
+        self.ui.open_menu_once = view == "menu" || view == "menu-update";
+        if view == "menu-update" {
+            self.state.update = putio_core::update::UpdateStatus::Available {
+                version: "0.2.0".into(),
+                url: "https://github.com/nicoSWD/putio-adder-rs/releases/tag/v0.2.0".into(),
+            };
+        }
         if view == "folders" {
             self.ui.folders = crate::ui::prefs::FolderPicker::demo();
         }
@@ -323,6 +330,9 @@ impl App {
 
     fn pump(&mut self, ctx: &egui::Context) {
         self.token_loaded(ctx);
+        if ctx.input_mut(|input| input.consume_shortcut(&ui::menu::preferences_shortcut())) {
+            self.ui.prefs_open = true;
+        }
         while let Ok(message) = self.from_worker.try_recv() {
             match message {
                 WorkerMsg::Core(event) => self.dispatch(ctx, event),

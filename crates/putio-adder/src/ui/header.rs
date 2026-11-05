@@ -1,9 +1,7 @@
 //! The top of the window: logo and account on black, then a status row with the list toggle, the
 //! current message and the quota pill.
 
-use eframe::egui::{
-    self, Align2, CornerRadius, Pos2, Rect, RectAlign, Sense, Stroke, StrokeKind, Vec2,
-};
+use eframe::egui::{self, Align2, CornerRadius, Pos2, Rect, Sense, Stroke, StrokeKind, Vec2};
 use putio_core::format;
 use putio_core::i18n::Msg;
 use putio_core::state::Event;
@@ -65,7 +63,16 @@ fn top_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2) {
             theme::pal().muted
         },
     );
-    menu_popup(&menu, app);
+    super::menu::show(&menu, app);
+    // A yellow dot on the button when a new version is waiting.
+    if matches!(
+        app.state.update,
+        putio_core::update::UpdateStatus::Available { .. }
+    ) {
+        let dot = menu_rect.right_top() + Vec2::new(-5.0, 6.0);
+        ui.painter().circle_filled(dot, 5.5, theme::pal().header);
+        ui.painter().circle_filled(dot, 3.8, theme::YELLOW);
+    }
 
     // Account: name, then a yellow avatar with the initial. (A Gravatar would need your e-mail hash
     // sent to a third party, so the initial is the default.)
@@ -92,40 +99,6 @@ fn top_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2) {
             theme::pal().text,
         );
     }
-}
-
-fn menu_popup(button: &egui::Response, app: &mut App) {
-    let ctx = button.ctx.clone();
-    let locale = app.state.locale;
-    egui::Popup::menu(button)
-        .align(RectAlign::BOTTOM_END)
-        .width(210.0)
-        .show(|ui| {
-            if ui.button(Msg::MenuPreferences.text(locale)).clicked() {
-                app.ui.prefs_open = true;
-            }
-            if ui.button(Msg::MenuCheckUpdates.text(locale)).clicked() {
-                app.dispatch(
-                    &ctx,
-                    Event::CheckForUpdates {
-                        user_initiated: true,
-                    },
-                );
-            }
-            if ui.button(Msg::MenuProjectPage.text(locale)).clicked() {
-                app.dispatch(&ctx, Event::OpenProjectPage);
-            }
-            if app.state.is_signed_in() {
-                ui.separator();
-                if ui.button(Msg::MenuSignOut.text(locale)).clicked() {
-                    app.dispatch(&ctx, Event::SignOutRequested);
-                }
-            }
-            ui.separator();
-            if ui.button("Quit").clicked() {
-                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-            }
-        });
 }
 
 fn status_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2) {

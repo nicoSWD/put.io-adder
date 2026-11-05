@@ -3,6 +3,7 @@
 pub(crate) mod header;
 pub(crate) mod icons;
 pub(crate) mod login;
+pub(crate) mod menu;
 pub(crate) mod prefs;
 pub(crate) mod summary;
 pub(crate) mod table;
@@ -29,6 +30,8 @@ pub(crate) struct UiState {
     pub(crate) sort: SortKey,
     pub(crate) ascending: bool,
     pub(crate) prefs_open: bool,
+    /// Debug previews: open the "..." menu on the first frame.
+    pub(crate) open_menu_once: bool,
     /// The transfer last clicked (highlighted).
     pub(crate) selected: Option<i64>,
     pub(crate) folders: prefs::FolderPicker,
@@ -40,6 +43,7 @@ impl Default for UiState {
             sort: SortKey::Default,
             ascending: true,
             prefs_open: false,
+            open_menu_once: false,
             selected: None,
             folders: prefs::FolderPicker::default(),
         }

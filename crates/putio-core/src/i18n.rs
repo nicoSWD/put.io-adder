@@ -138,6 +138,7 @@ pub enum Msg {
     MenuCheckUpdates,
     MenuProjectPage,
     MenuSignOut,
+    MenuQuit,
     TooltipToggleTransfers,
     // Preferences
     PrefsTitle,
@@ -523,6 +524,7 @@ impl Msg {
                 "Página del proyecto en GitHub"
             )
             .into(),
+            Self::MenuQuit => tr!(l, "Quit", "Beenden", "Salir").into(),
             Self::MenuSignOut => tr!(l, "Sign out", "Abmelden", "Cerrar sesión").into(),
             Self::TooltipToggleTransfers => tr!(
                 l,

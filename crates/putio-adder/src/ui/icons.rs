@@ -53,6 +53,109 @@ pub(crate) fn glyph(painter: &Painter, center: Pos2, glyph: Glyph, scale: f32, c
     }
 }
 
+/// Icons for the "..." menu, drawn about 16 px square around a centre.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MenuIcon {
+    Settings,
+    Refresh,
+    Update,
+    External,
+    SignOut,
+    Power,
+}
+
+/// A circular arc as a polyline (angles in degrees, 0 = right, increasing counter-clockwise on screen).
+/// Returns the end point and the (unit) direction of travel there, for an arrow head.
+fn arc(
+    painter: &Painter,
+    center: Pos2,
+    radius: f32,
+    from: f32,
+    to: f32,
+    stroke: Stroke,
+) -> (Pos2, Vec2) {
+    const STEPS: u8 = 16;
+    let point = |degrees: f32| {
+        let angle = degrees.to_radians();
+        center + Vec2::new(angle.cos(), -angle.sin()) * radius
+    };
+    let mut previous = point(from);
+    let mut direction = Vec2::ZERO;
+    for step in 1..=STEPS {
+        let degrees = from + (to - from) * f32::from(step) / f32::from(STEPS);
+        let next = point(degrees);
+        painter.line_segment([previous, next], stroke);
+        direction = (next - previous).normalized();
+        previous = next;
+    }
+    (previous, direction)
+}
+
+pub(crate) fn menu_icon(painter: &Painter, center: Pos2, icon: MenuIcon, color: Color32) {
+    let stroke = Stroke::new(1.6, color);
+    let at = |x: f32, y: f32| center + Vec2::new(x, y);
+    match icon {
+        MenuIcon::Settings => {
+            // A cog: a ring with eight short teeth.
+            painter.circle_stroke(center, 3.2, stroke);
+            painter.circle_stroke(center, 5.6, Stroke::new(1.6, color));
+            for index in 0_u8..8 {
+                let angle = f32::from(index) * std::f32::consts::FRAC_PI_4;
+                let direction = Vec2::new(angle.cos(), angle.sin());
+                painter.line_segment(
+                    [center + direction * 6.2, center + direction * 8.0],
+                    Stroke::new(2.2, color),
+                );
+            }
+        }
+        MenuIcon::Refresh => {
+            // Nearly a full circle with an arrow head at its end, pointing the way the arc runs.
+            let (tip, direction) = arc(painter, center, 6.0, 60.0, 335.0, stroke);
+            let side = Vec2::new(direction.y, -direction.x);
+            painter.line_segment([tip, tip - direction * 4.6 + side * 3.4], stroke);
+            painter.line_segment([tip, tip - direction * 4.6 - side * 3.4], stroke);
+        }
+        MenuIcon::Update => {
+            // An arrow pointing down into a tray.
+            painter.line_segment([at(0.0, -6.5), at(0.0, 3.0)], stroke);
+            painter.line_segment([at(-4.0, -1.0), at(0.0, 3.0)], stroke);
+            painter.line_segment([at(4.0, -1.0), at(0.0, 3.0)], stroke);
+            painter.line_segment([at(-6.0, 6.5), at(6.0, 6.5)], stroke);
+        }
+        MenuIcon::External => {
+            // A box with a corner cut out, and an arrow leaving through the gap.
+            painter.line_segment([at(-1.5, -6.0), at(-6.0, -6.0)], stroke);
+            painter.line_segment([at(-6.0, -6.0), at(-6.0, 6.0)], stroke);
+            painter.line_segment([at(-6.0, 6.0), at(6.0, 6.0)], stroke);
+            painter.line_segment([at(6.0, 6.0), at(6.0, 1.5)], stroke);
+            painter.line_segment([at(-1.0, 1.0), at(6.5, -6.5)], stroke);
+            painter.line_segment([at(1.0, -6.5), at(6.5, -6.5)], stroke);
+            painter.line_segment([at(6.5, -6.5), at(6.5, -1.0)], stroke);
+        }
+        MenuIcon::SignOut => {
+            // A doorway "[" and an arrow going out of it.
+            painter.line_segment([at(-1.0, -6.5), at(-6.5, -6.5)], stroke);
+            painter.line_segment([at(-6.5, -6.5), at(-6.5, 6.5)], stroke);
+            painter.line_segment([at(-6.5, 6.5), at(-1.0, 6.5)], stroke);
+            painter.line_segment([at(-2.0, 0.0), at(7.0, 0.0)], stroke);
+            painter.line_segment([at(3.5, -3.5), at(7.0, 0.0)], stroke);
+            painter.line_segment([at(3.5, 3.5), at(7.0, 0.0)], stroke);
+        }
+        MenuIcon::Power => {
+            // The power symbol: a ring open at the top, with a stroke through the gap.
+            arc(
+                painter,
+                center + Vec2::new(0.0, 0.8),
+                6.0,
+                125.0,
+                415.0,
+                stroke,
+            );
+            painter.line_segment([at(0.0, -7.5), at(0.0, -0.5)], Stroke::new(1.8, color));
+        }
+    }
+}
+
 /// The round badge at the left of a transfer row, by state.
 pub(crate) fn status_badge(painter: &Painter, center: Pos2, status: TransferStatus) {
     let radius = 12.0;
