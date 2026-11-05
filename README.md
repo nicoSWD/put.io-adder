@@ -10,12 +10,16 @@ A small cross-platform app for **macOS, Windows and Linux** (x86-64 and arm64), 
 - Optional: choose the put.io folder new transfers are saved in
 - Light and dark theme, a resizable window, English, German and Spanish
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/screenshot-dark.png">
-    <img src="docs/images/screenshot-light.png" alt="put.io adder showing running, queued, finished and failed transfers" width="420">
-  </picture>
-</p>
+<table>
+  <tr>
+    <th align="center">Light</th>
+    <th align="center">Dark</th>
+  </tr>
+  <tr>
+    <td><img src="docs/images/screenshot-light.png" alt="put.io adder in the light theme, showing running, queued, finished and failed transfers" width="420"></td>
+    <td><img src="docs/images/screenshot-dark.png" alt="put.io adder in the dark theme, showing running, queued, finished and failed transfers" width="420"></td>
+  </tr>
+</table>
 
 ## Install
 
