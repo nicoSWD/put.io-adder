@@ -1,0 +1,184 @@
+//! Reading a `.torrent` file that arrived from the OS (argv, Finder, IPC) without trusting it.
+
+use std::fs::File;
+use std::io::{self, Read};
+use std::path::Path;
+
+use putio_api::torrent::{self, InvalidTorrent, MAX_TORRENT_BYTES};
+
+/// Longest file name kept for the label sent to put.io.
+const MAX_NAME_CHARS: usize = 255;
+
+#[derive(Debug, thiserror::Error)]
+pub enum TorrentFileError {
+    #[error("not a regular file")]
+    NotAFile,
+    #[error("the file is larger than {} MiB", MAX_TORRENT_BYTES / 1024 / 1024)]
+    TooLarge,
+    #[error(transparent)]
+    Invalid(#[from] InvalidTorrent),
+    #[error("could not read the file: {0}")]
+    Io(#[from] io::Error),
+}
+
+/// A `.torrent` that passed every check.
+#[derive(Debug)]
+pub struct TorrentFile {
+    /// File name without directories, control characters removed.
+    pub name: String,
+    pub bytes: Vec<u8>,
+}
+
+/// Read `path` if it is a regular file of sensible size that looks like a torrent.
+///
+/// The path may point at a FIFO, a device (`/dev/zero`), a directory or a huge file: those are
+/// refused from the metadata *before* the file is opened, the size is checked again on the open
+/// handle, and the read itself is capped, so nothing can block or exhaust memory.
+pub fn read_torrent(path: &Path) -> Result<TorrentFile, TorrentFileError> {
+    let before = std::fs::metadata(path)?;
+    if !before.is_file() {
+        return Err(TorrentFileError::NotAFile);
+    }
+    if before.len() > MAX_TORRENT_BYTES as u64 {
+        return Err(TorrentFileError::TooLarge);
+    }
+
+    let file = File::open(path)?;
+    let opened = file.metadata()?;
+    if !opened.is_file() {
+        return Err(TorrentFileError::NotAFile);
+    }
+    if opened.len() > MAX_TORRENT_BYTES as u64 {
+        return Err(TorrentFileError::TooLarge);
+    }
+
+    let mut bytes = Vec::new();
+    // One byte more than allowed, so a file that grew after the checks is noticed.
+    file.take(MAX_TORRENT_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() > MAX_TORRENT_BYTES {
+        return Err(TorrentFileError::TooLarge);
+    }
+    torrent::validate(&bytes)?;
+
+    let name: String = path
+        .file_name()
+        .map(|n| {
+            n.to_string_lossy()
+                .chars()
+                .filter(|c| !c.is_control())
+                .take(MAX_NAME_CHARS)
+                .collect()
+        })
+        .unwrap_or_default();
+    Ok(TorrentFile {
+        name: if name.is_empty() {
+            "upload.torrent".into()
+        } else {
+            name
+        },
+        bytes,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::*;
+    use crate::settings_store::test_dir::TempDir;
+
+    const VALID: &[u8] = b"d8:announce3:url4:infod4:name1:aee";
+
+    fn dir(label: &str) -> TempDir {
+        let dir = TempDir::new(label);
+        fs::create_dir_all(&dir.0).unwrap();
+        dir
+    }
+
+    #[test]
+    fn reads_a_valid_torrent_and_names_it() {
+        let tmp = dir("torrent-ok");
+        let path = tmp.0.join("My Show.torrent");
+        fs::write(&path, VALID).unwrap();
+        let file = read_torrent(&path).unwrap();
+        assert_eq!(file.name, "My Show.torrent");
+        assert_eq!(file.bytes, VALID);
+    }
+
+    #[test]
+    fn refuses_directories_and_missing_files() {
+        let tmp = dir("torrent-dir");
+        assert!(matches!(
+            read_torrent(&tmp.0),
+            Err(TorrentFileError::NotAFile)
+        ));
+        assert!(matches!(
+            read_torrent(&tmp.0.join("nope.torrent")),
+            Err(TorrentFileError::Io(_))
+        ));
+    }
+
+    #[test]
+    fn refuses_oversized_files_without_reading_them() {
+        let tmp = dir("torrent-big");
+        let path = tmp.0.join("big.torrent");
+        let file = File::create(&path).unwrap();
+        file.set_len(MAX_TORRENT_BYTES as u64 + 1).unwrap(); // sparse: nothing is written
+        assert!(matches!(
+            read_torrent(&path),
+            Err(TorrentFileError::TooLarge)
+        ));
+    }
+
+    #[test]
+    fn refuses_files_that_are_not_torrents() {
+        let tmp = dir("torrent-bad");
+        let path = tmp.0.join("a.torrent");
+        fs::write(&path, b"<html>not a torrent</html>").unwrap();
+        assert!(matches!(
+            read_torrent(&path),
+            Err(TorrentFileError::Invalid(InvalidTorrent::NotATorrent))
+        ));
+        fs::write(&path, b"").unwrap();
+        assert!(matches!(
+            read_torrent(&path),
+            Err(TorrentFileError::Invalid(InvalidTorrent::Empty))
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn refuses_devices_and_fifos_without_blocking() {
+        let tmp = dir("torrent-special");
+        let link = tmp.0.join("zero.torrent");
+        std::os::unix::fs::symlink("/dev/zero", &link).unwrap();
+        assert!(matches!(
+            read_torrent(&link),
+            Err(TorrentFileError::NotAFile)
+        ));
+
+        let fifo = tmp.0.join("pipe.torrent");
+        let status = std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        // Would block forever on open() if the metadata check did not come first.
+        let started = std::time::Instant::now();
+        assert!(matches!(
+            read_torrent(&fifo),
+            Err(TorrentFileError::NotAFile)
+        ));
+        assert!(started.elapsed() < std::time::Duration::from_secs(1));
+    }
+
+    #[test]
+    fn control_characters_are_removed_from_the_name() {
+        let tmp = dir("torrent-name");
+        let path = tmp.0.join("a\u{7}b.torrent");
+        if fs::write(&path, VALID).is_ok() {
+            assert_eq!(read_torrent(&path).unwrap().name, "ab.torrent");
+        }
+    }
+}

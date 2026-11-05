@@ -6,8 +6,16 @@
 set -eu
 cd "$(dirname "$0")/.."
 
+LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 work=$(mktemp -d "${TMPDIR:-/tmp}/putio-probe.XXXXXX")
 app="$work/Probe.app"
+# The bundle registers itself as a magnet: handler candidate. Always undo that, even on failure.
+cleanup() {
+    pkill -f "$app/Contents/MacOS/Probe" 2>/dev/null || true
+    "$LSREGISTER" -u "$app" 2>/dev/null || true
+    rm -rf "$work"
+}
+trap cleanup EXIT INT TERM
 log=/tmp/putio-adder-probe.log
 hash=0123456789abcdef0123456789abcdef01234567
 
@@ -37,7 +45,7 @@ cat > "$app/Contents/Info.plist" <<PLIST
 </dict></plist>
 PLIST
 codesign --force --sign - "$app" >/dev/null 2>&1
-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$app"
+"$LSREGISTER" -f "$app"
 
 printf 'd8:announce0:4:infod4:name1:aee' > "$work/Sample Show.torrent"
 stop() { pkill -f "$app/Contents/MacOS/Probe" 2>/dev/null || true; sleep 1; }
@@ -57,5 +65,4 @@ for expected in "ok: Cold Magnet" "ok: Warm Magnet" "ok: Sample Show.torrent" "b
 done
 cold=$(grep -c "Sample Show.torrent" "$log" || true)
 [ "$cold" -ge 2 ] || { echo "MISSING: torrent delivered in both warm and cold launches (saw $cold)"; fail=1; }
-rm -rf "$work"
 [ "$fail" -eq 0 ] && echo "PASS" || { echo "FAIL"; exit 1; }

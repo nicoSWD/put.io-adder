@@ -38,6 +38,8 @@ const ACCEPT_POLL: Duration = Duration::from_millis(50);
 /// Connections handled at the same time. A stalled client occupies a slot for at most [`IO_DEADLINE`];
 /// beyond this many, new connections are dropped instead of queued.
 const MAX_CONNECTIONS: usize = 8;
+/// How long a launch waits for another launch to finish deciding who is the primary instance.
+const LOCK_WAIT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, thiserror::Error)]
 pub enum IpcError {
@@ -162,6 +164,9 @@ impl Endpoint {
     }
 }
 
+/// Makes probe-file names unique within a process (several launches can be tested in one).
+static PROBE_SERIAL: AtomicUsize = AtomicUsize::new(0);
+
 /// Create `dir` (mode `0700`) if needed and refuse to use it unless it is a real directory, owned by
 /// us, and not accessible to group or others.
 #[cfg(unix)]
@@ -185,7 +190,11 @@ fn ensure_private_dir(dir: &Path) -> Result<(), IpcError> {
         )));
     }
     // A file we create is owned by us; the directory must have the same owner.
-    let probe = dir.join(format!(".probe-{}", std::process::id()));
+    let probe = dir.join(format!(
+        ".probe-{}-{}",
+        std::process::id(),
+        PROBE_SERIAL.fetch_add(1, Ordering::Relaxed)
+    ));
     std::fs::write(&probe, b"")?;
     let probe_uid = std::fs::metadata(&probe).map(|m| m.uid());
     let _ = std::fs::remove_file(&probe);
@@ -261,7 +270,43 @@ pub enum Instance {
     Forwarded,
 }
 
+/// Serialises start-up between launches (Unix): "is anyone listening? if not, become the listener"
+/// must not interleave between two processes, or a second launch could delete the first one's
+/// freshly bound socket. Held only during that decision, never while running.
+struct StartupLock(#[allow(dead_code)] Option<std::fs::File>);
+
+impl StartupLock {
+    fn acquire(endpoint: &Endpoint) -> Result<Self, IpcError> {
+        let Endpoint::Path(socket) = endpoint else {
+            return Ok(Self(None)); // named pipes cannot go stale; creation is atomic
+        };
+        let mut options = std::fs::OpenOptions::new();
+        options.create(true).truncate(false).write(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let file = options.open(socket.with_file_name("ipc.lock"))?;
+        let deadline = Instant::now() + LOCK_WAIT;
+        loop {
+            match file.try_lock() {
+                Ok(()) => return Ok(Self(Some(file))),
+                Err(std::fs::TryLockError::WouldBlock) if Instant::now() < deadline => {
+                    thread::sleep(Duration::from_millis(20));
+                }
+                Err(std::fs::TryLockError::WouldBlock) => return Err(IpcError::Timeout),
+                Err(std::fs::TryLockError::Error(error)) => return Err(error.into()),
+            }
+        }
+    }
+}
+
 /// Become the primary instance, or hand `messages` to the one that already is.
+///
+/// A running instance is **never replaced**: the socket is only taken over when connecting to it was
+/// *refused* (a file left behind by a crash) or it does not exist. If an instance exists but is slow or
+/// unhappy, this returns an error instead of starting a second one.
 ///
 /// `on_message` runs after each received message (use it to wake the UI).
 pub fn start_or_forward(
@@ -270,19 +315,32 @@ pub fn start_or_forward(
     tx: Sender<String>,
     on_message: impl Fn() + Send + Sync + 'static,
 ) -> Result<Instance, IpcError> {
-    // Two launches at the same moment can both see "nobody is listening"; the loser's bind fails
-    // with AddrInUse, and the next round of this loop finds the winner.
+    if let Some(dir) = endpoint.socket_dir() {
+        ensure_private_dir(dir)?;
+    }
+    let _lock = StartupLock::acquire(endpoint)?;
+
     let mut attempts = 0;
     loop {
         attempts += 1;
         match forward(endpoint, messages) {
             Ok(()) => return Ok(Instance::Forwarded),
-            // The running instance is there but unhappy with the message: do not start a second one.
-            Err(error @ (IpcError::Rejected | IpcError::TooLarge)) => return Err(error),
-            Err(_) => {}
+            // Nobody is listening: free to take the socket.
+            Err(IpcError::Io(error))
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::ConnectionRefused | io::ErrorKind::NotFound
+                ) => {}
+            // Someone is there but did not cooperate: do not start a second instance.
+            Err(error) => return Err(error),
         }
-        if let Some(dir) = endpoint.socket_dir() {
-            ensure_private_dir(dir)?;
+        // Only now is it safe to remove a socket file left by a crashed instance.
+        if let Endpoint::Path(path) = endpoint {
+            match std::fs::remove_file(path) {
+                Ok(()) => {}
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
         }
         match bind(endpoint) {
             Ok(listener) => {
@@ -290,6 +348,7 @@ pub fn start_or_forward(
                     endpoint, listener, tx, on_message,
                 )?));
             }
+            // Lost a race (named pipes): the winner is reachable now, go round again and forward.
             Err(error) if error.kind() == io::ErrorKind::AddrInUse && attempts < 5 => {
                 thread::sleep(Duration::from_millis(50));
             }
@@ -298,13 +357,10 @@ pub fn start_or_forward(
     }
 }
 
+/// Create the listener **without** `try_overwrite`: that option deletes the socket file whenever the
+/// address is in use, which would steal a live instance's socket.
 fn bind(endpoint: &Endpoint) -> io::Result<interprocess::local_socket::Listener> {
-    // `try_overwrite` removes a stale socket file left by a crashed instance (we only get here
-    // after a failed connect, so nobody is listening).
-    ListenerOptions::new()
-        .name(endpoint.name()?)
-        .try_overwrite(true)
-        .create_sync()
+    ListenerOptions::new().name(endpoint.name()?).create_sync()
 }
 
 fn serve(
@@ -622,6 +678,90 @@ mod tests {
                 rx.recv_timeout(Duration::from_secs(2)).unwrap(),
                 "after-crash"
             );
+        }
+
+        #[test]
+        fn a_live_socket_is_never_stolen() {
+            let dir = short_dir("steal");
+            let endpoint = endpoint(&dir);
+            let (_server, rx) = primary(&endpoint);
+            // Binding the same address again must fail rather than delete the live socket.
+            let error = bind(&endpoint).unwrap_err();
+            assert_eq!(error.kind(), io::ErrorKind::AddrInUse);
+            // The original instance still works.
+            forward(&endpoint, &["still-mine".into()]).unwrap();
+            assert_eq!(
+                rx.recv_timeout(Duration::from_secs(2)).unwrap(),
+                "still-mine"
+            );
+        }
+
+        #[test]
+        fn simultaneous_launches_produce_exactly_one_primary() {
+            let dir = short_dir("race");
+            let endpoint = Arc::new(endpoint(&dir));
+            let (tx, rx) = mpsc::channel();
+            let barrier = Arc::new(std::sync::Barrier::new(8));
+            let handles: Vec<_> = (0..8)
+                .map(|i| {
+                    let (endpoint, tx, barrier) =
+                        (Arc::clone(&endpoint), tx.clone(), Arc::clone(&barrier));
+                    thread::spawn(move || {
+                        barrier.wait();
+                        start_or_forward(&endpoint, &[format!("launch-{i}")], tx, || {}).unwrap()
+                    })
+                })
+                .collect();
+            let instances: Vec<Instance> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+            let primaries = instances
+                .iter()
+                .filter(|i| matches!(i, Instance::Primary(_)))
+                .count();
+            assert_eq!(
+                primaries, 1,
+                "exactly one launch may become the primary instance"
+            );
+            // Everyone else forwarded: seven messages reached the primary.
+            let mut received = Vec::new();
+            while let Ok(message) = rx.recv_timeout(Duration::from_secs(2)) {
+                received.push(message);
+            }
+            assert_eq!(received.len(), 7, "{received:?}");
+        }
+
+        #[test]
+        fn an_unresponsive_instance_is_not_replaced() {
+            let dir = short_dir("hung");
+            ensure_private_dir(&dir.0).unwrap();
+            // A "primary" that accepts connections into its backlog but never answers.
+            let hung = std::os::unix::net::UnixListener::bind(dir.0.join("ipc.sock")).unwrap();
+            let (tx, _rx) = mpsc::channel();
+            let error = start_or_forward(&endpoint(&dir), &["x".into()], tx, || {}).unwrap_err();
+            assert!(matches!(error, IpcError::Timeout), "{error:?}");
+            assert!(
+                dir.0.join("ipc.sock").exists(),
+                "the other instance's socket must not be deleted"
+            );
+            drop(hung);
+        }
+
+        #[test]
+        fn the_connection_cap_drops_excess_clients_and_recovers() {
+            let dir = short_dir("cap");
+            let endpoint = endpoint(&dir);
+            let (_server, rx) = primary(&endpoint);
+            let silent: Vec<Stream> = (0..MAX_CONNECTIONS + 2)
+                .map(|_| Stream::connect(endpoint.name().unwrap()).unwrap())
+                .collect();
+            thread::sleep(Duration::from_millis(300));
+            // All slots are busy waiting on silent clients: a legitimate client is turned away…
+            assert!(forward(&endpoint, &["too-early".into()]).is_err());
+            // …and works again once the silent ones have timed out.
+            thread::sleep(IO_DEADLINE + Duration::from_millis(500));
+            forward(&endpoint, &["later".into()]).unwrap();
+            drop(silent);
+            assert_eq!(rx.recv_timeout(Duration::from_secs(2)).unwrap(), "later");
+            assert!(rx.try_recv().is_err());
         }
 
         #[test]

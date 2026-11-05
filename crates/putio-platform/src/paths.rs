@@ -26,11 +26,45 @@ impl Os {
     }
 }
 
+impl Os {
+    const fn separator(self) -> char {
+        match self {
+            Self::Windows => '\\',
+            Self::MacOs | Self::Linux => '/',
+        }
+    }
+}
+
+/// Whether `path` is absolute *on `os`*, whatever the host. (`Path::is_absolute` answers for the host,
+/// so `/home/me` would be "relative" when these functions are tested on Windows.)
+#[must_use]
+pub fn is_absolute_for(os: Os, path: &str) -> bool {
+    match os {
+        Os::MacOs | Os::Linux => path.starts_with('/'),
+        Os::Windows => {
+            let bytes = path.as_bytes();
+            let drive = bytes.first().is_some_and(u8::is_ascii_alphabetic)
+                && bytes.get(1) == Some(&b':')
+                && matches!(bytes.get(2), Some(b'\\' | b'/'));
+            drive || path.starts_with("\\\\")
+        }
+    }
+}
+
 /// An environment variable that must be an absolute path to be trusted.
-fn absolute(env: &dyn Fn(&str) -> Option<String>, name: &str) -> Option<PathBuf> {
-    let value = env(name)?;
-    let path = PathBuf::from(value);
-    (path.is_absolute() && !path.as_os_str().is_empty()).then_some(path)
+fn absolute(os: Os, env: &dyn Fn(&str) -> Option<String>, name: &str) -> Option<String> {
+    env(name).filter(|value| is_absolute_for(os, value))
+}
+
+/// `base` + `parts`, joined with `os`'s separator (a trailing separator on `base` is not doubled).
+fn join(os: Os, base: &str, parts: &[&str]) -> String {
+    let sep = os.separator();
+    let mut out = base.trim_end_matches(sep).to_owned();
+    for part in parts {
+        out.push(sep);
+        out.push_str(part);
+    }
+    out
 }
 
 /// Where `settings.json` lives.
@@ -41,14 +75,18 @@ fn absolute(env: &dyn Fn(&str) -> Option<String>, name: &str) -> Option<PathBuf>
 #[must_use]
 pub fn config_dir(os: Os, env: &dyn Fn(&str) -> Option<String>) -> Option<PathBuf> {
     let base = match os {
-        Os::MacOs => absolute(env, "HOME")?
-            .join("Library")
-            .join("Application Support"),
-        Os::Windows => absolute(env, "APPDATA")?,
-        Os::Linux => absolute(env, "XDG_CONFIG_HOME")
-            .or_else(|| absolute(env, "HOME").map(|home| home.join(".config")))?,
+        Os::MacOs => join(
+            os,
+            &absolute(os, env, "HOME")?,
+            &["Library", "Application Support"],
+        ),
+        Os::Windows => absolute(os, env, "APPDATA")?,
+        Os::Linux => match absolute(os, env, "XDG_CONFIG_HOME") {
+            Some(dir) => dir,
+            None => join(os, &absolute(os, env, "HOME")?, &[".config"]),
+        },
     };
-    Some(base.join(APP_DIR))
+    Some(PathBuf::from(join(os, &base, &[APP_DIR])))
 }
 
 /// A per-user directory for the IPC socket (Unix only; Windows uses a named pipe).
@@ -60,11 +98,13 @@ pub fn config_dir(os: Os, env: &dyn Fn(&str) -> Option<String>) -> Option<PathBu
 pub fn runtime_dir(os: Os, env: &dyn Fn(&str) -> Option<String>) -> Option<PathBuf> {
     let base = match os {
         Os::Windows => return None,
-        Os::MacOs => absolute(env, "TMPDIR"),
-        Os::Linux => absolute(env, "XDG_RUNTIME_DIR"),
+        Os::MacOs => absolute(os, env, "TMPDIR"),
+        Os::Linux => absolute(os, env, "XDG_RUNTIME_DIR"),
     };
-    base.map(|dir| dir.join(APP_DIR))
-        .or_else(|| config_dir(os, env))
+    match base {
+        Some(dir) => Some(PathBuf::from(join(os, &dir, &[APP_DIR]))),
+        None => config_dir(os, env),
+    }
 }
 
 /// Production environment lookup.

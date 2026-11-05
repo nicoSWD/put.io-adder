@@ -181,6 +181,18 @@ mod tests {
     }
 
     #[test]
+    fn windows_drive_urls_become_drive_paths() {
+        assert_eq!(
+            Intake::parse("file:///C:/Users/me/a%20b.torrent").unwrap(),
+            Intake::TorrentFile("C:/Users/me/a b.torrent".into())
+        );
+        assert_eq!(
+            Intake::parse("file://localhost/d:/x.torrent").unwrap(),
+            Intake::TorrentFile("d:/x.torrent".into())
+        );
+    }
+
+    #[test]
     fn hostile_file_urls_are_rejected() {
         for bad in [
             "file://evil.example/share/a.torrent",

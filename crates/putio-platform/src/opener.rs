@@ -48,13 +48,26 @@ pub trait UrlOpener: Send + Sync {
 }
 
 /// The program and arguments used to open `url` on `os`. Never a shell.
+///
+/// On Windows the program is `explorer.exe` by absolute path under `%SystemRoot%`: a bare name would be
+/// searched for in the application's own directory first.
 #[must_use]
-pub fn command_for(os: Os, url: &str) -> (&'static str, Vec<String>) {
-    match os {
-        Os::MacOs => ("/usr/bin/open", vec![url.to_owned()]),
-        Os::Windows => ("explorer.exe", vec![url.to_owned()]),
-        Os::Linux => ("xdg-open", vec![url.to_owned()]),
-    }
+pub fn command_for(
+    os: Os,
+    url: &str,
+    env: &dyn Fn(&str) -> Option<String>,
+) -> (String, Vec<String>) {
+    let program = match os {
+        Os::MacOs => "/usr/bin/open".to_owned(),
+        Os::Windows => {
+            let root = env("SystemRoot")
+                .filter(|root| crate::paths::is_absolute_for(Os::Windows, root))
+                .unwrap_or_else(|| "C:\\Windows".to_owned());
+            format!("{}\\explorer.exe", root.trim_end_matches('\\'))
+        }
+        Os::Linux => "xdg-open".to_owned(),
+    };
+    (program, vec![url.to_owned()])
 }
 
 #[derive(Debug, Default)]
@@ -65,7 +78,7 @@ impl UrlOpener for SystemOpener {
         if !is_allowed(url) {
             return Err(OpenError::NotAllowed);
         }
-        let (program, args) = command_for(Os::current(), url);
+        let (program, args) = command_for(Os::current(), url, &crate::paths::process_env);
         Command::new(program)
             .args(args)
             .stdin(Stdio::null())
@@ -154,18 +167,28 @@ mod tests {
 
     #[test]
     fn commands_never_go_through_a_shell() {
-        let (program, args) = command_for(Os::MacOs, "https://put.io/link");
+        let none = |_: &str| None;
+        let (program, args) = command_for(Os::MacOs, "https://put.io/link", &none);
+        assert_eq!(program, "/usr/bin/open");
+        assert_eq!(args, ["https://put.io/link"]);
         assert_eq!(
-            (program, args.as_slice()),
-            (
-                "/usr/bin/open",
-                ["https://put.io/link".to_owned()].as_slice()
-            )
+            command_for(Os::Linux, "https://put.io/link", &none).0,
+            "xdg-open"
         );
-        assert_eq!(command_for(Os::Linux, "https://put.io/link").0, "xdg-open");
         assert_eq!(
-            command_for(Os::Windows, "https://put.io/link").0,
-            "explorer.exe"
+            command_for(Os::Windows, "https://put.io/link", &none).0,
+            "C:\\Windows\\explorer.exe"
+        );
+        let root = |name: &str| (name == "SystemRoot").then(|| "D:\\WINNT\\".to_owned());
+        assert_eq!(
+            command_for(Os::Windows, "https://put.io/link", &root).0,
+            "D:\\WINNT\\explorer.exe"
+        );
+        // A relative SystemRoot (hostile environment) is ignored.
+        let relative = |name: &str| (name == "SystemRoot").then(|| "evil".to_owned());
+        assert_eq!(
+            command_for(Os::Windows, "https://put.io/link", &relative).0,
+            "C:\\Windows\\explorer.exe"
         );
     }
 

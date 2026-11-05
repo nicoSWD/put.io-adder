@@ -6,6 +6,7 @@
 //! * [`secret`]: the token in the OS secret store (Keychain, Credential Manager, Secret Service)
 //! * [`settings_store`] and [`paths`]: where preferences live, written atomically with private permissions
 //! * [`opener`]: opens an allow-listed `https` URL in the browser
+//! * [`torrent_file`]: reads a `.torrent` from disk without trusting the path
 //! * [`player`]: finds VLC and starts it with a signed URL
 //! * [`notify`] and [`badge`]: completion notifications and the dock badge
 //! * [`ipc`]: single-instance forwarding of magnet links and `.torrent` paths between processes
@@ -22,6 +23,7 @@ pub mod paths;
 pub mod player;
 pub mod secret;
 pub mod settings_store;
+pub mod torrent_file;
 
 #[cfg(target_os = "macos")]
 pub mod macos_events;
