@@ -29,7 +29,7 @@ egui painter. Still to verify on Windows and Linux in CI/manual runs.
 
 Phase 0 spike 1 is open. Everything the client assumes about behaviour the spec does not state:
 
-1. ~~`GET /account/info`: is `disk` still returned?~~ **Not usable**: after a successful sign-in the app showed the bandwidth fallback ("7.2 GB this month"), i.e. `disk` was absent or had no size (observed 2026-11-05). The bar therefore shows monthly bandwidth. Keep `disk` optional.
+1. ~~`GET /account/info`: is `disk` still returned?~~ **It depends on the account** (observed 2026-11-05): one account came back without a usable `disk` (the bar fell back to monthly bandwidth), another showed "91.6 GB left", so `disk` is sent for accounts with a quota. Keep `disk` optional, as modelled; the header shows the quota pill when it is there and the bandwidth outline when it is not.
 2. ~~`GET /oauth2/oob/code?app_id=711`: does OOB work for the old implicit-grant app id?~~ **Yes**: the app got a device code with app id 711 on its first launch (observed 2026-11-05; the sign-in itself is still to be completed).
 3. ~~**What does `GET /oauth2/oob/code/{code}` return before the user has linked the code?**~~ Sign-in completed end to end (observed 2026-11-05), so the pending state does not abort it. The exact pending body is still unrecorded; capture it as a fixture. Original question: The client
    assumes `200 {"oauth_token": null}` (or no field). If put.io answers with a 4xx instead, sign-in would be
