@@ -160,6 +160,25 @@ pub(super) fn open_folder(state: &mut State, now: Millis, id: i64, name: &str) {
     enter(state, now, trail);
 }
 
+/// Show a folder wherever it is: the trail starts over at the top level (the way to it is not known), and a
+/// search in the way is dropped.
+pub(super) fn reveal(state: &mut State, now: Millis, folder: i64, name: &str) {
+    if folder < 0 {
+        return;
+    }
+    let mut trail = vec![Crumb {
+        id: 0,
+        name: String::new(),
+    }];
+    if folder != 0 {
+        trail.push(Crumb {
+            id: folder,
+            name: clean(name),
+        });
+    }
+    enter(state, now, trail);
+}
+
 /// Go back up to the `index`-th folder of the trail (the breadcrumb).
 pub(super) fn go_to(state: &mut State, now: Millis, index: usize) {
     let last = state.files.trail.len().saturating_sub(1);
@@ -395,7 +414,7 @@ pub(super) fn delete_finished(
 }
 
 /// After a change: the listing is fetched again, and so is a search that is showing.
-fn refresh_everything(state: &mut State, now: Millis, fx: &mut Vec<Effect>) {
+pub(super) fn refresh_everything(state: &mut State, now: Millis, fx: &mut Vec<Effect>) {
     state.file_refresh.soon(now);
     if let Some(search) = state.files.search.as_mut() {
         search.loading = true;
@@ -612,6 +631,53 @@ mod tests {
         assert_eq!(names(&state.files.items), ["film.mkv"]);
         // Opening the folder that is already open does nothing.
         assert!(update(&mut state, 13, open(9, "Movies")).is_empty());
+    }
+
+    #[test]
+    fn a_folder_can_be_revealed_from_anywhere() {
+        let mut state = signed_in();
+        with_files(&mut state, 0, vec![]);
+        update(&mut state, 1, open(4, "Deep"));
+        update(&mut state, 2, Event::FilesSearchRequested("x".into()));
+        let fx = update(
+            &mut state,
+            3,
+            Event::FilesReveal {
+                folder: 77,
+                name: "TV\u{7} Shows".into(),
+            },
+        );
+        assert!(state.files.search.is_none());
+        assert_eq!(
+            state
+                .files
+                .trail
+                .iter()
+                .map(|c| (c.id, c.name.as_str()))
+                .collect::<Vec<_>>(),
+            [(0, ""), (77, "TV Shows")]
+        );
+        assert!(fx.contains(&Effect::ListFiles { parent: 77 }), "{fx:?}");
+        // The top level has no step of its own, and nonsense changes nothing.
+        update(
+            &mut state,
+            4,
+            Event::FilesReveal {
+                folder: 0,
+                name: String::new(),
+            },
+        );
+        assert_eq!(state.files.trail.len(), 1);
+        let before = state.files.clone();
+        update(
+            &mut state,
+            5,
+            Event::FilesReveal {
+                folder: -3,
+                name: "x".into(),
+            },
+        );
+        assert_eq!(state.files, before);
     }
 
     #[test]

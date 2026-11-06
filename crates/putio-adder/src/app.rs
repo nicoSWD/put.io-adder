@@ -264,13 +264,6 @@ impl App {
             "card-menu-done" => Some(crate::ui::Overlay::Card(5)),
             _ => None,
         };
-        self.ui.details = match view {
-            "details" => Some(6),
-            "details-failed" => Some(7),
-            "details-downloading" => Some(1),
-            "details-long" => Some(2),
-            _ => None,
-        };
         if matches!(view, "menu-update" | "collapsed-menu-update") {
             self.state.update = demo_update(true);
         }
@@ -307,6 +300,25 @@ impl App {
         );
         self.start_demo_feeds(ctx, view);
         self.start_demo_files(ctx, view);
+        let open = match view {
+            "details" => Some(6),
+            "details-failed" => Some(7),
+            "details-downloading" => Some(1),
+            "details-long" => Some(2),
+            _ => None,
+        };
+        if let Some(id) = open {
+            for (folder, name) in crate::demo::folder_names() {
+                self.ui.folder_named(folder, Some(name.to_owned()));
+            }
+            // The feed that added the seeding transfer is known once the Feeds tab has been looked at.
+            self.state.feeds = putio_core::state::FeedList {
+                loaded: true,
+                failed: false,
+                items: crate::demo::feeds(),
+            };
+            self.dispatch(ctx, Event::TransferDetailsOpened(id));
+        }
     }
 
     /// Debug builds only: the Feeds tab in each of its states (`feeds`, `feeds-empty`, `feeds-loading`,
@@ -409,6 +421,31 @@ impl App {
         }
         if view == "file-card-menu" {
             self.ui.open_once = Some(crate::ui::Overlay::FileCard(14));
+        }
+        if matches!(view, "file-extract" | "file-password") {
+            // The archive of the demo files (id 17), being unpacked or waiting for a password.
+            self.dispatch(
+                ctx,
+                Event::FileExtractRequested {
+                    id: 17,
+                    password: None,
+                },
+            );
+            let status = if view == "file-extract" {
+                putio_api::ExtractStatus::Extracting
+            } else {
+                putio_api::ExtractStatus::Password
+            };
+            self.dispatch(
+                ctx,
+                Event::ExtractionsListed(Ok(vec![putio_api::Extraction {
+                    id: 1,
+                    name: "Big.Buck.Bunny.2008.2160p.zip".into(),
+                    status,
+                    message: None,
+                    files: vec![17],
+                }])),
+            );
         }
         ui::file_dialogs::demo(self, ctx, view);
     }
@@ -523,6 +560,7 @@ impl App {
             }
             Effect::DeleteFeed { op, id } => self.send(Job::DeleteFeed { op, id }),
             Effect::ListFiles { parent } => self.send(Job::ListFiles { parent }),
+            Effect::FetchTransfer { id } => self.send(Job::FetchTransfer { id }),
             Effect::SearchFiles { query } => self.send(Job::SearchFiles { query }),
             Effect::RenameFile { op, id, name } => self.send(Job::RenameFile { op, id, name }),
             Effect::CreateFolder { op, parent, name } => {
@@ -530,6 +568,10 @@ impl App {
             }
             Effect::MoveFile { op, id, to } => self.send(Job::MoveFile { op, id, to }),
             Effect::DeleteFile { op, id } => self.send(Job::DeleteFile { op, id }),
+            Effect::ExtractFile { op, id, password } => {
+                self.send(Job::ExtractFile { op, id, password });
+            }
+            Effect::ListExtractions => self.send(Job::ListExtractions),
             Effect::CancelTransfer { op, id } => self.send(Job::Cancel { op, id }),
             Effect::RetryTransfer { op, id } => self.send(Job::Retry { op, id }),
             Effect::CleanTransfers { op, ids } => self.send(Job::Clean { op, ids }),
@@ -550,23 +592,7 @@ impl App {
                 self.dispatch(ctx, Event::DownloadHandedOver { opened });
             }
             Effect::PrepareUpdate { op, asset } => self.send(Job::PrepareUpdate { op, asset }),
-            Effect::ApplyUpdate => {
-                let result = match self.prepared_update.clone() {
-                    Some(prepared) => putio_platform::update::apply(&prepared).map(|()| {
-                        // The new version is in place. If nobody can reopen the app, say so before it
-                        // quits: "try again" would only download the same update once more.
-                        if let Err(reason) = putio_platform::update::relaunch(&prepared) {
-                            self.notifier.notify(&putio_core::state::Notification {
-                                title: "put.io adder".to_owned(),
-                                body: reason,
-                                file_id: None,
-                            });
-                        }
-                    }),
-                    None => Err("There is no update to install.".to_owned()),
-                };
-                self.dispatch(ctx, Event::UpdateApplied(result));
-            }
+            Effect::ApplyUpdate => self.apply_update(ctx),
             Effect::CheckDefaultHandler => self.send(Job::CheckDefaultHandler),
             Effect::RegisterDefaultHandler => self.send(Job::RegisterDefaultHandler),
             Effect::CopyText(text) => ctx.copy_text(text),
@@ -582,6 +608,25 @@ impl App {
             }
             Effect::Quit => ctx.send_viewport_cmd(ViewportCommand::Close),
         }
+    }
+
+    /// Put the prepared update in place and relaunch, and tell the core how it went.
+    fn apply_update(&mut self, ctx: &egui::Context) {
+        let result = match self.prepared_update.clone() {
+            Some(prepared) => putio_platform::update::apply(&prepared).map(|()| {
+                // The new version is in place. If nobody can reopen the app, say so before it quits:
+                // "try again" would only download the same update once more.
+                if let Err(reason) = putio_platform::update::relaunch(&prepared) {
+                    self.notifier.notify(&putio_core::state::Notification {
+                        title: "put.io adder".to_owned(),
+                        body: reason,
+                        file_id: None,
+                    });
+                }
+            }),
+            None => Err("There is no update to install.".to_owned()),
+        };
+        self.dispatch(ctx, Event::UpdateApplied(result));
     }
 
     fn store_token(&mut self, token: Token) {
@@ -611,6 +656,7 @@ impl App {
             && !self.ui.prefs_open
             && !self.ui.feed_dialog.is_open()
             && !self.ui.file_dialog.is_open()
+            && self.state.extract_ask().is_none()
             && let Some(tab) = ui::tabs::pressed(ctx)
         {
             // A shortcut for a list also opens the list if it was folded away.

@@ -159,6 +159,29 @@ pub enum Msg {
     HandlerKeptOther,
     A11yClose,
     A11yBack,
+    // Extracting archives
+    FileMenuExtract,
+    Extracting {
+        name: String,
+    },
+    ExtractingMany {
+        count: usize,
+    },
+    Extracted {
+        name: String,
+    },
+    ExtractFailed {
+        name: String,
+        reason: String,
+    },
+    PillExtracting,
+    PillPassword,
+    ExtractPasswordTitle,
+    ExtractPasswordBody {
+        name: String,
+    },
+    FilesPasswordLabel,
+    FileExtractConfirm,
     // Files
     TabFiles,
     FilesRoot,
@@ -289,6 +312,10 @@ pub enum Msg {
     DetailFinished,
     DetailYes,
     DetailNo,
+    DetailSavedIn,
+    DetailFromFeed,
+    DetailFromFeedUnknown,
+    MenuShowInFiles,
     KindTorrent,
     KindUrl,
     KindPlaylist,
@@ -755,6 +782,14 @@ impl Msg {
             Self::DetailError => tr!(l, "Error", "Fehler", "Error").into(),
             Self::DetailAdded => tr!(l, "Added", "Hinzugefügt", "Añadido").into(),
             Self::DetailFinished => tr!(l, "Finished", "Abgeschlossen", "Finalizado").into(),
+            Self::DetailSavedIn => tr!(l, "Saved in", "Gespeichert in", "Guardado en").into(),
+            Self::DetailFromFeed => {
+                tr!(l, "Added by", "Hinzugefügt von", "Añadido por").into()
+            }
+            Self::DetailFromFeedUnknown => tr!(l, "RSS feed", "RSS-Feed", "Feed RSS").into(),
+            Self::MenuShowInFiles => {
+                tr!(l, "Show in Files", "In Dateien", "Ver en Archivos").into()
+            }
             Self::DetailYes => tr!(l, "Yes", "Ja", "Sí").into(),
             Self::DetailNo => tr!(l, "No", "Nein", "No").into(),
             Self::KindTorrent => tr!(l, "Torrent", "Torrent", "Torrent").into(),
@@ -1779,6 +1814,48 @@ impl Msg {
                 "Ese nombre es demasiado largo."
             )
             .into(),
+            Self::FileMenuExtract => tr!(l, "Extract here", "Hier entpacken", "Extraer aquí").into(),
+            Self::PillExtracting => tr!(l, "Extracting", "Wird entpackt", "Extrayendo").into(),
+            Self::PillPassword => tr!(l, "Password needed", "Passwort nötig", "Contraseña").into(),
+            Self::ExtractPasswordTitle => tr!(
+                l,
+                "Password needed",
+                "Passwort erforderlich",
+                "Contraseña necesaria"
+            )
+            .into(),
+            Self::FilesPasswordLabel => tr!(l, "Password", "Passwort", "Contraseña").into(),
+            Self::FileExtractConfirm => tr!(l, "Extract", "Entpacken", "Extraer").into(),
+            Self::Extracting { name } => tr!(
+                l,
+                format!("Extracting “{name}”…"),
+                format!("„{name}“ wird entpackt …"),
+                format!("Extrayendo «{name}»…")
+            ),
+            Self::ExtractingMany { count } => tr!(
+                l,
+                format!("Extracting {count} archives…"),
+                format!("{count} Archive werden entpackt …"),
+                format!("Extrayendo {count} archivos comprimidos…")
+            ),
+            Self::Extracted { name } => tr!(
+                l,
+                format!("Extracted “{name}”"),
+                format!("„{name}“ entpackt"),
+                format!("«{name}» extraído")
+            ),
+            Self::ExtractFailed { name, reason } => tr!(
+                l,
+                format!("Could not extract “{name}”: {reason}"),
+                format!("„{name}“ konnte nicht entpackt werden: {reason}"),
+                format!("No se pudo extraer «{name}»: {reason}")
+            ),
+            Self::ExtractPasswordBody { name } => tr!(
+                l,
+                format!("“{name}” is protected with a password. Enter it to extract the archive."),
+                format!("„{name}“ ist passwortgeschützt. Gib es ein, um das Archiv zu entpacken."),
+                format!("«{name}» está protegido con contraseña. Escríbela para extraer el archivo.")
+            ),
             Self::FileKindFolder => tr!(
                 l,
                 "Folder",
@@ -2021,6 +2098,26 @@ mod tests {
     /// Every message of the Files tab, with a stand-in for each argument.
     fn file_messages() -> Vec<Msg> {
         vec![
+            Msg::FileMenuExtract,
+            Msg::PillExtracting,
+            Msg::PillPassword,
+            Msg::ExtractPasswordTitle,
+            Msg::FilesPasswordLabel,
+            Msg::FileExtractConfirm,
+            Msg::Extracting {
+                name: "Spring".into(),
+            },
+            Msg::ExtractingMany { count: 3 },
+            Msg::Extracted {
+                name: "Spring".into(),
+            },
+            Msg::ExtractFailed {
+                name: "Spring".into(),
+                reason: "Spring".into(),
+            },
+            Msg::ExtractPasswordBody {
+                name: "Spring".into(),
+            },
             Msg::TabFiles,
             Msg::FilesRoot,
             Msg::FilesEmptyTitle,
@@ -2085,6 +2182,27 @@ mod tests {
     }
 
     #[test]
+    fn the_messages_of_the_details_panel_are_written_in_every_language() {
+        let all = [
+            Msg::DetailSavedIn,
+            Msg::DetailFromFeed,
+            Msg::DetailFromFeedUnknown,
+            Msg::MenuShowInFiles,
+        ];
+        for msg in all {
+            let texts = [Locale::En, Locale::De, Locale::Es].map(|l| msg.text(l));
+            for text in &texts {
+                assert!(!text.trim().is_empty(), "{msg:?}");
+                assert_eq!(text, text.trim(), "{msg:?}");
+            }
+            assert!(
+                texts[0] != texts[1] && texts[0] != texts[2],
+                "{msg:?}: {texts:?}"
+            );
+        }
+    }
+
+    #[test]
     fn every_files_message_is_written_in_every_language() {
         for locale in [Locale::En, Locale::De, Locale::Es] {
             for msg in file_messages() {
@@ -2097,7 +2215,11 @@ mod tests {
         // The arguments arrive in the sentence, whatever the language.
         for locale in [Locale::En, Locale::De, Locale::Es] {
             for msg in file_messages() {
-                if let Msg::FilesSearchResults { .. }
+                if let Msg::Extracting { .. }
+                | Msg::Extracted { .. }
+                | Msg::ExtractFailed { .. }
+                | Msg::ExtractPasswordBody { .. }
+                | Msg::FilesSearchResults { .. }
                 | Msg::FilesSearchNone { .. }
                 | Msg::FileMoveHere { .. }
                 | Msg::FileDeleteFileBody { .. }
@@ -2126,6 +2248,9 @@ mod tests {
                     | Msg::FileKindAudio
                     | Msg::FileRenameTitle
                     | Msg::FileRenameConfirm
+                    | Msg::ExtractPasswordTitle
+                    | Msg::FilesPasswordLabel
+                    | Msg::PillPassword
             ) {
                 continue; // the same word in some languages
             }

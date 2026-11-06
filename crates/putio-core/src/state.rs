@@ -11,8 +11,8 @@ use std::path::PathBuf;
 
 use putio_api::client::{FileListing, FileSearch};
 use putio_api::{
-    Account, ApiError, DeviceCode, Release, RssFeed, RssFeedSettings, Token, Transfer, ZipState,
-    ZipStatus,
+    Account, ApiError, DeviceCode, Extraction, Release, RssFeed, RssFeedSettings, Token, Transfer,
+    ZipState, ZipStatus,
 };
 
 use crate::update::UpdateAsset;
@@ -21,14 +21,19 @@ use crate::download;
 use crate::handler;
 use crate::i18n::{Locale, Msg};
 use crate::intake::{Intake, IntakeError};
+use crate::secret::Secret;
 use crate::settings::{Folder, Settings, Tab, ThemeChoice, WindowSize};
 use crate::transfers::{self, Summary, Tracker};
 use crate::update::{self, UpdateStatus};
 
+mod detail;
+mod extract;
 mod feeds;
 mod files;
 mod refresh;
 
+pub use detail::TransferDetail;
+pub use extract::{PasswordAsk, Unpacking};
 pub use feeds::{FeedList, FeedSave};
 pub use files::{Crumb, FileAction, FilesView, Search};
 
@@ -115,6 +120,7 @@ enum Op {
     FileCreate,
     FileMove,
     FileDelete,
+    Extract,
 }
 
 /// Where an in-place update has got to.
@@ -382,6 +388,34 @@ pub enum Event {
         id: i64,
         result: Result<(), ApiError>,
     },
+    /// The details panel of a transfer was opened / closed.
+    TransferDetailsOpened(i64),
+    TransferDetailsClosed,
+    /// The answer to `Effect::FetchTransfer`.
+    TransferDetailsFetched {
+        id: i64,
+        result: Result<Transfer, ApiError>,
+    },
+    /// Show the folder `folder` (named `name`) on the Files tab, wherever the user was in it before.
+    FilesReveal {
+        folder: i64,
+        name: String,
+    },
+    /// Unpack the archive `id` into a folder next to it (`password` when it has one).
+    FileExtractRequested {
+        id: i64,
+        password: Option<Secret>,
+    },
+    /// The answer to `Effect::ExtractFile`.
+    FileExtractStarted {
+        op: OpId,
+        id: i64,
+        result: Result<Vec<Extraction>, ApiError>,
+    },
+    /// The answer to `Effect::ListExtractions`.
+    ExtractionsListed(Result<Vec<Extraction>, ApiError>),
+    /// The user gave up on entering a password.
+    FileExtractPasswordDismissed,
     FileOpenRequested(i64),
     FileCopyLinkRequested(i64),
     FileDownloadRequested(i64),
@@ -484,6 +518,18 @@ pub enum Effect {
         op: OpId,
         id: i64,
     },
+    /// Fetch one transfer (answered with `Event::TransferDetailsFetched`).
+    FetchTransfer {
+        id: i64,
+    },
+    /// Unpack an archive (answered with `Event::FileExtractStarted`).
+    ExtractFile {
+        op: OpId,
+        id: i64,
+        password: Option<Secret>,
+    },
+    /// List the running extractions (answered with `Event::ExtractionsListed`).
+    ListExtractions,
     /// Put text on the system clipboard. Only ever built here, from validated data.
     CopyText(String),
     /// Ask the system whether this app is the default for magnet links and `.torrent` files.
@@ -546,6 +592,10 @@ pub struct State {
     pub feeds: FeedList,
     /// The Files tab: the folder being shown, or the search.
     pub files: FilesView,
+    /// The transfer whose details panel is open.
+    pub detail: Option<TransferDetail>,
+    /// Archives being unpacked on put.io.
+    pub unpacking: Vec<Unpacking>,
     pub update: UpdateStatus,
     pub install: Install,
     pub install_target: InstallTarget,
@@ -573,6 +623,11 @@ pub struct State {
     feed_refresh: refresh::Refresh,
     file_action: FileAction,
     file_refresh: refresh::Refresh,
+    detail_refresh: refresh::Refresh,
+    /// The transfer whose fetch is on its way.
+    detail_requested: Option<i64>,
+    extract_ask: Option<PasswordAsk>,
+    extract_refresh: refresh::Refresh,
     /// The folder whose listing is on its way.
     files_requested: Option<i64>,
     failures: u32,
@@ -596,6 +651,8 @@ impl State {
             tab: settings.tab,
             feeds: FeedList::default(),
             files: FilesView::default(),
+            detail: None,
+            unpacking: Vec::new(),
             settings,
             locale,
             auth: Auth::Starting,
@@ -624,6 +681,10 @@ impl State {
             feed_refresh: refresh::Refresh::default(),
             file_action: FileAction::Idle,
             file_refresh: refresh::Refresh::default(),
+            detail_refresh: refresh::Refresh::default(),
+            detail_requested: None,
+            extract_ask: None,
+            extract_refresh: refresh::Refresh::default(),
             files_requested: None,
             failures: 0,
             close_at: None,
@@ -634,6 +695,12 @@ impl State {
             opening: None,
             handler_asked: false,
         }
+    }
+
+    /// The archive that needs a password the app does not have, if any.
+    #[must_use]
+    pub fn extract_ask(&self) -> Option<&PasswordAsk> {
+        self.extract_ask.as_ref()
     }
 
     /// How the rename, new folder or move dialog's request stands.
@@ -1092,6 +1159,20 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
         Event::FileDeleteFinished { op, id, result } => {
             files::delete_finished(state, now, (op, id), result, &mut fx);
         }
+        Event::TransferDetailsOpened(id) => detail::opened(state, now, id),
+        Event::TransferDetailsClosed => detail::closed(state),
+        Event::TransferDetailsFetched { id, result } => {
+            detail::fetched(state, now, id, result, &mut fx);
+        }
+        Event::FilesReveal { folder, name } => files::reveal(state, now, folder, &name),
+        Event::FileExtractRequested { id, password } => {
+            extract::requested(state, id, password, &mut fx);
+        }
+        Event::FileExtractStarted { op, id, result } => {
+            extract::started(state, now, (op, id), result, &mut fx);
+        }
+        Event::ExtractionsListed(result) => extract::listed(state, now, result, &mut fx),
+        Event::FileExtractPasswordDismissed => extract::password_dismissed(state),
         Event::FileOpenRequested(id) => files::open_on_putio(state, id, &mut fx),
         Event::FileCopyLinkRequested(id) => files::copy_link(state, now, id, &mut fx),
         Event::FileDownloadRequested(id) => files::download(state, now, id, &mut fx),
@@ -1267,6 +1348,8 @@ fn sign_out(state: &mut State, fx: &mut Vec<Effect>) {
     state.zip = None;
     feeds::reset(state);
     files::reset(state);
+    detail::reset(state);
+    extract::reset(state);
     // What was running for this account has no one to report to. (An update is not tied to the account.)
     state.ops.retain(|_, kind| *kind == Op::Update);
     state.busy = u32::try_from(state.ops.len()).unwrap_or(u32::MAX);
@@ -1694,6 +1777,8 @@ fn polled(
 fn maybe_poll(state: &mut State, now: Millis, fx: &mut Vec<Effect>) {
     feeds::maybe_load(state, now, fx);
     files::maybe_load(state, now, fx);
+    detail::maybe_load(state, now, fx);
+    extract::maybe_poll(state, now, fx);
     if state.is_signed_in()
         && !state.poll_in_flight
         && state.next_poll_at.is_some_and(|at| now >= at)

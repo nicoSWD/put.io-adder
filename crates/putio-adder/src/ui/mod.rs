@@ -69,8 +69,6 @@ pub(crate) struct UiState {
     pub(crate) file_dialog: file_dialogs::FileDialog,
     /// The add / edit feed form and the delete confirmation.
     pub(crate) feed_dialog: feed_form::FeedDialog,
-    /// The transfer whose details panel is open.
-    pub(crate) details: Option<i64>,
     pub(crate) folders: prefs::FolderPicker,
     /// Names of the folders asked about so far (`None`: put.io could not say).
     pub(crate) folder_names: std::collections::HashMap<i64, Option<String>>,
@@ -90,7 +88,6 @@ impl Default for UiState {
             search_text: String::new(),
             file_dialog: file_dialogs::FileDialog::default(),
             feed_dialog: feed_form::FeedDialog::default(),
-            details: None,
             folders: prefs::FolderPicker::default(),
             folder_names: std::collections::HashMap::new(),
         }
