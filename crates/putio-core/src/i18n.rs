@@ -211,6 +211,7 @@ pub enum Msg {
     FileErrNameEmpty,
     FileErrNameSlash,
     FileErrNameTooLong,
+    FileErrMoveIntoSelf,
     FileKindFolder,
     FileKindVideo,
     FileKindAudio,
@@ -1358,7 +1359,7 @@ impl Msg {
                 "Copiar dirección del feed"
             )
             .into(),
-            Self::FeedMenuDelete => tr!(
+            Self::FeedMenuDelete | Self::FileMenuDelete => tr!(
                 l,
                 "Delete…",
                 "Löschen …",
@@ -1664,13 +1665,6 @@ impl Msg {
                 "Mover…"
             )
             .into(),
-            Self::FileMenuDelete => tr!(
-                l,
-                "Delete…",
-                "Löschen …",
-                "Eliminar…"
-            )
-            .into(),
             Self::FileRenameTitle | Self::FileRenameConfirm => tr!(
                 l,
                 "Rename",
@@ -1753,6 +1747,13 @@ impl Msg {
                 "A name cannot contain a slash.",
                 "Ein Name darf keinen Schrägstrich enthalten.",
                 "Un nombre no puede contener una barra."
+            )
+            .into(),
+            Self::FileErrMoveIntoSelf => tr!(
+                l,
+                "A folder cannot be moved into itself.",
+                "Ein Ordner lässt sich nicht in sich selbst verschieben.",
+                "Una carpeta no se puede mover dentro de sí misma."
             )
             .into(),
             Self::FileErrNameTooLong => tr!(
@@ -2033,6 +2034,7 @@ mod tests {
             Msg::FileErrNameEmpty,
             Msg::FileErrNameSlash,
             Msg::FileErrNameTooLong,
+            Msg::FileErrMoveIntoSelf,
             Msg::FileKindFolder,
             Msg::FileKindVideo,
             Msg::FileKindAudio,

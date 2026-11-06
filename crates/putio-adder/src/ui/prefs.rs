@@ -143,7 +143,14 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
         .show(ctx, |ui| {
             ui.set_width(CONTENT_WIDTH);
             if app.ui.folders.open {
-                folder_page(ui, app, &workers, locale, &mut folder_chosen)
+                folder_page(
+                    ui,
+                    app,
+                    &workers,
+                    locale,
+                    &FolderPage::choose(),
+                    &mut folder_chosen,
+                )
             } else {
                 settings_page(ui, app, &workers, locale, &mut actions)
             }
@@ -594,15 +601,40 @@ fn folder_list(ui: &mut egui::Ui, app: &App, locale: Locale) -> Option<(i64, Str
     enter
 }
 
+/// What the folder page says: its title, what the button that chooses a folder is called, and, while
+/// something is being done with the choice, a line about how it went.
+pub(crate) struct FolderPage<'a> {
+    pub(crate) title: Msg,
+    /// The button's label, given the name of the folder being shown.
+    pub(crate) confirm: fn(String) -> Msg,
+    /// What went wrong with the last choice, if anything.
+    pub(crate) error: Option<&'a str>,
+    /// The choice is being acted on: the button waits.
+    pub(crate) busy: bool,
+}
+
+impl FolderPage<'_> {
+    /// Choosing the folder new transfers are saved in.
+    pub(crate) fn choose() -> Self {
+        Self {
+            title: Msg::PrefsChooseFolderTitle,
+            confirm: |name| Msg::PrefsUseFolder { name },
+            error: None,
+            busy: false,
+        }
+    }
+}
+
 /// The folder page: where to go, and a button that chooses the folder being shown.
 pub(crate) fn folder_page(
     ui: &mut egui::Ui,
     app: &mut App,
     workers: &Workers,
     locale: Locale,
+    page: &FolderPage,
     chosen: &mut Option<Folder>,
 ) -> bool {
-    let (back, close) = header(ui, &Msg::PrefsChooseFolderTitle.text(locale), true, locale);
+    let (back, close) = header(ui, &page.title.text(locale), true, locale);
     if back {
         app.ui.folders.open = false;
         return false;
@@ -616,15 +648,23 @@ pub(crate) fn folder_page(
 
     // Confirm.
     ui.add_space(8.0);
+    if let Some(error) = page.error {
+        ui.add(
+            egui::Label::new(
+                RichText::new(error)
+                    .font(theme::text(11.0))
+                    .color(theme::pal().error),
+            )
+            .wrap(),
+        );
+        ui.add_space(6.0);
+    }
     let here = app.ui.folders.trail.last().cloned();
     ui.horizontal(|ui| {
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             if let Some((id, name)) = here
-                && theme::primary_button(
-                    ui,
-                    Msg::PrefsUseFolder { name: name.clone() }.text(locale),
-                )
-                .clicked()
+                && theme::primary_button(ui, (page.confirm)(name.clone()).text(locale)).clicked()
+                && !page.busy
             {
                 *chosen = Some(Folder { id, name });
             }

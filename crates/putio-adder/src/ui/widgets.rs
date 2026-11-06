@@ -375,17 +375,62 @@ fn button(ui: &mut egui::Ui, icon: Option<MenuIcon>, label: &str, kind: Kind) ->
 /// Height of [`action_button`].
 pub(crate) const ACTION_HEIGHT: f32 = 36.0;
 
+/// Height of [`accent_pill`].
+const ACCENT_PILL_HEIGHT: f32 = 26.0;
+
+/// A small yellow pill with a plus and a label: the one action of a tab ("Add feed", "New folder"). Painted at
+/// fixed positions, so hovering changes the fill and nothing moves.
+pub(crate) fn accent_pill(ui: &mut egui::Ui, label: &str) -> Response {
+    let p = theme::pal();
+    let galley =
+        ui.painter()
+            .layout_no_wrap(label.to_owned(), theme::bold(11.5), Color32::PLACEHOLDER);
+    let size = Vec2::new(
+        10.0 + 12.0 + 6.0 + galley.size().x + 14.0,
+        ACCENT_PILL_HEIGHT,
+    );
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
+    focus_ring(ui, &response, rect, CornerRadius::same(13));
+    ui.painter().rect_filled(
+        rect,
+        CornerRadius::same(13),
+        if response.hovered() {
+            p.yellow_pressed
+        } else {
+            theme::YELLOW
+        },
+    );
+    icons::glyph(
+        ui.painter(),
+        Pos2::new(rect.left() + 10.0 + 6.0, rect.center().y),
+        icons::Glyph::Plus,
+        0.8,
+        p.on_yellow,
+    );
+    ui.painter().galley(
+        Pos2::new(
+            rect.left() + 10.0 + 12.0 + 6.0,
+            rect.center().y - galley.size().y / 2.0,
+        ),
+        galley,
+        p.on_yellow,
+    );
+    response
+}
+
 /// Height of a [`text_field`].
 pub(crate) const FIELD_HEIGHT: f32 = 34.0;
 
 /// A single-line text input in the look of the other controls: a quiet inset pill, a ring when it has the
-/// keyboard. The field is `labelled_by` the label above it (for screen readers) and shows `hint` while it
-/// is empty. Typing stops at `max_chars`.
+/// keyboard. The field is `labelled_by` the label above it (for screen readers; without one it is
+/// announced by its hint) and shows `hint` while it is empty. Typing stops at `max_chars`.
 pub(crate) fn text_field(
     ui: &mut egui::Ui,
     value: &mut String,
     hint: &str,
-    labelled_by: egui::Id,
+    labelled_by: Option<egui::Id>,
     max_chars: usize,
 ) -> Response {
     let p = theme::pal();
@@ -402,21 +447,23 @@ pub(crate) fn text_field(
             .max_rect(inner)
             .layout(egui::Layout::left_to_right(egui::Align::Center)),
     );
-    let response = child
-        .add(
-            egui::TextEdit::singleline(value)
-                .frame(egui::Frame::NONE)
-                .margin(egui::Margin::ZERO)
-                .font(theme::text(12.5))
-                .char_limit(max_chars)
-                .desired_width(inner.width())
-                .hint_text(
-                    egui::RichText::new(hint)
-                        .font(theme::text(12.5))
-                        .color(p.muted),
-                ),
-        )
-        .labelled_by(labelled_by);
+    let mut response = child.add(
+        egui::TextEdit::singleline(value)
+            .frame(egui::Frame::NONE)
+            .margin(egui::Margin::ZERO)
+            .font(theme::text(12.5))
+            .char_limit(max_chars)
+            .desired_width(inner.width())
+            .hint_text(
+                egui::RichText::new(hint)
+                    .font(theme::text(12.5))
+                    .color(p.muted),
+            ),
+    );
+    // A field with a visible label is announced with it; one without (a search box) by its hint.
+    if let Some(label) = labelled_by {
+        response = response.labelled_by(label);
+    }
     let focused = response.has_focus();
     let hovered = ui.rect_contains_pointer(rect);
     ui.painter().set(
@@ -593,8 +640,13 @@ mod tests {
             };
             let output = ctx.run_ui(input, |ui| {
                 let label = ui.label("Address").id;
-                let field =
-                    text_field(ui, &mut value, "https://example.com/feed.xml", label, limit);
+                let field = text_field(
+                    ui,
+                    &mut value,
+                    "https://example.com/feed.xml",
+                    Some(label),
+                    limit,
+                );
                 if frame == 0 {
                     field.request_focus();
                 }

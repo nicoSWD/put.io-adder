@@ -3,6 +3,7 @@
 use eframe::egui::{self, Color32, CornerRadius, Painter, Pos2, Rect, Stroke, StrokeKind, Vec2};
 use putio_api::TransferStatus;
 use putio_core::feeds::FeedStatus;
+use putio_core::files::Kind;
 
 use super::theme;
 
@@ -86,6 +87,7 @@ pub(crate) enum MenuIcon {
     Check,
     Pause,
     Edit,
+    Folder,
 }
 
 /// A circular arc as a polyline (angles in degrees, 0 = right, increasing counter-clockwise on screen).
@@ -224,6 +226,19 @@ pub(crate) fn menu_icon(painter: &Painter, center: Pos2, icon: MenuIcon, color: 
             painter.line_segment([at(-6.5, 7.0), at(6.5, 7.0)], stroke);
             painter.line_segment([at(6.5, 7.0), at(6.5, 3.0)], stroke);
         }
+        MenuIcon::Folder => {
+            painter.add(egui::Shape::closed_line(
+                vec![
+                    at(-6.5, -5.0),
+                    at(-1.5, -5.0),
+                    at(0.5, -2.8),
+                    at(6.5, -2.8),
+                    at(6.5, 5.5),
+                    at(-6.5, 5.5),
+                ],
+                stroke,
+            ));
+        }
         MenuIcon::Pause => {
             painter.line_segment([at(-3.2, -5.5), at(-3.2, 5.5)], stroke);
             painter.line_segment([at(3.2, -5.5), at(3.2, 5.5)], stroke);
@@ -330,6 +345,81 @@ pub(crate) fn feed_badge(painter: &Painter, center: Pos2, status: FeedStatus) {
             painter.circle_filled(center, radius, p.error_soft);
             painter.circle_stroke(center, radius, Stroke::new(1.0, p.error));
             glyph(painter, center, Glyph::Rss, 1.0, p.error);
+        }
+    }
+}
+
+/// The round badge of a file's row: yellow for a folder, quiet for the rest, with a small drawing of what
+/// kind of file it is.
+pub(crate) fn file_badge(painter: &Painter, center: Pos2, kind: Kind) {
+    let p = theme::pal();
+    let (fill, ink) = if kind == Kind::Folder {
+        (p.yellow_soft, p.accent_text)
+    } else {
+        (p.neutral_soft, p.muted)
+    };
+    painter.circle_filled(center, 12.0, fill);
+    let stroke = Stroke::new(1.5, ink);
+    let at = |x: f32, y: f32| center + Vec2::new(x, y);
+    match kind {
+        Kind::Folder => {
+            painter.add(egui::Shape::closed_line(
+                vec![
+                    at(-6.0, -4.5),
+                    at(-1.5, -4.5),
+                    at(0.5, -2.5),
+                    at(6.0, -2.5),
+                    at(6.0, 4.5),
+                    at(-6.0, 4.5),
+                ],
+                stroke,
+            ));
+        }
+        Kind::Video => {
+            painter.add(egui::Shape::closed_line(
+                vec![at(-2.5, -4.5), at(-2.5, 4.5), at(4.5, 0.0)],
+                stroke,
+            ));
+        }
+        Kind::Audio => {
+            painter.circle_filled(at(-2.5, 3.5), 2.2, ink);
+            painter.line_segment([at(-0.4, 3.5), at(-0.4, -5.0)], stroke);
+            painter.line_segment([at(-0.4, -5.0), at(4.0, -3.2)], stroke);
+        }
+        Kind::Image => {
+            painter.rect_stroke(
+                Rect::from_center_size(center, Vec2::new(12.0, 9.0)),
+                CornerRadius::same(1),
+                stroke,
+                StrokeKind::Inside,
+            );
+            painter.line_segment([at(-5.5, 4.0), at(-2.0, 0.0)], stroke);
+            painter.line_segment([at(-2.0, 0.0), at(1.0, 3.0)], stroke);
+            painter.line_segment([at(1.0, 3.0), at(3.0, 1.0)], stroke);
+            painter.line_segment([at(3.0, 1.0), at(5.5, 3.5)], stroke);
+        }
+        Kind::Archive => {
+            painter.rect_stroke(
+                Rect::from_center_size(center, Vec2::new(11.0, 10.0)),
+                CornerRadius::same(1),
+                stroke,
+                StrokeKind::Inside,
+            );
+            for y in [-4.0, -1.0, 2.0] {
+                painter.line_segment([at(0.0, y), at(0.0, y + 1.6)], stroke);
+            }
+        }
+        Kind::Document | Kind::Other => {
+            painter.rect_stroke(
+                Rect::from_center_size(center, Vec2::new(9.0, 11.5)),
+                CornerRadius::same(1),
+                stroke,
+                StrokeKind::Inside,
+            );
+            if kind == Kind::Document {
+                painter.line_segment([at(-2.2, -1.5), at(2.2, -1.5)], stroke);
+                painter.line_segment([at(-2.2, 1.5), at(2.2, 1.5)], stroke);
+            }
         }
     }
 }

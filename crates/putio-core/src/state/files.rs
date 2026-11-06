@@ -242,11 +242,11 @@ pub(super) fn searched(
     fx: &mut Vec<Effect>,
 ) {
     // The answer to a question that is not the current one is dropped.
-    if !state
+    if state
         .files
         .search
         .as_ref()
-        .is_some_and(|search| search.query == query)
+        .is_none_or(|search| search.query != query)
     {
         return;
     }
@@ -486,6 +486,7 @@ mod tests {
         }
     }
 
+    #[allow(clippy::unnecessary_wraps)] // it is what the events carry
     fn listing(files: Vec<File>) -> Result<FileListing, ApiError> {
         Ok(FileListing {
             parent: None,
@@ -668,6 +669,7 @@ mod tests {
         assert_eq!(state.files.items.len(), 1);
     }
 
+    #[allow(clippy::unnecessary_wraps)] // it is what the events carry
     fn found(files: Vec<File>, total: usize) -> Result<FileSearch, ApiError> {
         Ok(FileSearch { files, total })
     }

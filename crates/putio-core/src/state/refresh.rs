@@ -124,7 +124,7 @@ mod tests {
         for _ in 0..8 {
             refresh.started();
             refresh.failed(now, &error());
-            let due_at = (now..).find(|t| refresh.due(*t)).unwrap();
+            let due_at = (now..now + 1_000_000).find(|t| refresh.due(*t)).unwrap();
             waits.push(due_at - now);
             now = due_at;
         }

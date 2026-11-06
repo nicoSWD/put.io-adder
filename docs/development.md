@@ -16,6 +16,8 @@ PUTIO_ADDER_DEMO=menu cargo run -p putio-adder      # the "..." menu open (menu-
 PUTIO_ADDER_DEMO=sort cargo run -p putio-adder      # the sort drop-down open
 PUTIO_ADDER_DEMO=card-menu cargo run -p putio-adder   # a card's "⋯" menu open (also card-menu-seeding, -failed, -done)
 PUTIO_ADDER_DEMO=details cargo run -p putio-adder     # the details panel (also details-downloading, details-failed, details-long)
+PUTIO_ADDER_DEMO=files cargo run -p putio-adder     # the Files tab (also files-empty, files-loading, files-failed, files-search, files-deep, file-card-menu)
+PUTIO_ADDER_DEMO=file-rename cargo run -p putio-adder # a Files card (also file-new-folder, file-move, file-delete, file-delete-folder)
 PUTIO_ADDER_DEMO=feeds cargo run -p putio-adder     # the Feeds tab (also feeds-empty, feeds-loading, feeds-failed, feed-card-menu)
 PUTIO_ADDER_DEMO=feed-add cargo run -p putio-adder  # the add-feed form (also feed-edit, feed-delete: the question before deleting)
 PUTIO_ADDER_LOCALE=de|es PUTIO_ADDER_DEMO=feeds cargo run -p putio-adder   # any view in German or Spanish
@@ -56,7 +58,7 @@ for t in tools/test_*.py; do python3 -I "$t"; done
 
 ## Screenshots
 
-The README screenshots (`docs/images/screenshot-light.png` and `-dark.png`, `screenshot-feeds-light.png` and `-dark.png`) are the demo list
-(`PUTIO_ADDER_DEMO=list`) and the demo feeds (`PUTIO_ADDER_DEMO=feeds`) with
+The README screenshots (`docs/images/screenshot-light.png` and `-dark.png`, `screenshot-files-light.png` and `-dark.png`, `screenshot-feeds-light.png` and `-dark.png`) are the demo list
+(`PUTIO_ADDER_DEMO=list`), files (`files`) and feeds (`feeds`) with
 `PUTIO_ADDER_THEME=light|dark`, captured as a window-only 2x PNG (`screencapture -o -l <window id>`). The demo data is
 fictional (public-domain film titles), so nothing personal is in them. Retake them when the look changes.

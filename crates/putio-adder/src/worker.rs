@@ -351,6 +351,7 @@ fn prepare_update(
     })
 }
 
+#[allow(clippy::too_many_lines)] // one arm per job reads best as one list
 fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
     match job {
         Job::DeviceCode => WorkerMsg::Core(Event::DeviceCodeReceived(
