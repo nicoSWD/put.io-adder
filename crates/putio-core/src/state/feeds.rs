@@ -11,16 +11,13 @@ use crate::feeds::sort_feeds;
 use crate::i18n::Msg;
 use crate::settings::Tab;
 
-use super::{
-    ERROR_NOTICE_TIME, Effect, MAX_BACKOFF, Millis, NOTICE_TIME, Op, OpId, State, session_expired,
-};
+use super::refresh::Refresh;
+use super::{ERROR_NOTICE_TIME, Effect, Millis, NOTICE_TIME, Op, OpId, State, session_expired};
 
 /// How old the list may get before it is fetched again while its tab is open.
 const REFRESH_INTERVAL: Millis = 60_000;
 /// Opening the tab fetches the list again when it is older than this.
 const STALE_AFTER: Millis = 15_000;
-/// The wait after a failed fetch, doubled for each failure in a row.
-const RETRY_INTERVAL: Millis = 10_000;
 
 /// The feeds as last fetched.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -46,24 +43,9 @@ pub enum FeedSave {
     Saved,
 }
 
-/// When to fetch the list.
-#[derive(Debug, Default)]
-pub(super) struct Schedule {
-    in_flight: bool,
-    /// Fetch at or after this time. `None`: as soon as the list is wanted.
-    next_at: Option<Millis>,
-    loaded_at: Option<Millis>,
-    failures: u32,
-}
-
 /// Whether the list is on screen: signed in, list open, Feeds tab chosen.
 fn wanted(state: &State) -> bool {
     state.is_signed_in() && state.transfers_expanded && state.tab == Tab::Feeds
-}
-
-/// Fetch again at the next opportunity.
-fn refresh_soon(state: &mut State, now: Millis) {
-    state.feed_schedule.next_at = Some(now);
 }
 
 pub(super) fn select_tab(state: &mut State, now: Millis, tab: Tab, fx: &mut Vec<Effect>) {
@@ -73,23 +55,15 @@ pub(super) fn select_tab(state: &mut State, now: Millis, tab: Tab, fx: &mut Vec<
     state.tab = tab;
     state.settings.tab = tab;
     fx.push(Effect::SaveSettings(state.settings.clone()));
-    let outdated = state
-        .feed_schedule
-        .loaded_at
-        .is_none_or(|at| now.saturating_sub(at) >= STALE_AFTER);
-    if tab == Tab::Feeds && outdated {
-        refresh_soon(state, now);
+    if tab == Tab::Feeds && state.feed_refresh.is_older_than(now, STALE_AFTER) {
+        state.feed_refresh.soon(now);
     }
 }
 
 /// Ask for the list when it is on screen and due. Runs after every event.
 pub(super) fn maybe_load(state: &mut State, now: Millis, fx: &mut Vec<Effect>) {
-    if wanted(state)
-        && !state.feed_schedule.in_flight
-        && state.feed_schedule.next_at.is_none_or(|at| now >= at)
-    {
-        state.feed_schedule.in_flight = true;
-        state.feed_schedule.next_at = None;
+    if wanted(state) && state.feed_refresh.due(now) {
+        state.feed_refresh.started();
         fx.push(Effect::LoadFeeds);
     }
 }
@@ -97,8 +71,7 @@ pub(super) fn maybe_load(state: &mut State, now: Millis, fx: &mut Vec<Effect>) {
 /// The "try again" button after the first fetch failed.
 pub(super) fn retry(state: &mut State, now: Millis) {
     state.feeds.failed = false;
-    state.feed_schedule.failures = 0;
-    refresh_soon(state, now);
+    state.feed_refresh.retry(now);
 }
 
 pub(super) fn loaded(
@@ -107,8 +80,8 @@ pub(super) fn loaded(
     result: Result<Vec<RssFeed>, ApiError>,
     fx: &mut Vec<Effect>,
 ) {
-    state.feed_schedule.in_flight = false;
     if !state.is_signed_in() {
+        state.feed_refresh.answered();
         return;
     }
     match result {
@@ -119,29 +92,15 @@ pub(super) fn loaded(
                 loaded: true,
                 failed: false,
             };
-            state.feed_schedule.failures = 0;
-            state.feed_schedule.loaded_at = Some(now);
-            state.feed_schedule.next_at = Some(now + REFRESH_INTERVAL);
+            state.feed_refresh.succeeded(now, REFRESH_INTERVAL);
         }
         Err(ApiError::Unauthorized) => session_expired(state, fx),
         Err(error) => {
             // A list that was fetched before stays on screen; only the very first fetch has nothing to show.
             state.feeds.failed = !state.feeds.loaded;
-            let wait = retry_wait(&error, state.feed_schedule.failures);
-            state.feed_schedule.failures = state.feed_schedule.failures.saturating_add(1);
-            state.feed_schedule.next_at = Some(now.saturating_add(wait));
+            state.feed_refresh.failed(now, &error);
         }
     }
-}
-
-fn retry_wait(error: &ApiError, failures: u32) -> Millis {
-    if let ApiError::RateLimited { retry_after } = error {
-        let ms = u64::try_from(retry_after.as_millis()).unwrap_or(MAX_BACKOFF);
-        return ms.min(MAX_BACKOFF);
-    }
-    RETRY_INTERVAL
-        .saturating_mul(1u64 << failures.min(5))
-        .min(MAX_BACKOFF)
 }
 
 pub(super) fn save_requested(
@@ -182,7 +141,7 @@ pub(super) fn save_finished(
                 Msg::FeedUpdated
             };
             state.say(said, now, NOTICE_TIME);
-            refresh_soon(state, now);
+            state.feed_refresh.soon(now);
         }
         Err(ApiError::Unauthorized) => session_expired(state, fx),
         Err(error) => state.feed_save = FeedSave::Failed(save_failure(state, &error)),
@@ -235,7 +194,7 @@ pub(super) fn pause_finished(
                 Msg::FeedResumedNotice
             };
             state.say(said, now, NOTICE_TIME);
-            refresh_soon(state, now);
+            state.feed_refresh.soon(now);
         }
         Err(ApiError::Unauthorized) => session_expired(state, fx),
         Err(error) => failed(state, now, &error),
@@ -263,7 +222,7 @@ pub(super) fn delete_finished(
         Ok(()) => {
             state.feeds.items.retain(|feed| feed.id != id);
             state.say(Msg::FeedDeletedNotice, now, NOTICE_TIME);
-            refresh_soon(state, now);
+            state.feed_refresh.soon(now);
         }
         Err(ApiError::Unauthorized) => session_expired(state, fx),
         Err(error) => failed(state, now, &error),
@@ -294,7 +253,7 @@ pub(super) fn copy_address(state: &mut State, now: Millis, id: i64, fx: &mut Vec
 pub(super) fn reset(state: &mut State) {
     state.feeds = FeedList::default();
     state.feed_save = FeedSave::Idle;
-    state.feed_schedule = Schedule::default();
+    state.feed_refresh = Refresh::default();
 }
 
 #[cfg(test)]

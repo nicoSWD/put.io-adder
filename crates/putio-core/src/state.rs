@@ -25,6 +25,7 @@ use crate::transfers::{self, Summary, Tracker};
 use crate::update::{self, UpdateStatus};
 
 mod feeds;
+mod refresh;
 
 pub use feeds::{FeedList, FeedSave};
 
@@ -483,7 +484,7 @@ pub struct State {
     next_poll_at: Option<Millis>,
     zip: Option<ZipJob>,
     feed_save: FeedSave,
-    feed_schedule: feeds::Schedule,
+    feed_refresh: refresh::Refresh,
     failures: u32,
     close_at: Option<Millis>,
     badge: Option<u8>,
@@ -529,7 +530,7 @@ impl State {
             next_poll_at: None,
             zip: None,
             feed_save: FeedSave::Idle,
-            feed_schedule: feeds::Schedule::default(),
+            feed_refresh: refresh::Refresh::default(),
             failures: 0,
             close_at: None,
             badge: None,
