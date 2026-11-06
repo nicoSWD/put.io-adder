@@ -91,7 +91,10 @@ pub(super) fn dropped(state: &mut State, now: Millis, items: Vec<Dropped>, fx: &
         .map(|disk| u64::try_from(disk.avail).unwrap_or(0));
     let mut skipped = 0;
     let mut started = 0;
-    for item in items.into_iter().take(MAX_PER_DROP.saturating_mul(4)) {
+    // Only so many entries are looked at; the rest of a huge drop is counted as skipped, not ignored.
+    let examined = MAX_PER_DROP.saturating_mul(4);
+    skipped += items.len().saturating_sub(examined);
+    for item in items.into_iter().take(examined) {
         let name = clean_name(&item.name);
         if item.kind != DroppedKind::File || item.size == 0 || name.trim().is_empty() {
             skipped += 1;
@@ -107,8 +110,11 @@ pub(super) fn dropped(state: &mut State, now: Millis, items: Vec<Dropped>, fx: &
         {
             // Shown as a row that failed before it began.
             let reason = Msg::UploadNoSpace {
-                needed: crate::format::bytes(i64::try_from(item.size).unwrap_or(i64::MAX)),
-                free: crate::format::bytes(i64::try_from(room).unwrap_or(i64::MAX)),
+                needed: crate::format::bytes(
+                    i64::try_from(item.size).unwrap_or(i64::MAX),
+                    state.locale,
+                ),
+                free: crate::format::bytes(i64::try_from(room).unwrap_or(i64::MAX), state.locale),
             }
             .text(state.locale);
             let op = state.op(Op::UploadFile);
@@ -348,6 +354,19 @@ mod tests {
             state
                 .status_text(1)
                 .starts_with("5 items were not uploaded")
+        );
+    }
+
+    #[test]
+    fn entries_past_the_examined_ones_are_counted_as_skipped() {
+        let mut state = signed_in();
+        let many: Vec<Dropped> = (0..500).map(|i| file(&format!("f{i}"), 1)).collect();
+        let fx = update(&mut state, 1, Event::FilesDropped(many));
+        assert_eq!(uploads(&fx).len(), MAX_PER_DROP);
+        assert!(
+            state
+                .status_text(1)
+                .starts_with("400 items were not uploaded")
         );
     }
 

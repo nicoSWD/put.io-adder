@@ -144,6 +144,8 @@ fn sort_trigger(ui: &mut egui::Ui, text: &str, ascending: bool) -> egui::Respons
     let size = Vec2::new(galley.size().x + 12.0 + 22.0, 26.0);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+    // Painted by hand, so a screen reader is told what it is.
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, text));
     if response.hovered() {
         ui.painter()
             .rect_filled(rect, CornerRadius::same(8), p.card_hover);
@@ -441,7 +443,7 @@ fn draw_card(ui: &mut egui::Ui, transfer: &Transfer, selected: bool, locale: Loc
     painter.text(
         Pos2::new(right, rect.top() + 11.0),
         Align2::RIGHT_TOP,
-        format::bytes(transfer.size),
+        format::bytes(transfer.size, locale),
         theme::text(11.0),
         p.muted,
     );
@@ -561,6 +563,17 @@ mod tests {
                 "the sort label moved on hover (ascending: {ascending})"
             );
         }
+    }
+
+    #[test]
+    fn the_sort_trigger_is_a_named_button_for_screen_readers() {
+        let names = crate::ui::test_support::accessible_names(|ui| {
+            sort_trigger(ui, "Sort: Status", true);
+        });
+        assert!(
+            names.contains(&("Button".to_owned(), "Sort: Status".to_owned())),
+            "{names:?}"
+        );
     }
 
     fn sample(status: TransferStatus, file_id: Option<i64>, source: Option<&str>) -> Transfer {

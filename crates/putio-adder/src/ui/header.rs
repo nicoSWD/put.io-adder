@@ -220,7 +220,7 @@ fn quota_pill(ui: &egui::Ui, app: &App, pill: Rect) {
         // Black over the yellow part, the normal text colour over the rest, so it reads wherever the
         // edge falls (on the light palette both are black).
         let label = Msg::DiskLeft {
-            left: format::bytes(left),
+            left: format::bytes(left, locale),
         }
         .text(locale);
         let font = theme::bold(10.5);
@@ -250,7 +250,7 @@ fn quota_pill(ui: &egui::Ui, app: &App, pill: Rect) {
             pill.center(),
             Align2::CENTER_CENTER,
             Msg::Bandwidth {
-                used: format::bytes(account.monthly_bandwidth_usage),
+                used: format::bytes(account.monthly_bandwidth_usage, locale),
             }
             .text(locale),
             theme::bold(10.5),

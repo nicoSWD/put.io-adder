@@ -242,7 +242,7 @@ fn detail(file: &File, shared: bool, locale: Locale) -> String {
         .as_deref()
         .and_then(format::date)
         .unwrap_or_default();
-    let size = (!is_folder(file)).then(|| format::bytes(file.size));
+    let size = (!is_folder(file)).then(|| format::bytes(file.size, locale));
     let badge = shared.then(|| Msg::FileSharedBadge.text(locale));
     [size, Some(date), badge]
         .into_iter()
@@ -977,7 +977,7 @@ mod tests {
         );
         assert_eq!(
             detail(&video, true, Locale::De),
-            "1.4 GB · 2024-05-01 · Geteilt"
+            "1,4 GB · 2024-05-01 · Geteilt"
         );
         assert_eq!(detail(&odd, true, Locale::Es), "Compartido");
     }

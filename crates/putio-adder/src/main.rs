@@ -14,6 +14,7 @@ use std::sync::{Arc, OnceLock};
 
 use putio_core::i18n::Locale;
 use putio_core::settings::Settings;
+use putio_core::state::SettingsProblem;
 use putio_platform::ipc::{self, Endpoint, Instance};
 use putio_platform::notify::{self, ClickHandler};
 use putio_platform::paths;
@@ -26,6 +27,37 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const RELAUNCH_WAIT: std::time::Duration = std::time::Duration::from_secs(60);
 
 #[allow(clippy::too_many_lines)] // the start-up sequence reads best top to bottom
+/// Where the preferences live, if anywhere. A demo run never writes the real preferences.
+fn settings_file(demo: bool) -> Option<SettingsFile> {
+    if demo {
+        return None;
+    }
+    paths::config_dir(paths::Os::current(), &paths::process_env).map(SettingsFile::new)
+}
+
+/// The saved preferences, and what is wrong with them if anything is. No file yet is not a problem (first
+/// run); a file that cannot be read or is not valid means the defaults are used, and the user is told. No
+/// place to keep preferences at all (outside a demo run) means changes cannot last.
+fn load_settings(file: Option<&SettingsFile>, demo: bool) -> (Settings, Option<SettingsProblem>) {
+    let Some(file) = file else {
+        return (
+            Settings::default(),
+            (!demo).then_some(SettingsProblem::NotSaved),
+        );
+    };
+    match file.load() {
+        Ok(None) => (Settings::default(), None),
+        Ok(Some(text)) => Settings::parse(&text).map_or_else(
+            || (Settings::default(), Some(SettingsProblem::Unreadable)),
+            |settings| (settings, None),
+        ),
+        Err(error) => {
+            eprintln!("could not read settings: {error}");
+            (Settings::default(), Some(SettingsProblem::Unreadable))
+        }
+    }
+}
+
 fn main() -> eframe::Result {
     // Magnet links and files handed to us by the OS or another launch arrive here as raw strings; the
     // app validates every one of them (`Intake::parse`) before acting.
@@ -81,17 +113,8 @@ fn main() -> eframe::Result {
         spawn_update_cleanup();
     }
 
-    let settings_file = if demo {
-        None // never write the real preferences from a demo run
-    } else {
-        paths::config_dir(paths::Os::current(), &paths::process_env).map(SettingsFile::new)
-    };
-    let settings = Settings::from_json_or_default(
-        settings_file
-            .as_ref()
-            .and_then(|file| file.load().ok().flatten())
-            .as_deref(),
-    );
+    let settings_file = settings_file(demo);
+    let (settings, settings_problem) = load_settings(settings_file.as_ref(), demo);
     let locale = sys_locale::get_locale().map_or(Locale::En, |tag| Locale::from_tag(&tag));
     // Debug builds only: `PUTIO_ADDER_LOCALE=de` (or `es`) to look at a translation.
     #[cfg(debug_assertions)]
@@ -119,6 +142,7 @@ fn main() -> eframe::Result {
     let startup = app::Startup {
         settings,
         settings_file,
+        settings_problem,
         locale,
         secrets,
         secrets_persist,
@@ -223,5 +247,53 @@ mod tests {
             assert!(!take_relaunch_flag(&mut list));
             assert_eq!(list, original);
         }
+    }
+
+    fn dir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("putio-adder-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn missing_malformed_and_unreadable_preferences_are_told_apart() {
+        // First run: nothing saved, nothing wrong.
+        let first = dir("settings-first");
+        let file = SettingsFile::new(first.clone());
+        assert_eq!(load_settings(Some(&file), false).1, None);
+
+        // A saved file loads.
+        let saved = Settings {
+            close_after_magnet: true,
+            ..Settings::default()
+        };
+        file.save(&saved.to_json()).unwrap();
+        let (loaded, problem) = load_settings(Some(&file), false);
+        assert!(loaded.close_after_magnet && problem.is_none());
+
+        // Garbage: the defaults, and the user is told.
+        std::fs::write(file.path(), "{ not json").unwrap();
+        let (loaded, problem) = load_settings(Some(&file), false);
+        assert_eq!(loaded, Settings::default());
+        assert_eq!(problem, Some(SettingsProblem::Unreadable));
+
+        // A path that cannot be read as a file (a directory in its place).
+        std::fs::remove_file(file.path()).unwrap();
+        std::fs::create_dir(file.path()).unwrap();
+        assert_eq!(
+            load_settings(Some(&file), false).1,
+            Some(SettingsProblem::Unreadable)
+        );
+        let _ = std::fs::remove_dir_all(first);
+    }
+
+    #[test]
+    fn no_place_for_preferences_is_a_problem_except_in_a_demo() {
+        assert_eq!(
+            load_settings(None, false).1,
+            Some(SettingsProblem::NotSaved)
+        );
+        assert_eq!(load_settings(None, true).1, None);
     }
 }
