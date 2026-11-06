@@ -271,14 +271,6 @@ jobs:
       - name: Release notes
         run: |
           {
-            echo "## Downloads"
-            echo
-            echo "| Platform | Files |"
-            echo "|---|---|"
-            echo "| macOS (Apple Silicon / Intel) | \`putio-adder-v${VERSION}-macos-arm64.dmg\`, \`putio-adder-v${VERSION}-macos-x64.dmg\` (the \`.zip\` next to each is what the in-app updater uses) |"
-            echo "| Windows (x64 / arm64) | \`...-windows-x64-setup.exe\` or \`.zip\`, \`...-windows-arm64-setup.exe\` or \`.zip\` |"
-            echo "| Linux (x86_64 / aarch64) | \`putio-adder-v${VERSION}-linux-x86_64.tar.gz\`, \`...-linux-aarch64.tar.gz\` |"
-            echo
             if grep -q ad-hoc dist/signing-*.txt; then
               echo "> **macOS:** this build is not notarized. Right-click the app, choose *Open*, and confirm once."
             else
