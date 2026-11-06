@@ -20,6 +20,6 @@ cp $src/app-light-512.png  "$set_dir/icon_256x256@2x.png"
 cp $src/app-light-512.png  "$set_dir/icon_512x512.png"
 cp $src/app-light-1024.png "$set_dir/icon_512x512@2x.png"
 iconutil -c icns "$set_dir" -o assets/AppIcon.icns
-python3 tools/make-ico.py $src/putio-adder.ico $src/app-light-16.png $src/app-light-32.png $src/app-light-64.png $src/app-light-128.png $src/app-light-256.png
+python3 tools/make-ico.py $src/putio-adder.ico $src/app-light-16.png $src/app-light-24.png $src/app-light-32.png $src/app-light-48.png $src/app-light-64.png $src/app-light-128.png $src/app-light-256.png
 rm -rf "$(dirname "$set_dir")"
 echo "wrote assets/AppIcon.icns and $src/putio-adder.ico"
