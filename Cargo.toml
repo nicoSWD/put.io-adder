@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/putio-api", "crates/putio-core", "crates/putio-platform", "crates/putio-adder"]
 
 [workspace.package]
-version = "4.0.0"
+version = "4.0.1"
 edition = "2024"
 rust-version = "1.99"
 license = "MIT"
