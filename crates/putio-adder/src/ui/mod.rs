@@ -20,6 +20,7 @@ pub(crate) mod tabs;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub(crate) mod theme;
+pub(crate) mod thumbs;
 pub(crate) mod update;
 pub(crate) mod uploads;
 pub(crate) mod widgets;
@@ -73,6 +74,8 @@ pub(crate) struct UiState {
     pub(crate) file_dialog: file_dialogs::FileDialog,
     /// The add / edit feed form and the delete confirmation.
     pub(crate) feed_dialog: feed_form::FeedDialog,
+    /// The pictures of files.
+    pub(crate) thumbs: thumbs::Thumbs,
     /// The *Add a link* card.
     pub(crate) link_ui: link_card::LinkUi,
     /// The friends card's field and the removal being asked about.
@@ -98,6 +101,7 @@ impl Default for UiState {
             search_text: String::new(),
             file_dialog: file_dialogs::FileDialog::default(),
             feed_dialog: feed_form::FeedDialog::default(),
+            thumbs: thumbs::Thumbs::default(),
             link_ui: link_card::LinkUi::default(),
             friends_ui: friends_card::FriendsUi::default(),
             share_pick: share_card::Pick::default(),
@@ -121,6 +125,9 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
     let ctx = ui.ctx().clone();
     // One palette for the whole frame, whatever the theme resolves to right now.
     theme::select(&ctx);
+    if !app.state.is_signed_in() {
+        app.ui.thumbs.clear();
+    }
     uploads::handle_drops(&ctx, app);
     link_card::handle_paste(&ctx, app);
     egui::CentralPanel::default()

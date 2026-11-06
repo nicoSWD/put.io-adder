@@ -353,6 +353,17 @@ impl App {
         ui::feed_form::demo(self, ctx, view);
     }
 
+    /// Debug builds only: the pictures of the demo's videos, as if they had arrived.
+    #[cfg(debug_assertions)]
+    fn demo_thumbnails(&mut self, ctx: &egui::Context) {
+        for file in crate::demo::files() {
+            if let Some(address) = putio_core::files::thumbnail_url(&file) {
+                let picture = crate::demo::thumbnail_picture(file.id);
+                self.ui.thumbs.insert_ready(ctx, &address, &picture);
+            }
+        }
+    }
+
     /// Debug builds only: the Files tab in each of its states (`files`, `files-empty`, `files-loading`,
     /// `files-failed`, `files-search`, `files-deep`, `file-card-menu`) and its cards (`file-rename`,
     /// `file-new-folder`, `file-move`, `file-delete`, `file-delete-folder`).
@@ -407,6 +418,7 @@ impl App {
                 name: String::new(),
             }]
         };
+        self.demo_thumbnails(ctx);
         self.state.files = FilesView {
             trail,
             items: if matches!(view, "files-empty" | "files-loading" | "files-failed") {
@@ -752,6 +764,7 @@ impl App {
                 WorkerMsg::Core(event) => self.dispatch(ctx, event),
                 WorkerMsg::Folders { parent, result } => self.ui.folder_listed(parent, result),
                 WorkerMsg::FolderName { id, name } => self.ui.folder_named(id, name),
+                WorkerMsg::Thumbnail { url, result } => self.ui.thumbs.arrived(ctx, url, result),
                 WorkerMsg::UpdatePrepared { op, result } => {
                     let result = result.map(|prepared| self.prepared_update = Some(prepared));
                     self.dispatch(ctx, Event::UpdatePrepared { op, result });

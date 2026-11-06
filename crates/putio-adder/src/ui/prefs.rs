@@ -110,6 +110,7 @@ impl FolderPicker {
             content_type: String::new(),
             size: 0,
             screenshot: None,
+            icon: None,
             created_at: None,
         };
         Self {

@@ -76,6 +76,30 @@ pub fn sort_files(files: &mut [File]) {
     files.sort_by_cached_key(|file| (!is_folder(file), file.name.to_lowercase(), file.id));
 }
 
+/// The address of a small picture of a file worth fetching, or `None`: put.io's thumbnail of a video
+/// (`icon`) when it has one, else its screenshot, and only when the address is on put.io's picture paths
+/// (see [`putio_api::thumbnail_path`]). A folder and a file with only a generic icon have none.
+#[must_use]
+pub fn thumbnail_url(file: &File) -> Option<String> {
+    if is_folder(file) {
+        return None;
+    }
+    let usable = |address: &Option<String>| {
+        address
+            .as_deref()
+            .filter(|a| putio_api::thumbnail_path(a).is_some())
+            .map(str::to_owned)
+    };
+    // The thumbnail is made for a small box; the screenshot is the whole frame.
+    let thumbnail = file
+        .icon
+        .as_deref()
+        .filter(|a| a.contains("/thumbnails/"))
+        .map(str::to_owned)
+        .filter(|a| putio_api::thumbnail_path(a).is_some());
+    thumbnail.or_else(|| usable(&file.screenshot))
+}
+
 /// A file's name for showing: control characters removed, `…` when there is none.
 #[must_use]
 pub fn display_name(file: &File) -> String {
@@ -100,8 +124,32 @@ mod tests {
             content_type: String::new(),
             size: 0,
             screenshot: None,
+            icon: None,
             created_at: None,
         }
+    }
+
+    #[test]
+    fn a_videos_thumbnail_is_preferred_to_its_screenshot_and_only_put_ios_pictures_count() {
+        let thumb = "https://put.io/thumbnails/abc%3D.jpg";
+        let shot = "https://put.io/screenshots/abc%3D.jpg";
+        let mut video = file(1, "a.mkv", FileType::Video);
+        assert_eq!(thumbnail_url(&video), None, "nothing to show");
+        video.screenshot = Some(shot.into());
+        assert_eq!(thumbnail_url(&video).as_deref(), Some(shot));
+        video.icon = Some(thumb.into());
+        assert_eq!(thumbnail_url(&video).as_deref(), Some(thumb));
+        // A generic type icon is not a picture of the file.
+        video.icon = Some("https://put.io/images/file_types/video.png".into());
+        assert_eq!(thumbnail_url(&video).as_deref(), Some(shot));
+        // An address that is not on put.io's picture paths is never used, whatever the field says.
+        video.icon = Some("https://evil.example/thumbnails/a.jpg".into());
+        video.screenshot = Some("https://put.io/thumbnails/a.jpg?x=1".into());
+        assert_eq!(thumbnail_url(&video), None);
+        // A folder has none.
+        let mut folder = file(2, "Movies", FileType::Folder);
+        folder.icon = Some(thumb.into());
+        assert_eq!(thumbnail_url(&folder), None);
     }
 
     #[test]

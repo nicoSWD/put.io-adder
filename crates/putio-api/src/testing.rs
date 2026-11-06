@@ -40,6 +40,16 @@ impl FakeTransport {
         self
     }
 
+    /// Queue an answer whose body is bytes, not text.
+    pub fn queue_bytes(&self, status: u16, body: Vec<u8>) -> &Self {
+        self.queue(Ok(Response {
+            status,
+            headers: Vec::new(),
+            body,
+        }));
+        self
+    }
+
     pub fn push_error(&self, error: TransportError) -> &Self {
         self.queue(Err(error));
         self

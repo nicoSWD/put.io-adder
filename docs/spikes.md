@@ -51,3 +51,5 @@ Replace `crates/putio-api/tests/fixtures/*.json` with scrubbed recordings afterw
 
 7f. **Adding a transfer from a web address** uses `POST /transfers/add` with `url=` and `save_parent_id=`, the call that adds magnet links (verified for magnets). The spec says the field takes "a magnet link or an HTTP(S) URL", but the app has only added magnets against a live account: unknown is what put.io answers for an address it cannot fetch (the card shows its message as it is), for a page that is not a file, and whether an address with credentials in it is accepted.
 
+7g. **Thumbnails** use the `icon` and `screenshot` fields of a file. Their form is taken from the test fixtures of put.io's Go client (`https://put.io/thumbnails/<token>.jpg` for a video's `icon`, `https://put.io/screenshots/<token>.jpg` for its `screenshot`, JPEG, no signature), not from a live reply or documentation. If the real addresses are on another host or path, nothing is fetched and rows keep their icons. Unknown: the real host and format, the size of the pictures, and whether they need the account's token (the app sends none).
+
