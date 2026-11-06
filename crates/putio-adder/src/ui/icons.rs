@@ -81,6 +81,7 @@ pub(crate) enum MenuIcon {
     Settings,
     Refresh,
     External,
+    Coffee,
     SignOut,
     Power,
     Play,
@@ -147,6 +148,18 @@ pub(crate) fn menu_icon(painter: &Painter, center: Pos2, icon: MenuIcon, color: 
             let side = Vec2::new(direction.y, -direction.x);
             painter.line_segment([tip, tip - direction * 4.6 + side * 3.4], stroke);
             painter.line_segment([tip, tip - direction * 4.6 - side * 3.4], stroke);
+        }
+        MenuIcon::Coffee => {
+            // A cup with a handle and two wisps of steam.
+            painter.line_segment([at(-6.0, -1.0), at(-5.0, 5.5)], stroke);
+            painter.line_segment([at(-5.0, 5.5), at(3.0, 5.5)], stroke);
+            painter.line_segment([at(3.0, 5.5), at(4.0, -1.0)], stroke);
+            painter.line_segment([at(-6.5, -1.0), at(4.5, -1.0)], stroke);
+            painter.line_segment([at(4.2, 0.0), at(7.0, 0.0)], stroke);
+            painter.line_segment([at(7.0, 0.0), at(7.0, 3.0)], stroke);
+            painter.line_segment([at(7.0, 3.0), at(3.4, 3.0)], stroke);
+            painter.line_segment([at(-3.0, -3.0), at(-3.0, -6.0)], stroke);
+            painter.line_segment([at(0.5, -3.0), at(0.5, -6.0)], stroke);
         }
         MenuIcon::External => {
             // A box with a corner cut out, and an arrow leaving through the gap.

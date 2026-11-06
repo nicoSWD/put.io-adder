@@ -67,6 +67,8 @@ const MAX_REASON_CHARS: usize = 200;
 
 pub const LINK_URL: &str = "https://put.io/link";
 pub const PROJECT_URL: &str = "https://github.com/nicoSWD/put.io-adder";
+/// Where to say thanks for the app.
+pub const SUPPORT_URL: &str = "https://buymeacoffee.com/nicoswd";
 
 /// What went wrong with the place the sign-in is kept.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -322,6 +324,8 @@ pub enum Event {
         file_id: Option<i64>,
     },
     OpenProjectPage,
+    /// The "Buy me a coffee" link of the menu.
+    OpenSupportPage,
     /// Open the release page of the update that was found (the URL comes from the validated update status).
     OpenReleasePage,
 
@@ -1239,6 +1243,7 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
         }
         Event::NotificationClicked { file_id } => fx.push(Effect::OpenUrl(open_file_url(file_id))),
         Event::OpenProjectPage => fx.push(Effect::OpenUrl(PROJECT_URL.to_owned())),
+        Event::OpenSupportPage => fx.push(Effect::OpenUrl(SUPPORT_URL.to_owned())),
         Event::OpenReleasePage => {
             if let UpdateStatus::Available { url, .. } = &state.update {
                 fx.push(Effect::OpenUrl(url.clone()));
@@ -3516,6 +3521,10 @@ mod tests {
         assert_eq!(
             update(&mut state, 0, Event::OpenProjectPage),
             [Effect::OpenUrl(PROJECT_URL.into())]
+        );
+        assert_eq!(
+            update(&mut state, 0, Event::OpenSupportPage),
+            [Effect::OpenUrl("https://buymeacoffee.com/nicoswd".into())]
         );
     }
 

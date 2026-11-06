@@ -1,7 +1,7 @@
 //! The "..." menu: a rounded card of icon rows, grouped by hairlines.
 
 use eframe::egui::{self, Align2, CornerRadius, Pos2, RectAlign, Sense, Vec2};
-use putio_core::i18n::Msg;
+use putio_core::i18n::{Locale, Msg};
 use putio_core::state::Event;
 use putio_core::update::UpdateStatus;
 
@@ -30,16 +30,20 @@ fn has_update_row(state: &putio_core::state::State) -> bool {
 
 /// How tall the window has to be for the whole menu to be inside it. A menu is drawn inside the window,
 /// so the collapsed window (only the header and the status row) would cut it off. The rows are: Preferences,
-/// check for updates, project page, sign out and quit, in three groups; the new-version row and its hairline
-/// come first when there is one.
-pub(crate) fn window_height(update_row: bool) -> f32 {
-    let (rows, dividers) = if update_row { (6.0, 3.0) } else { (5.0, 2.0) };
+/// Friends (signed in), check for updates, project page, *Buy me a coffee*, sign out (signed in) and quit, in
+/// three groups; the new-version row and its hairline come first when there is one.
+pub(crate) fn window_height(update_row: bool, signed_in: bool) -> f32 {
+    let rows = 5.0 + f32::from(u8::from(update_row)) + 2.0 * f32::from(u8::from(signed_in));
+    let dividers = 2.0 + f32::from(u8::from(update_row));
     MENU_TOP + MENU_PADDING + rows * ROW_HEIGHT + dividers * DIVIDER_HEIGHT + MENU_BOTTOM_MARGIN
 }
 
-/// Whether the window has to make room for the menu when it is open: with the new-version row or not.
-pub(crate) fn window_room(app: &App) -> Option<bool> {
-    app.ui.menu_open.then(|| has_update_row(&app.state))
+/// What the window has to make room for when the menu is open: whether it has the new-version row, and
+/// whether the user is signed in (which adds Friends and Sign out).
+pub(crate) fn window_room(app: &App) -> Option<(bool, bool)> {
+    app.ui
+        .menu_open
+        .then(|| (has_update_row(&app.state), app.state.is_signed_in()))
 }
 
 /// How the shortcut for Preferences is written on this platform.
@@ -219,15 +223,7 @@ pub(crate) fn show(button: &egui::Response, app: &mut App) {
                 },
             );
         }
-        if item(
-            ui,
-            MenuIcon::External,
-            &Msg::MenuProjectPage.text(locale),
-            None,
-            Tint::Normal,
-        ) {
-            app.dispatch(&ctx, Event::OpenProjectPage);
-        }
+        web_links(ui, app, &ctx, locale);
         divider(ui);
         if signed_in
             && item(
@@ -251,6 +247,28 @@ pub(crate) fn show(button: &egui::Response, app: &mut App) {
         }
     });
     app.ui.menu_open = shown.is_some();
+}
+
+/// The two rows that open a web page: the project's, and the one to say thanks.
+fn web_links(ui: &mut egui::Ui, app: &mut App, ctx: &egui::Context, locale: Locale) {
+    if item(
+        ui,
+        MenuIcon::External,
+        &Msg::MenuProjectPage.text(locale),
+        None,
+        Tint::Normal,
+    ) {
+        app.dispatch(ctx, Event::OpenProjectPage);
+    }
+    if item(
+        ui,
+        MenuIcon::Coffee,
+        &Msg::MenuBuyCoffee.text(locale),
+        None,
+        Tint::Normal,
+    ) {
+        app.dispatch(ctx, Event::OpenSupportPage);
+    }
 }
 
 #[cfg(test)]
@@ -279,14 +297,21 @@ mod tests {
 
     #[test]
     fn the_window_makes_room_for_the_menu_and_for_the_update_row() {
-        // 5 rows and 2 hairlines under the button, with the frame and a margin.
-        let plain = window_height(false);
+        // Signed out: Preferences, check for updates, project page, coffee and quit are 5 rows, with 2
+        // hairlines under the button, the frame and a margin.
+        let out = window_height(false, false);
         assert_eq!(
-            plain,
+            out,
             MENU_TOP + MENU_PADDING + 5.0 * ROW_HEIGHT + 2.0 * DIVIDER_HEIGHT + MENU_BOTTOM_MARGIN
         );
+        // Signed in, Friends and Sign out are two rows more.
+        let plain = window_height(false, true);
+        assert_eq!(plain - out, 2.0 * ROW_HEIGHT);
         // The new-version row adds a row and a hairline.
-        assert_eq!(window_height(true) - plain, ROW_HEIGHT + DIVIDER_HEIGHT);
+        assert_eq!(
+            window_height(true, true) - plain,
+            ROW_HEIGHT + DIVIDER_HEIGHT
+        );
         // The divider really is as tall as the constant says.
         assert_eq!(DIVIDER_HEIGHT, 4.0 + 1.0 + 4.0);
     }

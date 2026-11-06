@@ -16,6 +16,9 @@ const ALLOWED_PREFIXES: [&str; 2] = [
 ];
 /// The project page itself, without a trailing slash.
 const PROJECT_PAGE: &str = "https://github.com/nicoSWD/put.io-adder";
+/// The one page of another site that is allowed: where to say thanks for the app. Exactly this address,
+/// not the site.
+const SUPPORT_PAGE: &str = "https://buymeacoffee.com/nicoswd";
 
 #[derive(Debug, thiserror::Error)]
 pub enum OpenError {
@@ -37,6 +40,7 @@ pub fn is_allowed(url: &str) -> bool {
             )
     });
     let on_list = url == PROJECT_PAGE
+        || url == SUPPORT_PAGE
         || ALLOWED_PREFIXES
             .iter()
             .any(|prefix| url.starts_with(prefix));
@@ -145,6 +149,40 @@ impl UrlOpener for RecordingOpener {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_page_the_core_asks_to_open_is_one_the_opener_allows() {
+        // The addresses are constants in the core; the allow-list is here. If one is added or changed
+        // without the other, this fails instead of a menu item that quietly does nothing.
+        for url in [
+            putio_core::state::PROJECT_URL,
+            putio_core::state::SUPPORT_URL,
+            "https://put.io/files/8",
+            "https://put.io/transfers",
+        ] {
+            assert!(is_allowed(url), "{url} would be refused");
+            let opener = RecordingOpener::default();
+            assert!(opener.open(url).is_ok(), "{url}");
+            assert_eq!(opener.opened(), [url]);
+        }
+    }
+
+    #[test]
+    fn only_that_one_coffee_page_is_allowed_and_nothing_that_looks_like_it() {
+        for bad in [
+            "https://buymeacoffee.com/",
+            "https://buymeacoffee.com/nicoswd/extra",
+            "https://buymeacoffee.com/nicoswd2",
+            "https://buymeacoffee.com/other",
+            "https://buymeacoffee.com@evil.example/nicoswd",
+            "https://buymeacoffee.com.evil.example/nicoswd",
+            "http://buymeacoffee.com/nicoswd",
+            "https://www.buymeacoffee.com/nicoswd",
+            "https://buymeacoffee.com/nicoswd?x=1 y",
+        ] {
+            assert!(!is_allowed(bad), "{bad} was allowed");
+        }
+    }
 
     #[test]
     fn a_download_address_is_checked_by_the_download_rule_not_the_page_list() {

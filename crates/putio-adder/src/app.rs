@@ -859,9 +859,12 @@ impl App {
             Mode::Login
         } else if self.state.transfers_expanded {
             Mode::List
-        } else if let Some(update_row) = ui::menu::window_room(self) {
+        } else if let Some((update_row, signed_in)) = ui::menu::window_room(self) {
             // The menu is drawn inside the window, which has no room for it while collapsed.
-            Mode::Menu { update_row }
+            Mode::Menu {
+                update_row,
+                signed_in,
+            }
         } else {
             Mode::Collapsed
         };
