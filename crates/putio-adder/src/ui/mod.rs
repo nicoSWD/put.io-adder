@@ -5,12 +5,14 @@ pub(crate) mod feed_form;
 pub(crate) mod feeds;
 pub(crate) mod file_dialogs;
 pub(crate) mod files;
+pub(crate) mod friends_card;
 pub(crate) mod handler;
 pub(crate) mod header;
 pub(crate) mod icons;
 pub(crate) mod login;
 pub(crate) mod menu;
 pub(crate) mod prefs;
+pub(crate) mod share_card;
 pub(crate) mod summary;
 pub(crate) mod table;
 pub(crate) mod tabs;
@@ -18,6 +20,7 @@ pub(crate) mod tabs;
 pub(crate) mod test_support;
 pub(crate) mod theme;
 pub(crate) mod update;
+pub(crate) mod uploads;
 pub(crate) mod widgets;
 
 use eframe::egui::{self, Frame, Margin};
@@ -69,8 +72,10 @@ pub(crate) struct UiState {
     pub(crate) file_dialog: file_dialogs::FileDialog,
     /// The add / edit feed form and the delete confirmation.
     pub(crate) feed_dialog: feed_form::FeedDialog,
-    /// The transfer whose details panel is open.
-    pub(crate) details: Option<i64>,
+    /// The friends card's field and the removal being asked about.
+    pub(crate) friends_ui: friends_card::FriendsUi,
+    /// Who is ticked in the sharing card.
+    pub(crate) share_pick: share_card::Pick,
     pub(crate) folders: prefs::FolderPicker,
     /// Names of the folders asked about so far (`None`: put.io could not say).
     pub(crate) folder_names: std::collections::HashMap<i64, Option<String>>,
@@ -90,7 +95,8 @@ impl Default for UiState {
             search_text: String::new(),
             file_dialog: file_dialogs::FileDialog::default(),
             feed_dialog: feed_form::FeedDialog::default(),
-            details: None,
+            friends_ui: friends_card::FriendsUi::default(),
+            share_pick: share_card::Pick::default(),
             folders: prefs::FolderPicker::default(),
             folder_names: std::collections::HashMap::new(),
         }
@@ -111,6 +117,7 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
     let ctx = ui.ctx().clone();
     // One palette for the whole frame, whatever the theme resolves to right now.
     theme::select(&ctx);
+    uploads::handle_drops(&ctx, app);
     egui::CentralPanel::default()
         .frame(
             Frame::new()
@@ -136,6 +143,9 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
     prefs::show(&ctx, app);
     feed_form::show(&ctx, app);
     file_dialogs::show(&ctx, app);
+    share_card::show(&ctx, app);
+    friends_card::show(&ctx, app);
     details::show(&ctx, app);
     handler::show(&ctx, app);
+    uploads::drop_hint(&ctx, app);
 }

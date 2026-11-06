@@ -213,10 +213,20 @@ pub(crate) fn account() -> Account {
 }
 
 /// Peers, ratios, tracker messages and dates, so the details panel has something to show.
+/// The folders the demo transfers save into (their names are in [`folder_names`]).
+const DEMO_MOVIES: i64 = 11;
+const DEMO_SHOWS: i64 = 12;
+
+/// What put.io would say when asked for the names of those folders.
+pub(crate) fn folder_names() -> [(i64, &'static str); 2] {
+    [(DEMO_MOVIES, "Movies"), (DEMO_SHOWS, "TV Shows")]
+}
+
 fn add_details(list: &mut [Transfer]) {
     for item in list {
         match item.id {
             1 | 2 => {
+                item.save_parent_id = Some(if item.id == 1 { DEMO_MOVIES } else { 0 });
                 item.peers = Some(14 - item.id * 3);
                 item.availability = Some(100);
                 item.downloaded = Some(item.size * item.percent_done / 100);
@@ -230,6 +240,8 @@ fn add_details(list: &mut [Transfer]) {
                 item.finished_at = Some("2026-11-04T21:41:52".into());
             }
             6 => {
+                item.save_parent_id = Some(DEMO_SHOWS);
+                item.subscription_id = Some(6);
                 item.peers = Some(9);
                 item.availability = Some(100);
                 item.downloaded = Some(item.size);

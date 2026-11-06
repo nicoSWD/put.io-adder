@@ -15,16 +15,18 @@
 
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use putio_api::client::FileListing;
+use putio_api::client::{FileListing, FileUpload};
 use putio_api::{
-    ApiError, Client, FileType, RssFeedSettings, Token, Transport, UploadOutcome, UreqTransport,
+    ApiError, Client, FileType, FriendChange, RssFeedSettings, ShareWith, Token, Transport,
+    UploadOutcome, UreqTransport,
 };
 use putio_core::secret::Secret;
-use putio_core::state::{Event, OpId, Prepared, StreamFailure};
+use putio_core::state::{Event, OpId, Prepared, StreamFailure, UploadFailure};
 use putio_core::update::UpdateAsset;
 use putio_platform::handler;
 use putio_platform::player::{PlayError, PlayerLauncher, VlcLauncher};
@@ -116,6 +118,33 @@ pub(crate) enum Job {
     ListFiles {
         parent: i64,
     },
+    FetchFriendList,
+    FetchFriendRequests,
+    ChangeFriend {
+        op: OpId,
+        change: FriendChange,
+    },
+    FetchSharedWith {
+        file_id: i64,
+    },
+    FetchFriends {
+        file_id: i64,
+    },
+    ShareFile {
+        op: OpId,
+        file_id: i64,
+        with: ShareWith,
+    },
+    UnshareFile {
+        op: OpId,
+        file_id: i64,
+        share_id: i64,
+    },
+    ListShared,
+    /// One transfer, for the open details panel.
+    FetchTransfer {
+        id: i64,
+    },
     SearchFiles {
         query: String,
     },
@@ -138,6 +167,16 @@ pub(crate) enum Job {
         op: OpId,
         id: i64,
     },
+    /// Upload a file from disk into a folder. Has its own lane: a big file must not hold up the
+    /// torrents, the stream to VLC or the update behind it.
+    UploadFile {
+        op: OpId,
+        path: PathBuf,
+        name: String,
+        parent: i64,
+        /// Set to stop it.
+        cancel: Arc<AtomicBool>,
+    },
     ExtractFile {
         op: OpId,
         id: i64,
@@ -158,6 +197,10 @@ impl Job {
                 | Self::RegisterDefaultHandler
                 | Self::LatestRelease
         )
+    }
+
+    fn is_upload(&self) -> bool {
+        matches!(self, Self::UploadFile { .. })
     }
 
     fn is_heavy(&self) -> bool {
@@ -215,6 +258,7 @@ struct Session {
 pub(crate) struct Workers {
     interactive: Sender<Queued>,
     heavy: Sender<Queued>,
+    uploads: Sender<Queued>,
     session: Arc<Mutex<Session>>,
 }
 
@@ -240,6 +284,8 @@ impl Workers {
         Ok(Self {
             interactive: lane("interactive", INTERACTIVE_THREADS)?,
             heavy: lane("heavy", HEAVY_THREADS)?,
+            // One at a time, in the order they were dropped.
+            uploads: lane("uploads", 1)?,
             session: Arc::new(Mutex::new(Session::default())),
         })
     }
@@ -249,9 +295,11 @@ impl Workers {
     pub(crate) fn detached() -> Self {
         let (interactive, _) = mpsc::channel();
         let (heavy, _) = mpsc::channel();
+        let (uploads, _) = mpsc::channel();
         Self {
             interactive,
             heavy,
+            uploads,
             session: Arc::new(Mutex::new(Session::default())),
         }
     }
@@ -278,7 +326,9 @@ impl Workers {
             Ok(session) => (session.number, session.token.clone()),
             Err(_) => return,
         };
-        let lane = if job.is_heavy() {
+        let lane = if job.is_upload() {
+            &self.uploads
+        } else if job.is_heavy() {
             &self.heavy
         } else {
             &self.interactive
@@ -326,6 +376,30 @@ fn run(
                 op,
                 result: prepare_update(op, &asset, out, ctx),
             }
+        } else if let Job::UploadFile {
+            op,
+            path,
+            name,
+            parent,
+            cancel,
+        } = job
+        {
+            let client = match token {
+                Some(token) => Client::with_token(Arc::clone(transport), token),
+                None => Client::new(Arc::clone(transport)),
+            };
+            let (out, ctx) = (out.clone(), ctx.clone());
+            let report: Arc<dyn Fn(u64) + Send + Sync> = Arc::new(move |sent| {
+                let _ = out.send(Delivery {
+                    session,
+                    msg: WorkerMsg::Core(Event::UploadProgress { op, sent }),
+                });
+                ctx.request_repaint();
+            });
+            WorkerMsg::Core(Event::UploadFinished {
+                op,
+                result: upload_file(&client, &path, name, parent, &cancel, report),
+            })
         } else {
             let client = match token {
                 Some(token) => Client::with_token(Arc::clone(transport), token),
@@ -337,6 +411,51 @@ fn run(
             return; // the UI is gone
         }
         ctx.request_repaint();
+    }
+}
+
+/// Upload one file, telling `report` how many bytes have gone (at most a thousand times: a progress bar
+/// cannot show finer than that, and a big file would otherwise send the UI a message every few
+/// kilobytes).
+fn upload_file<T: Transport>(
+    client: &Client<T>,
+    path: &std::path::Path,
+    name: String,
+    parent: i64,
+    cancel: &Arc<AtomicBool>,
+    report: Arc<dyn Fn(u64) + Send + Sync>,
+) -> Result<(), UploadFailure> {
+    if cancel.load(Ordering::Relaxed) {
+        return Err(UploadFailure::Cancelled);
+    }
+    let local =
+        |why: &dyn std::fmt::Display| UploadFailure::Local(format!("cannot read the file: {why}"));
+    let meta = std::fs::metadata(path).map_err(|error| local(&error))?;
+    if !meta.is_file() {
+        return Err(UploadFailure::Local("not a regular file".into()));
+    }
+    let len = meta.len();
+    // Say how far it has got only when the bar would move.
+    let last = AtomicU64::new(0);
+    let progress: putio_api::transport::ProgressFn = Arc::new(move |sent| {
+        let step = sent.saturating_mul(1000) / len.max(1);
+        if last.swap(step, Ordering::Relaxed) != step {
+            report(sent);
+        }
+    });
+    let result = client.upload_file(FileUpload {
+        path: path.to_path_buf(),
+        name,
+        len,
+        parent_id: parent,
+        progress: Some(progress),
+        cancel: Some(Arc::clone(cancel)),
+    });
+    match result {
+        Ok(_) => Ok(()),
+        Err(_) if cancel.load(Ordering::Relaxed) => Err(UploadFailure::Cancelled),
+        Err(ApiError::File(why)) => Err(UploadFailure::Local(why)),
+        Err(error) => Err(UploadFailure::Api(error)),
     }
 }
 
@@ -456,6 +575,12 @@ fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
             result: stream(client, &VlcLauncher, file_id),
         }),
         // Handled in `run`, which has the channel progress is reported on.
+        Job::UploadFile { op, .. } => WorkerMsg::Core(Event::UploadFinished {
+            op,
+            result: Err(UploadFailure::Local(
+                "internal error: the upload ran without a progress channel".to_owned(),
+            )),
+        }),
         Job::PrepareUpdate { op, .. } => WorkerMsg::UpdatePrepared {
             op,
             result: Err("internal error: the update job ran without a progress channel".to_owned()),
@@ -487,6 +612,41 @@ fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
         Job::ListFiles { parent } => WorkerMsg::Core(Event::FilesListed {
             parent,
             result: client.list_files(parent, None),
+        }),
+        Job::FetchFriendList => WorkerMsg::Core(Event::FriendListFetched(client.friends())),
+        Job::FetchFriendRequests => {
+            WorkerMsg::Core(Event::FriendRequestsFetched(client.friend_requests()))
+        }
+        Job::ChangeFriend { op, change } => {
+            let result = client.change_friend(&change);
+            WorkerMsg::Core(Event::FriendChangeFinished { op, change, result })
+        }
+        Job::FetchSharedWith { file_id } => WorkerMsg::Core(Event::SharedWithFetched {
+            file_id,
+            result: client.shared_with(file_id),
+        }),
+        Job::FetchFriends { file_id } => WorkerMsg::Core(Event::FriendsFetched {
+            file_id,
+            result: client.friends(),
+        }),
+        Job::ShareFile { op, file_id, with } => WorkerMsg::Core(Event::ShareFinished {
+            op,
+            file_id,
+            result: client.share_file(file_id, &with),
+        }),
+        Job::UnshareFile {
+            op,
+            file_id,
+            share_id,
+        } => WorkerMsg::Core(Event::UnshareFinished {
+            op,
+            file_id,
+            result: client.unshare_file(file_id, &[share_id]),
+        }),
+        Job::ListShared => WorkerMsg::Core(Event::SharedListed(client.shared_files())),
+        Job::FetchTransfer { id } => WorkerMsg::Core(Event::TransferDetailsFetched {
+            id,
+            result: client.transfer(id),
         }),
         Job::SearchFiles { query } => {
             let result = client.search_files(&query);
@@ -906,9 +1066,11 @@ mod tests {
     fn workers_without_threads() -> (Workers, Receiver<Queued>) {
         let (interactive, queue) = mpsc::channel();
         let (heavy, _) = mpsc::channel();
+        let (uploads, _) = mpsc::channel();
         let workers = Workers {
             interactive,
             heavy,
+            uploads,
             session: Arc::new(Mutex::new(Session::default())),
         };
         (workers, queue)
@@ -1177,8 +1339,276 @@ mod tests {
                 settings: feed_settings(),
             },
             Job::FolderName { id: 1 },
+            Job::FetchTransfer { id: 1 },
+            Job::ListShared,
+            Job::FetchFriends { file_id: 1 },
+            Job::FetchFriendList,
+            Job::ChangeFriend {
+                op: OpId(1),
+                change: FriendChange::Request("x".into()),
+            },
         ] {
             assert!(job.is_session_bound(), "{job:?}");
+        }
+    }
+
+    /// A file in the temp folder that is removed when dropped.
+    struct TempFile(std::path::PathBuf);
+
+    impl TempFile {
+        fn new(name: &str, bytes: &[u8]) -> Self {
+            let path =
+                std::env::temp_dir().join(format!("putio-adder-{}-{name}", std::process::id()));
+            std::fs::write(&path, bytes).unwrap();
+            Self(path)
+        }
+    }
+
+    impl Drop for TempFile {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    fn quiet() -> Arc<dyn Fn(u64) + Send + Sync> {
+        Arc::new(|_| {})
+    }
+
+    #[test]
+    fn a_file_is_uploaded_with_the_length_it_has_now_and_the_answer_says_how_it_went() {
+        let file = TempFile::new("up.bin", b"hello world");
+        let fake = FakeTransport::new();
+        fake.push_json(200, r#"{"status":"OK","file":{"id":9,"name":"up.bin"}}"#);
+        fake.push_json(500, r#"{"status":"ERROR","error_message":"broken"}"#);
+        let cancel = Arc::new(AtomicBool::new(false));
+        let c = client(&fake);
+        assert_eq!(
+            upload_file(&c, &file.0, "up.bin".into(), 4, &cancel, quiet()),
+            Ok(())
+        );
+        let request = fake.last_request().unwrap();
+        let putio_api::Body::File(body) = request.body else {
+            panic!("a file body")
+        };
+        assert_eq!((body.len, body.path.clone()), (11, file.0.clone()));
+        assert!(
+            String::from_utf8(body.head)
+                .unwrap()
+                .contains("name=\"parent_id\"\r\n\r\n4\r\n")
+        );
+        // What put.io refuses comes back as its own error.
+        let error = upload_file(&c, &file.0, "up.bin".into(), 4, &cancel, quiet()).unwrap_err();
+        assert!(matches!(error, UploadFailure::Api(ApiError::Api(f)) if f.status == 500));
+    }
+
+    #[test]
+    fn a_missing_file_a_folder_and_a_cancel_before_the_start_send_nothing() {
+        let fake = FakeTransport::new();
+        let c = client(&fake);
+        let cancel = Arc::new(AtomicBool::new(false));
+        let gone = std::env::temp_dir().join("putio-adder-no-such-file");
+        assert!(matches!(
+            upload_file(&c, &gone, "x".into(), 0, &cancel, quiet()),
+            Err(UploadFailure::Local(why)) if why.contains("cannot read")
+        ));
+        assert!(matches!(
+            upload_file(&c, &std::env::temp_dir(), "x".into(), 0, &cancel, quiet()),
+            Err(UploadFailure::Local(why)) if why.contains("regular")
+        ));
+        let file = TempFile::new("cancelled.bin", b"x");
+        cancel.store(true, Ordering::Relaxed);
+        assert_eq!(
+            upload_file(&c, &file.0, "x".into(), 0, &cancel, quiet()),
+            Err(UploadFailure::Cancelled)
+        );
+        assert_eq!(fake.requests().len(), 0);
+    }
+
+    /// A transport that is told to cancel while the request is on its way, and fails because of it.
+    struct CancelsInFlight(Arc<AtomicBool>);
+
+    impl Transport for CancelsInFlight {
+        fn execute(
+            &self,
+            _: &putio_api::Request,
+        ) -> Result<putio_api::Response, putio_api::TransportError> {
+            self.0.store(true, Ordering::Relaxed);
+            Err(putio_api::TransportError::Network("cancelled".into()))
+        }
+    }
+
+    #[test]
+    fn an_upload_that_fails_because_it_was_cancelled_is_a_cancel_and_not_a_failure() {
+        let file = TempFile::new("late.bin", b"abc");
+        let cancel = Arc::new(AtomicBool::new(false));
+        let c = Client::with_token(
+            CancelsInFlight(Arc::clone(&cancel)),
+            putio_api::Token::new("tok-123").unwrap(),
+        );
+        assert_eq!(
+            upload_file(&c, &file.0, "x".into(), 0, &cancel, quiet()),
+            Err(UploadFailure::Cancelled)
+        );
+        // Without the flag the same failure is the network's.
+        let other = Arc::new(AtomicBool::new(false));
+        let c = Client::with_token(
+            CancelsInFlight(Arc::new(AtomicBool::new(false))),
+            putio_api::Token::new("tok-123").unwrap(),
+        );
+        assert!(matches!(
+            upload_file(&c, &file.0, "x".into(), 0, &other, quiet()),
+            Err(UploadFailure::Api(ApiError::Network(_)))
+        ));
+    }
+
+    #[test]
+    fn uploads_have_their_own_lane_so_a_big_file_holds_nothing_else_up() {
+        let upload = Job::UploadFile {
+            op: OpId(1),
+            path: "x".into(),
+            name: "x".into(),
+            parent: 0,
+            cancel: Arc::new(AtomicBool::new(false)),
+        };
+        assert!(upload.is_upload() && !upload.is_heavy());
+        assert!(upload.is_session_bound());
+        assert!(
+            !Job::UploadTorrent {
+                op: OpId(1),
+                path: "x".into(),
+                parent: None,
+                trash_after: false,
+            }
+            .is_upload()
+        );
+    }
+
+    #[test]
+    fn friend_jobs_answer_with_the_events_the_core_waits_for() {
+        let fake = FakeTransport::new();
+        fake.push_json(200, r#"{"friends":[{"id":1,"name":"jane"}]}"#);
+        fake.push_json(200, r#"{"friends":[{"id":4,"name":"sam"}]}"#);
+        fake.push_json(200, r#"{"status":"OK"}"#);
+        let c = client(&fake);
+        assert!(matches!(
+            execute(&c, Job::FetchFriendList),
+            WorkerMsg::Core(Event::FriendListFetched(Ok(list))) if list[0].name == "jane"
+        ));
+        assert!(matches!(
+            execute(&c, Job::FetchFriendRequests),
+            WorkerMsg::Core(Event::FriendRequestsFetched(Ok(list))) if list[0].name == "sam"
+        ));
+        let change = FriendChange::Approve("sam".into());
+        match execute(
+            &c,
+            Job::ChangeFriend {
+                op: OpId(6),
+                change: change.clone(),
+            },
+        ) {
+            WorkerMsg::Core(Event::FriendChangeFinished {
+                op: OpId(6),
+                change: answered,
+                result: Ok(()),
+            }) => {
+                assert_eq!(answered, change);
+            }
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(
+            fake.last_request().unwrap().describe(),
+            "POST /friends/sam/approve"
+        );
+    }
+
+    #[test]
+    fn sharing_jobs_answer_with_the_events_the_core_waits_for() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            200,
+            r#"{"shared-with":[{"user_name":"jane","share_id":3}]}"#,
+        );
+        fake.push_json(200, r#"{"friends":[{"id":1,"name":"jane"}]}"#);
+        fake.push_json(200, r#"{"status":"OK"}"#);
+        fake.push_json(200, r#"{"status":"OK"}"#);
+        fake.push_json(200, r#"{"shared":[{"id":5,"name":"a"}]}"#);
+        let c = client(&fake);
+        assert!(matches!(
+            execute(&c, Job::FetchSharedWith { file_id: 5 }),
+            WorkerMsg::Core(Event::SharedWithFetched { file_id: 5, result: Ok(list) }) if list.len() == 1
+        ));
+        assert!(matches!(
+            execute(&c, Job::FetchFriends { file_id: 5 }),
+            WorkerMsg::Core(Event::FriendsFetched { file_id: 5, result: Ok(list) }) if list.len() == 1
+        ));
+        let job = Job::ShareFile {
+            op: OpId(2),
+            file_id: 5,
+            with: ShareWith::Everyone,
+        };
+        assert!(matches!(
+            execute(&c, job),
+            WorkerMsg::Core(Event::ShareFinished {
+                op: OpId(2),
+                file_id: 5,
+                result: Ok(())
+            })
+        ));
+        assert_eq!(fake.last_request().unwrap().describe(), "POST /files/share");
+        let job = Job::UnshareFile {
+            op: OpId(3),
+            file_id: 5,
+            share_id: 30,
+        };
+        assert!(matches!(
+            execute(&c, job),
+            WorkerMsg::Core(Event::UnshareFinished {
+                op: OpId(3),
+                file_id: 5,
+                result: Ok(())
+            })
+        ));
+        assert_eq!(
+            fake.last_request().unwrap().describe(),
+            "POST /files/5/unshare"
+        );
+        assert!(matches!(
+            execute(&c, Job::ListShared),
+            WorkerMsg::Core(Event::SharedListed(Ok(list))) if list.len() == 1
+        ));
+    }
+
+    #[test]
+    fn one_transfer_is_fetched_for_the_details_panel() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            200,
+            r#"{"transfer":{"id":8,"name":"x","status":"SEEDING","save_parent_id":4,"subscription_id":2}}"#,
+        );
+        match execute(&client(&fake), Job::FetchTransfer { id: 8 }) {
+            WorkerMsg::Core(Event::TransferDetailsFetched {
+                id: 8,
+                result: Ok(transfer),
+            }) => {
+                assert_eq!(
+                    (transfer.save_parent_id, transfer.subscription_id),
+                    (Some(4), Some(2))
+                );
+            }
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(fake.last_request().unwrap().describe(), "GET /transfers/8");
+        // A transfer that is gone is told apart from a network problem.
+        fake.push_json(
+            404,
+            r#"{"status":"ERROR","error_type":"NotFound","error_message":"gone"}"#,
+        );
+        match execute(&client(&fake), Job::FetchTransfer { id: 8 }) {
+            WorkerMsg::Core(Event::TransferDetailsFetched {
+                result: Err(ApiError::Api(failure)),
+                ..
+            }) => assert_eq!(failure.status, 404),
+            other => panic!("{other:?}"),
         }
     }
 

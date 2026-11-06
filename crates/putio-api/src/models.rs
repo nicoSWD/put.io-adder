@@ -141,6 +141,12 @@ pub struct Transfer {
     pub created_at: Option<String>,
     #[serde(default, deserialize_with = "lenient")]
     pub finished_at: Option<String>,
+    /// The folder the transfer saves into.
+    #[serde(default, deserialize_with = "lenient")]
+    pub save_parent_id: Option<i64>,
+    /// The RSS feed that added the transfer, when one did.
+    #[serde(default, deserialize_with = "lenient")]
+    pub subscription_id: Option<i64>,
 }
 
 impl Transfer {
@@ -225,6 +231,90 @@ pub struct Account {
     pub monthly_bandwidth_usage: i64,
     #[serde(default)]
     pub disk: Option<Disk>,
+}
+
+/// A friend: someone files can be shared with. Text fields are untrusted server text.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+pub struct Friend {
+    pub id: i64,
+    #[serde(default, deserialize_with = "lenient_default")]
+    pub name: String,
+}
+
+/// A change to a friendship, by the other person's user name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FriendChange {
+    /// Ask somebody to be a friend.
+    Request(String),
+    /// Accept a request somebody sent.
+    Approve(String),
+    /// Turn a request down.
+    Deny(String),
+    /// End a friendship. put.io takes the files shared with all friends out of the old friend's folder.
+    Unfriend(String),
+}
+
+impl FriendChange {
+    /// The name of the person it is about.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Request(name) | Self::Approve(name) | Self::Deny(name) | Self::Unfriend(name) => {
+                name
+            }
+        }
+    }
+
+    /// The last part of the call's path.
+    #[must_use]
+    pub fn verb(&self) -> &'static str {
+        match self {
+            Self::Request(_) => "request",
+            Self::Approve(_) => "approve",
+            Self::Deny(_) => "deny",
+            Self::Unfriend(_) => "unfriend",
+        }
+    }
+}
+
+/// One person a file is shared with. `share_id` is what ends the share.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+pub struct Share {
+    pub share_id: i64,
+    #[serde(default, deserialize_with = "lenient_default")]
+    pub user_name: String,
+}
+
+/// One entry of the list of files the account shares.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+pub struct SharedFile {
+    pub id: i64,
+    #[serde(default, deserialize_with = "lenient_default")]
+    pub name: String,
+}
+
+/// Who a file is shared with when it is shared.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ShareWith {
+    /// Every friend, now and later.
+    Everyone,
+    /// These friends, by name.
+    Friends(Vec<String>),
+}
+
+impl ShareWith {
+    /// The value of the `friends` form field, or `None` when there is nobody to share with (or a name
+    /// that could not be told apart from a list).
+    #[must_use]
+    pub fn as_field(&self) -> Option<String> {
+        match self {
+            Self::Everyone => Some("everyone".into()),
+            Self::Friends(names) => {
+                let clean = |name: &String| !name.trim().is_empty() && !name.contains(',');
+                (!names.is_empty() && names.iter().all(clean)).then(|| names.join(","))
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]

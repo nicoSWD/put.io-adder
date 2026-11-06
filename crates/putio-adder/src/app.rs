@@ -1,5 +1,7 @@
 //! The eframe application: glue between the pure core state machine, the worker thread and the OS.
 
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
@@ -106,6 +108,8 @@ pub(crate) struct App {
     secret_problems: Receiver<SecretProblem>,
     /// The saved token, on its way from the keychain thread; `None` once it has arrived.
     pending_token: Option<Receiver<Option<Token>>>,
+    /// The flags that stop the uploads in flight, by operation.
+    upload_cancels: HashMap<putio_core::state::OpId, Arc<AtomicBool>>,
     settings_file: Option<SettingsFile>,
     notifier: Arc<dyn Notifier>,
     opener: SystemOpener,
@@ -188,6 +192,7 @@ impl App {
             keychain,
             secret_problems,
             pending_token: demo.is_none().then_some(pending_token),
+            upload_cancels: HashMap::new(),
             settings_file,
             notifier,
             opener: SystemOpener,
@@ -264,13 +269,6 @@ impl App {
             "card-menu-done" => Some(crate::ui::Overlay::Card(5)),
             _ => None,
         };
-        self.ui.details = match view {
-            "details" => Some(6),
-            "details-failed" => Some(7),
-            "details-downloading" => Some(1),
-            "details-long" => Some(2),
-            _ => None,
-        };
         if matches!(view, "menu-update" | "collapsed-menu-update") {
             self.state.update = demo_update(true);
         }
@@ -307,6 +305,27 @@ impl App {
         );
         self.start_demo_feeds(ctx, view);
         self.start_demo_files(ctx, view);
+        ui::friends_card::demo(self, ctx, view);
+        ui::uploads::demo(self, ctx, view);
+        let open = match view {
+            "details" => Some(6),
+            "details-failed" => Some(7),
+            "details-downloading" => Some(1),
+            "details-long" => Some(2),
+            _ => None,
+        };
+        if let Some(id) = open {
+            for (folder, name) in crate::demo::folder_names() {
+                self.ui.folder_named(folder, Some(name.to_owned()));
+            }
+            // The feed that added the seeding transfer is known once the Feeds tab has been looked at.
+            self.state.feeds = putio_core::state::FeedList {
+                loaded: true,
+                failed: false,
+                items: crate::demo::feeds(),
+            };
+            self.dispatch(ctx, Event::TransferDetailsOpened(id));
+        }
     }
 
     /// Debug builds only: the Feeds tab in each of its states (`feeds`, `feeds-empty`, `feeds-loading`,
@@ -436,6 +455,7 @@ impl App {
             );
         }
         ui::file_dialogs::demo(self, ctx, view);
+        ui::share_card::demo(self, ctx, view);
     }
 
     /// Debug builds only: the update flow in each of its states (`update`, `update-installing`,
@@ -483,6 +503,9 @@ impl App {
     /// Feed one event to the core and carry out what it asks for.
     pub(crate) fn dispatch(&mut self, ctx: &egui::Context, event: Event) {
         let now = self.now();
+        if let Event::UploadFinished { op, .. } = &event {
+            self.upload_cancels.remove(op);
+        }
         let effects = update(&mut self.state, now, event);
         for effect in effects {
             self.run(ctx, effect);
@@ -500,6 +523,61 @@ impl App {
     /// A handle for sending jobs from UI code that also borrows `self` mutably.
     pub(crate) fn workers(&self) -> Workers {
         self.workers.clone()
+    }
+
+    /// Start an upload (with the flag that can stop it) or stop one.
+    fn run_upload(&mut self, effect: Effect) {
+        match effect {
+            Effect::UploadFile {
+                op,
+                path,
+                name,
+                parent,
+                ..
+            } => {
+                let cancel = Arc::new(AtomicBool::new(false));
+                self.upload_cancels.insert(op, Arc::clone(&cancel));
+                self.send(Job::UploadFile {
+                    op,
+                    path,
+                    name,
+                    parent,
+                    cancel,
+                });
+            }
+            Effect::CancelUpload { op } => {
+                if let Some(flag) = self.upload_cancels.get(&op) {
+                    flag.store(true, Ordering::Relaxed);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// The effects of the sharing and friends cards, the marks in the Files list and the details panel: each
+    /// is one job.
+    fn send_sharing(&self, effect: Effect) {
+        let job = match effect {
+            Effect::FetchFriendList => Job::FetchFriendList,
+            Effect::FetchFriendRequests => Job::FetchFriendRequests,
+            Effect::ChangeFriend { op, change } => Job::ChangeFriend { op, change },
+            Effect::FetchSharedWith { file_id } => Job::FetchSharedWith { file_id },
+            Effect::FetchFriends { file_id } => Job::FetchFriends { file_id },
+            Effect::ShareFile { op, file_id, with } => Job::ShareFile { op, file_id, with },
+            Effect::UnshareFile {
+                op,
+                file_id,
+                share_id,
+            } => Job::UnshareFile {
+                op,
+                file_id,
+                share_id,
+            },
+            Effect::ListShared => Job::ListShared,
+            Effect::FetchTransfer { id } => Job::FetchTransfer { id },
+            _ => return,
+        };
+        self.send(job);
     }
 
     fn run(&mut self, ctx: &egui::Context, effect: Effect) {
@@ -548,6 +626,16 @@ impl App {
             }
             Effect::DeleteFeed { op, id } => self.send(Job::DeleteFeed { op, id }),
             Effect::ListFiles { parent } => self.send(Job::ListFiles { parent }),
+            Effect::UploadFile { .. } | Effect::CancelUpload { .. } => self.run_upload(effect),
+            Effect::FetchFriendList
+            | Effect::FetchFriendRequests
+            | Effect::ChangeFriend { .. }
+            | Effect::FetchSharedWith { .. }
+            | Effect::FetchFriends { .. }
+            | Effect::ShareFile { .. }
+            | Effect::UnshareFile { .. }
+            | Effect::ListShared
+            | Effect::FetchTransfer { .. } => self.send_sharing(effect),
             Effect::SearchFiles { query } => self.send(Job::SearchFiles { query }),
             Effect::RenameFile { op, id, name } => self.send(Job::RenameFile { op, id, name }),
             Effect::CreateFolder { op, parent, name } => {

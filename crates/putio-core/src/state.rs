@@ -11,8 +11,8 @@ use std::path::PathBuf;
 
 use putio_api::client::{FileListing, FileSearch};
 use putio_api::{
-    Account, ApiError, DeviceCode, Extraction, Release, RssFeed, RssFeedSettings, Token, Transfer,
-    ZipState, ZipStatus,
+    Account, ApiError, DeviceCode, Extraction, Friend, FriendChange, Release, RssFeed,
+    RssFeedSettings, Share, ShareWith, SharedFile, Token, Transfer, ZipState, ZipStatus,
 };
 
 use crate::update::UpdateAsset;
@@ -26,14 +26,22 @@ use crate::settings::{Folder, Settings, Tab, ThemeChoice, WindowSize};
 use crate::transfers::{self, Summary, Tracker};
 use crate::update::{self, UpdateStatus};
 
+mod detail;
 mod extract;
 mod feeds;
 mod files;
+mod friends;
 mod refresh;
+mod shares;
+mod uploads;
 
+pub use detail::TransferDetail;
 pub use extract::{PasswordAsk, Unpacking};
 pub use feeds::{FeedList, FeedSave};
 pub use files::{Crumb, FileAction, FilesView, Search};
+pub use friends::{FriendAction, FriendsView};
+pub use shares::{Fetch, Problem, ShareAction, SharedFiles, SharingView};
+pub use uploads::{Dropped, DroppedKind, MAX_PER_DROP, Upload, UploadFailure};
 
 /// Monotonic milliseconds supplied by the shell.
 pub type Millis = u64;
@@ -118,7 +126,11 @@ enum Op {
     FileCreate,
     FileMove,
     FileDelete,
+    Share,
+    Unshare,
     Extract,
+    Friend,
+    UploadFile,
 }
 
 /// Where an in-place update has got to.
@@ -386,6 +398,77 @@ pub enum Event {
         id: i64,
         result: Result<(), ApiError>,
     },
+    /// Files were dropped on the window: upload them into the folder the Files tab shows.
+    FilesDropped(Vec<Dropped>),
+    /// How many bytes of an upload have gone.
+    UploadProgress {
+        op: OpId,
+        sent: u64,
+    },
+    UploadFinished {
+        op: OpId,
+        result: Result<(), UploadFailure>,
+    },
+    /// Stop an upload (or take it out of the queue).
+    UploadCancelRequested(OpId),
+    /// The row of an upload that failed was put away.
+    UploadDismissed(OpId),
+    /// The friends card was opened / closed.
+    FriendsCardOpened,
+    FriendsCardClosed,
+    /// The answers to `Effect::FetchFriendList` and `Effect::FetchFriendRequests`.
+    FriendListFetched(Result<Vec<Friend>, ApiError>),
+    FriendRequestsFetched(Result<Vec<Friend>, ApiError>),
+    /// Ask somebody to be a friend, answer a request, or end a friendship.
+    FriendChangeRequested(FriendChange),
+    FriendChangeFinished {
+        op: OpId,
+        change: FriendChange,
+        result: Result<(), ApiError>,
+    },
+    /// The sharing card of a file was opened (named `name`) / closed.
+    ShareOpened {
+        file_id: i64,
+        name: String,
+    },
+    ShareClosed,
+    /// The answers to `Effect::FetchSharedWith` and `Effect::FetchFriends`.
+    SharedWithFetched {
+        file_id: i64,
+        result: Result<Vec<Share>, ApiError>,
+    },
+    FriendsFetched {
+        file_id: i64,
+        result: Result<Vec<Friend>, ApiError>,
+    },
+    /// Share the open card's file with these friends / end one of its shares.
+    ShareRequested(ShareWith),
+    ShareFinished {
+        op: OpId,
+        file_id: i64,
+        result: Result<(), ApiError>,
+    },
+    UnshareRequested(i64),
+    UnshareFinished {
+        op: OpId,
+        file_id: i64,
+        result: Result<(), ApiError>,
+    },
+    /// The answer to `Effect::ListShared`.
+    SharedListed(Result<Vec<SharedFile>, ApiError>),
+    /// The details panel of a transfer was opened / closed.
+    TransferDetailsOpened(i64),
+    TransferDetailsClosed,
+    /// The answer to `Effect::FetchTransfer`.
+    TransferDetailsFetched {
+        id: i64,
+        result: Result<Transfer, ApiError>,
+    },
+    /// Show the folder `folder` (named `name`) on the Files tab, wherever the user was in it before.
+    FilesReveal {
+        folder: i64,
+        name: String,
+    },
     /// Unpack the archive `id` into a folder next to it (`password` when it has one).
     FileExtractRequested {
         id: i64,
@@ -503,6 +586,47 @@ pub enum Effect {
         op: OpId,
         id: i64,
     },
+    /// Upload the file at `path` (`size` bytes long) as `name` into folder `parent`. Answered with
+    /// `UploadProgress` now and then and then `UploadFinished`.
+    UploadFile {
+        op: OpId,
+        path: std::path::PathBuf,
+        name: String,
+        size: u64,
+        parent: i64,
+    },
+    /// Stop that upload.
+    CancelUpload {
+        op: OpId,
+    },
+    FetchFriendList,
+    FetchFriendRequests,
+    ChangeFriend {
+        op: OpId,
+        change: FriendChange,
+    },
+    FetchSharedWith {
+        file_id: i64,
+    },
+    FetchFriends {
+        file_id: i64,
+    },
+    ShareFile {
+        op: OpId,
+        file_id: i64,
+        with: ShareWith,
+    },
+    UnshareFile {
+        op: OpId,
+        file_id: i64,
+        share_id: i64,
+    },
+    /// Ask for the files the account shares (answered with `Event::SharedListed`).
+    ListShared,
+    /// Fetch one transfer (answered with `Event::TransferDetailsFetched`).
+    FetchTransfer {
+        id: i64,
+    },
     /// Unpack an archive (answered with `Event::FileExtractStarted`).
     ExtractFile {
         op: OpId,
@@ -573,6 +697,16 @@ pub struct State {
     pub feeds: FeedList,
     /// The Files tab: the folder being shown, or the search.
     pub files: FilesView,
+    /// The transfer whose details panel is open.
+    pub detail: Option<TransferDetail>,
+    /// Files being uploaded or waiting for their turn, in the order they were dropped.
+    pub uploads: Vec<Upload>,
+    /// The open friends card.
+    pub friends_card: Option<FriendsView>,
+    /// The open sharing card.
+    pub sharing: Option<SharingView>,
+    /// The files the account shares.
+    pub shared: SharedFiles,
     /// Archives being unpacked on put.io.
     pub unpacking: Vec<Unpacking>,
     pub update: UpdateStatus,
@@ -602,6 +736,10 @@ pub struct State {
     feed_refresh: refresh::Refresh,
     file_action: FileAction,
     file_refresh: refresh::Refresh,
+    detail_refresh: refresh::Refresh,
+    shared_refresh: refresh::Refresh,
+    /// The transfer whose fetch is on its way.
+    detail_requested: Option<i64>,
     extract_ask: Option<PasswordAsk>,
     extract_refresh: refresh::Refresh,
     /// The folder whose listing is on its way.
@@ -627,6 +765,11 @@ impl State {
             tab: settings.tab,
             feeds: FeedList::default(),
             files: FilesView::default(),
+            detail: None,
+            uploads: Vec::new(),
+            friends_card: None,
+            sharing: None,
+            shared: SharedFiles::default(),
             unpacking: Vec::new(),
             settings,
             locale,
@@ -656,6 +799,9 @@ impl State {
             feed_refresh: refresh::Refresh::default(),
             file_action: FileAction::Idle,
             file_refresh: refresh::Refresh::default(),
+            detail_refresh: refresh::Refresh::default(),
+            shared_refresh: refresh::Refresh::default(),
+            detail_requested: None,
             extract_ask: None,
             extract_refresh: refresh::Refresh::default(),
             files_requested: None,
@@ -765,6 +911,9 @@ impl State {
                 seconds: retry_after.as_secs(),
             }),
             ApiError::Api(failure) if failure.status >= 500 => self.text(&Msg::ServerError),
+            // Payment required: put.io's way of saying the account has no room (or no plan) left, whatever
+            // the body says (an upload's answer often has none).
+            ApiError::Api(failure) if failure.status == 402 => self.text(&Msg::PaymentRequired),
             ApiError::Api(failure) => failure
                 .message
                 .chars()
@@ -772,6 +921,11 @@ impl State {
                 .take(MAX_REASON_CHARS)
                 .collect(),
             ApiError::InvalidInput(why) => (*why).to_owned(),
+            ApiError::File(why) => why
+                .chars()
+                .filter(|c| !c.is_control())
+                .take(MAX_REASON_CHARS)
+                .collect(),
             ApiError::Unauthorized | ApiError::Decode(_) | ApiError::TooLarge => {
                 self.text(&Msg::ServerError)
             }
@@ -1132,6 +1286,48 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
         Event::FileDeleteFinished { op, id, result } => {
             files::delete_finished(state, now, (op, id), result, &mut fx);
         }
+        Event::FilesDropped(items) => uploads::dropped(state, now, items, &mut fx),
+        Event::UploadProgress { op, sent } => uploads::progress(state, op, sent),
+        Event::UploadFinished { op, result } => uploads::finished(state, now, op, result),
+        Event::UploadCancelRequested(op) => uploads::cancel_requested(state, op, &mut fx),
+        Event::UploadDismissed(op) => uploads::dismissed(state, op),
+        Event::FriendsCardOpened => friends::opened(state, &mut fx),
+        Event::FriendsCardClosed => friends::closed(state),
+        Event::FriendListFetched(result) => friends::list_fetched(state, result),
+        Event::FriendRequestsFetched(result) => friends::requests_fetched(state, result),
+        Event::FriendChangeRequested(change) => {
+            friends::change_requested(state, &change, &mut fx);
+        }
+        Event::FriendChangeFinished { op, change, result } => {
+            friends::change_finished(state, (op, change), result, &mut fx);
+        }
+        Event::ShareOpened { file_id, name } => shares::opened(state, file_id, &name, &mut fx),
+        Event::ShareClosed => shares::closed(state),
+        Event::SharedWithFetched { file_id, result } => {
+            shares::shares_fetched(state, file_id, result);
+        }
+        Event::FriendsFetched { file_id, result } => {
+            shares::friends_fetched(state, file_id, result);
+        }
+        Event::ShareRequested(with) => shares::share_requested(state, with, &mut fx),
+        Event::ShareFinished {
+            op,
+            file_id,
+            result,
+        } => shares::share_finished(state, (op, file_id), result, &mut fx),
+        Event::UnshareRequested(share_id) => shares::unshare_requested(state, share_id, &mut fx),
+        Event::UnshareFinished {
+            op,
+            file_id,
+            result,
+        } => shares::unshare_finished(state, (op, file_id), result, &mut fx),
+        Event::SharedListed(result) => shares::listed(state, now, result),
+        Event::TransferDetailsOpened(id) => detail::opened(state, now, id),
+        Event::TransferDetailsClosed => detail::closed(state),
+        Event::TransferDetailsFetched { id, result } => {
+            detail::fetched(state, now, id, result, &mut fx);
+        }
+        Event::FilesReveal { folder, name } => files::reveal(state, now, folder, &name),
         Event::FileExtractRequested { id, password } => {
             extract::requested(state, id, password, &mut fx);
         }
@@ -1315,7 +1511,11 @@ fn sign_out(state: &mut State, fx: &mut Vec<Effect>) {
     state.zip = None;
     feeds::reset(state);
     files::reset(state);
+    detail::reset(state);
+    shares::reset(state);
     extract::reset(state);
+    friends::reset(state);
+    uploads::reset(state, fx);
     // What was running for this account has no one to report to. (An update is not tied to the account.)
     state.ops.retain(|_, kind| *kind == Op::Update);
     state.busy = u32::try_from(state.ops.len()).unwrap_or(u32::MAX);
@@ -1743,6 +1943,8 @@ fn polled(
 fn maybe_poll(state: &mut State, now: Millis, fx: &mut Vec<Effect>) {
     feeds::maybe_load(state, now, fx);
     files::maybe_load(state, now, fx);
+    detail::maybe_load(state, now, fx);
+    shares::maybe_load(state, now, fx);
     extract::maybe_poll(state, now, fx);
     if state.is_signed_in()
         && !state.poll_in_flight

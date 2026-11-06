@@ -8,12 +8,12 @@ use serde_json::Value;
 use crate::error::{ApiError, ApiFailure, retry_delay};
 use crate::form::{self, Part};
 use crate::models::{
-    Account, DeviceCode, Extraction, File, FileType, Release, RssFeed, RssFeedSettings, Transfer,
-    UploadOutcome, ZipStatus,
+    Account, DeviceCode, Extraction, File, FileType, Friend, FriendChange, Release, RssFeed,
+    RssFeedSettings, Share, ShareWith, SharedFile, Transfer, UploadOutcome, ZipStatus,
 };
 use crate::token::Token;
 use crate::torrent;
-use crate::transport::{Body, Host, Method, Request, Response, Transport};
+use crate::transport::{Body, FileBody, Host, Method, ProgressFn, Request, Response, Transport};
 
 const JSON: &str = "application/json";
 const GITHUB_JSON: &str = "application/vnd.github+json";
@@ -34,6 +34,34 @@ pub struct FileSearch {
 
 /// How many search results are asked for: enough to find a file, few enough to answer quickly.
 const SEARCH_RESULTS: &str = "100";
+
+/// A file to upload into a folder.
+#[derive(Clone)]
+pub struct FileUpload {
+    /// Where the file is on disk; it is read while it is sent.
+    pub path: std::path::PathBuf,
+    /// The name it gets on put.io.
+    pub name: String,
+    /// How long it is now. A file of another length when it is read is an error, not a short upload.
+    pub len: u64,
+    /// The folder it goes into (`0` is the top level).
+    pub parent_id: i64,
+    /// Told how many bytes of the file have been sent, now and then.
+    pub progress: Option<ProgressFn>,
+    /// Set to stop the upload.
+    pub cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+}
+
+impl std::fmt::Debug for FileUpload {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FileUpload")
+            .field("path", &self.path)
+            .field("name", &self.name)
+            .field("len", &self.len)
+            .field("parent_id", &self.parent_id)
+            .finish_non_exhaustive()
+    }
+}
 
 /// One page of a file listing.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -234,6 +262,18 @@ impl<T: Transport> Client<T> {
             .transfers)
     }
 
+    /// One transfer, with everything put.io knows about it right now. A transfer that is gone (cleared or
+    /// cancelled) answers with an [`ApiError::Api`] whose status is 404.
+    pub fn transfer(&self, id: i64) -> Result<Transfer, ApiError> {
+        #[derive(serde::Deserialize)]
+        struct Reply {
+            transfer: Transfer,
+        }
+        Ok(self
+            .json::<Reply>(&self.get(format!("/transfers/{id}")))?
+            .transfer)
+    }
+
     /// Add a magnet link or HTTP(S) URL. `save_parent_id` is the destination folder (account default if `None`).
     pub fn add_transfer(
         &self,
@@ -361,13 +401,6 @@ impl<T: Transport> Client<T> {
         bytes: &[u8],
         parent_id: Option<i64>,
     ) -> Result<UploadOutcome, ApiError> {
-        #[derive(serde::Deserialize)]
-        struct Reply {
-            #[serde(default)]
-            transfer: Option<Transfer>,
-            #[serde(default)]
-            file: Option<File>,
-        }
         torrent::validate(bytes).map_err(|e| {
             ApiError::InvalidInput(match e {
                 torrent::InvalidTorrent::Empty => "torrent file is empty",
@@ -407,7 +440,19 @@ impl<T: Transport> Client<T> {
             true,
         );
 
-        let reply: Reply = self.json(&request)?;
+        self.upload_outcome(&request)
+    }
+
+    /// Send an upload request and say what put.io made of it.
+    fn upload_outcome(&self, request: &Request) -> Result<UploadOutcome, ApiError> {
+        #[derive(serde::Deserialize)]
+        struct Reply {
+            #[serde(default)]
+            transfer: Option<Transfer>,
+            #[serde(default)]
+            file: Option<File>,
+        }
+        let reply: Reply = self.json(request)?;
         match (reply.transfer, reply.file) {
             (Some(transfer), _) => Ok(UploadOutcome::Transfer(Box::new(transfer))),
             (None, Some(file)) => Ok(UploadOutcome::File(file)),
@@ -415,6 +460,42 @@ impl<T: Transport> Client<T> {
                 "upload reply has neither `transfer` nor `file`".into(),
             )),
         }
+    }
+
+    /// Upload any file into a folder (`0` is the top level), reading it from disk while it is sent. A file
+    /// that is a torrent starts as a transfer, as on put.io's site.
+    pub fn upload_file(&self, upload: FileUpload) -> Result<UploadOutcome, ApiError> {
+        let name: String = upload.name.chars().filter(|c| !c.is_control()).collect();
+        if name.trim().is_empty() {
+            return Err(ApiError::InvalidInput("the file has no name"));
+        }
+        if upload.len == 0 {
+            return Err(ApiError::InvalidInput("the file is empty"));
+        }
+        let parent = upload.parent_id.to_string();
+        let streamed = form::streamed(
+            &[("filename", &name), ("parent_id", &parent)],
+            "file",
+            &name,
+            "application/octet-stream",
+        );
+        let request = self.request(
+            Method::Post,
+            Host::Upload,
+            "/files/upload".into(),
+            Body::File(FileBody {
+                content_type: streamed.content_type,
+                head: streamed.head,
+                path: upload.path,
+                len: upload.len,
+                tail: streamed.tail,
+                progress: upload.progress,
+                cancel: upload.cancel,
+            }),
+            JSON,
+            true,
+        );
+        self.upload_outcome(&request)
     }
 
     /// List a folder (`0` is the root), following pagination cursors. `only` filters by type.
@@ -511,6 +592,88 @@ impl<T: Transport> Client<T> {
         }
         let joined = ids.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
         self.ack(&self.post_form("/files/delete", &[("file_ids", &joined)]))
+    }
+
+    /// The files the account shares (each once).
+    pub fn shared_files(&self) -> Result<Vec<SharedFile>, ApiError> {
+        #[derive(serde::Deserialize)]
+        struct Reply {
+            #[serde(default)]
+            shared: Vec<SharedFile>,
+        }
+        Ok(self
+            .json::<Reply>(&self.get("/files/shared".into()))?
+            .shared)
+    }
+
+    /// Who a file is shared with.
+    pub fn shared_with(&self, file_id: i64) -> Result<Vec<Share>, ApiError> {
+        #[derive(serde::Deserialize)]
+        struct Reply {
+            #[serde(default, rename = "shared-with")]
+            shared_with: Vec<Share>,
+        }
+        Ok(self
+            .json::<Reply>(&self.get(format!("/files/{file_id}/shared-with")))?
+            .shared_with)
+    }
+
+    /// The account's friends.
+    pub fn friends(&self) -> Result<Vec<Friend>, ApiError> {
+        #[derive(serde::Deserialize)]
+        struct Reply {
+            #[serde(default)]
+            friends: Vec<Friend>,
+        }
+        Ok(self
+            .json::<Reply>(&self.get("/friends/list".into()))?
+            .friends)
+    }
+
+    /// The requests to be a friend that others have sent.
+    pub fn friend_requests(&self) -> Result<Vec<Friend>, ApiError> {
+        #[derive(serde::Deserialize)]
+        struct Reply {
+            #[serde(default)]
+            friends: Vec<Friend>,
+        }
+        Ok(self
+            .json::<Reply>(&self.get("/friends/waiting-requests".into()))?
+            .friends)
+    }
+
+    /// Ask somebody to be a friend, answer a request, or end a friendship.
+    pub fn change_friend(&self, change: &FriendChange) -> Result<(), ApiError> {
+        let name = change.name();
+        if name.trim().is_empty() || name.chars().any(char::is_control) {
+            return Err(ApiError::InvalidInput("no user name"));
+        }
+        let path = format!("/friends/{}/{}", form::percent_encode(name), change.verb());
+        self.ack(&self.request(Method::Post, Host::Api, path, Body::None, JSON, true))
+    }
+
+    /// Share a file (or folder) with friends.
+    pub fn share_file(&self, file_id: i64, with: &ShareWith) -> Result<(), ApiError> {
+        let Some(friends) = with.as_field() else {
+            return Err(ApiError::InvalidInput("nobody to share with"));
+        };
+        self.ack(&self.post_form(
+            "/files/share",
+            &[("file_ids", &file_id.to_string()), ("friends", &friends)],
+        ))
+    }
+
+    /// End shares of a file, by the ids [`shared_with`](Self::shared_with) gave.
+    pub fn unshare_file(&self, file_id: i64, share_ids: &[i64]) -> Result<(), ApiError> {
+        if share_ids.is_empty() {
+            return Err(ApiError::InvalidInput("no shares"));
+        }
+        let joined = share_ids
+            .iter()
+            .map(i64::to_string)
+            .collect::<Vec<_>>()
+            .join(",");
+        self.ack(&self.post_form(&format!("/files/{file_id}/unshare"), &[("shares", &joined)]))
     }
 
     /// Unpack ZIP or RAR archives into folders next to them. A `password` is sent only when there is one.
@@ -708,6 +871,214 @@ mod tests {
     }
 
     #[test]
+    fn what_is_shared_and_with_whom_is_read_and_odd_values_do_not_lose_the_list() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            200,
+            r#"{"status":"OK","shared":[{"id":5,"name":"Movies","size":0,"share_with":"everyone"},{"id":6,"name":7,"share_with":3},{"name":"no id"}]}"#,
+        );
+        fake.push_json(
+            200,
+            r#"{"status":"OK","shared-with":[{"user_name":"jane","user_avatar_url":"/a.png","share_id":3913572317},{"share_id":4,"user_name":null}]}"#,
+        );
+        fake.push_json(
+            200,
+            r#"{"status":"OK","friends":[{"id":1,"name":"jane","avatar_url":"x"},{"id":2}]}"#,
+        );
+        let c = client(&fake);
+        // An entry without an id cannot be used for anything and is the one thing that fails the list.
+        assert!(matches!(c.shared_files(), Err(ApiError::Decode(_))));
+        let shared = c.shared_with(5).unwrap();
+        assert_eq!(
+            fake.last_request().unwrap().describe(),
+            "GET /files/5/shared-with"
+        );
+        assert_eq!(
+            (shared[0].share_id, shared[0].user_name.as_str()),
+            (3_913_572_317, "jane")
+        );
+        assert_eq!(shared[1].user_name, "");
+        let friends = c.friends().unwrap();
+        assert_eq!(fake.last_request().unwrap().describe(), "GET /friends/list");
+        assert_eq!((friends[0].id, friends[0].name.as_str()), (1, "jane"));
+        assert_eq!(friends[1].name, "");
+    }
+
+    #[test]
+    fn friend_requests_are_read_and_friendships_changed_by_name() {
+        let fake = FakeTransport::new();
+        fake.push_json(200, r#"{"status":"OK","friends":[{"id":4,"name":"sam"}]}"#);
+        for _ in 0..4 {
+            fake.push_json(200, r#"{"status":"OK"}"#);
+        }
+        let c = client(&fake);
+        assert_eq!(c.friend_requests().unwrap()[0].name, "sam");
+        assert_eq!(
+            fake.last_request().unwrap().describe(),
+            "GET /friends/waiting-requests"
+        );
+        for (change, path) in [
+            (
+                FriendChange::Request("jane".into()),
+                "POST /friends/jane/request",
+            ),
+            (
+                FriendChange::Approve("sam".into()),
+                "POST /friends/sam/approve",
+            ),
+            (
+                FriendChange::Deny("a b/c".into()),
+                "POST /friends/a%20b%2Fc/deny",
+            ),
+            (
+                FriendChange::Unfriend("é".into()),
+                "POST /friends/%C3%A9/unfriend",
+            ),
+        ] {
+            c.change_friend(&change).unwrap();
+            assert_eq!(fake.last_request().unwrap().describe(), path);
+            assert_eq!(fake.last_request().unwrap().body, Body::None);
+        }
+        // Nothing is sent for nobody, and a name cannot carry a new path.
+        let sent = fake.requests().len();
+        for name in ["", "  ", "a\nb"] {
+            assert!(matches!(
+                c.change_friend(&FriendChange::Request(name.into())),
+                Err(ApiError::InvalidInput(_))
+            ));
+        }
+        assert_eq!(fake.requests().len(), sent);
+    }
+
+    fn an_upload(len: u64, name: &str) -> FileUpload {
+        FileUpload {
+            path: "/tmp/x".into(),
+            name: name.into(),
+            len,
+            parent_id: 7,
+            progress: None,
+            cancel: None,
+        }
+    }
+
+    #[test]
+    fn any_file_is_uploaded_from_disk_into_a_folder_and_put_io_says_what_it_made_of_it() {
+        let fake = FakeTransport::new();
+        fake.push_json(200, r#"{"status":"OK","file":{"id":9,"name":"a.mkv"}}"#);
+        fake.push_json(
+            200,
+            r#"{"status":"OK","transfer":{"id":3,"name":"t","status":"IN_QUEUE"}}"#,
+        );
+        let c = client(&fake);
+        let outcome = c.upload_file(an_upload(12, "a\u{7}.mkv")).unwrap();
+        assert!(matches!(outcome, UploadOutcome::File(f) if f.id == 9));
+        let request = fake.last_request().unwrap();
+        assert_eq!(
+            (request.host, request.path.as_str()),
+            (Host::Upload, "/files/upload")
+        );
+        let Body::File(body) = request.body else {
+            panic!("expected a file body")
+        };
+        assert_eq!((body.len, body.path.to_str()), (12, Some("/tmp/x")));
+        assert!(
+            body.content_type
+                .starts_with("multipart/form-data; boundary=")
+        );
+        let head = String::from_utf8(body.head).unwrap();
+        // The name, without anything that is not text, and the folder, are in the head; the bytes are not.
+        assert!(
+            head.contains("name=\"filename\"\r\n\r\na.mkv\r\n"),
+            "{head}"
+        );
+        assert!(head.contains("name=\"parent_id\"\r\n\r\n7\r\n"), "{head}");
+        assert!(head.contains("name=\"file\"; filename=\"a.mkv\""), "{head}");
+        assert!(head.ends_with("\r\n\r\n"));
+        assert!(String::from_utf8(body.tail).unwrap().ends_with("--\r\n"));
+        // A torrent comes back as a transfer.
+        let outcome = c.upload_file(an_upload(5, "a.torrent")).unwrap();
+        assert!(matches!(outcome, UploadOutcome::Transfer(t) if t.id == 3));
+    }
+
+    #[test]
+    fn nothing_is_sent_for_an_empty_file_or_a_file_without_a_name() {
+        let fake = FakeTransport::new();
+        let c = client(&fake);
+        assert!(matches!(
+            c.upload_file(an_upload(0, "a")),
+            Err(ApiError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            c.upload_file(an_upload(3, " \u{7}")),
+            Err(ApiError::InvalidInput(_))
+        ));
+        assert_eq!(fake.requests().len(), 0);
+    }
+
+    #[test]
+    fn the_shared_files_list_is_read() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            200,
+            r#"{"status":"OK","shared":[{"id":5,"name":"Movies","size":0,"share_with":"everyone"},{"id":6,"name":7,"share_with":3}]}"#,
+        );
+        let shared = client(&fake).shared_files().unwrap();
+        assert_eq!(fake.last_request().unwrap().describe(), "GET /files/shared");
+        assert_eq!(shared.iter().map(|s| s.id).collect::<Vec<_>>(), [5, 6]);
+        assert_eq!(shared[1].name, "", "a name of the wrong type is dropped");
+    }
+
+    #[test]
+    fn sharing_and_unsharing_send_what_the_api_documents() {
+        let fake = FakeTransport::new();
+        for _ in 0..4 {
+            fake.push_json(200, r#"{"status":"OK"}"#);
+        }
+        let c = client(&fake);
+        c.share_file(5, &ShareWith::Everyone).unwrap();
+        assert_eq!(
+            fake.last_request().unwrap().body,
+            Body::Form("file_ids=5&friends=everyone".into())
+        );
+        assert_eq!(fake.last_request().unwrap().describe(), "POST /files/share");
+        c.share_file(
+            5,
+            &ShareWith::Friends(vec!["jane".into(), "john doe".into()]),
+        )
+        .unwrap();
+        assert_eq!(
+            fake.last_request().unwrap().body,
+            Body::Form("file_ids=5&friends=jane%2Cjohn%20doe".into())
+        );
+        c.unshare_file(5, &[3, 9]).unwrap();
+        assert_eq!(
+            fake.last_request().unwrap().describe(),
+            "POST /files/5/unshare"
+        );
+        assert_eq!(
+            fake.last_request().unwrap().body,
+            Body::Form("shares=3%2C9".into())
+        );
+        // Nothing is sent for nobody, or for a name that would read as two.
+        let sent = fake.requests().len();
+        for with in [
+            ShareWith::Friends(vec![]),
+            ShareWith::Friends(vec!["a,b".into()]),
+            ShareWith::Friends(vec![" ".into()]),
+        ] {
+            assert!(matches!(
+                c.share_file(5, &with),
+                Err(ApiError::InvalidInput(_))
+            ));
+        }
+        assert!(matches!(
+            c.unshare_file(5, &[]),
+            Err(ApiError::InvalidInput(_))
+        ));
+        assert_eq!(fake.requests().len(), sent);
+    }
+
+    #[test]
     fn the_token_is_only_ever_sent_as_a_bearer() {
         let fake = FakeTransport::new();
         fake.push_json(200, include_str!("../tests/fixtures/transfers_list.json"));
@@ -844,6 +1215,42 @@ mod tests {
             unwanted_keywords: String::new(),
             skip_existing: false,
         }
+    }
+
+    #[test]
+    fn one_transfer_is_read_with_where_it_saves_and_which_feed_added_it() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            200,
+            r#"{"status":"OK","transfer":{"id":77,"name":"Show S01E01","status":"SEEDING","type":"TORRENT",
+                "peers":12,"current_ratio":1.5,"save_parent_id":42,"subscription_id":5,"file_id":900}}"#,
+        );
+        let transfer = client(&fake).transfer(77).unwrap();
+        assert_eq!(fake.last_request().unwrap().describe(), "GET /transfers/77");
+        assert_eq!(transfer.id, 77);
+        assert_eq!(transfer.peers, Some(12));
+        assert_eq!(transfer.save_parent_id, Some(42));
+        assert_eq!(transfer.subscription_id, Some(5));
+        assert_eq!(transfer.file_id, Some(900));
+        // Neither is sent for a transfer that was not added by a feed, and odd values are dropped.
+        fake.push_json(
+            200,
+            r#"{"transfer":{"id":78,"save_parent_id":"x","subscription_id":null}}"#,
+        );
+        let plain = client(&fake).transfer(78).unwrap();
+        assert_eq!((plain.save_parent_id, plain.subscription_id), (None, None));
+        // A transfer that is gone is a 404, and a reply without the transfer is an error.
+        fake.push_json(404, r#"{"error_type":"NotFound","error_message":"gone"}"#);
+        let gone = client(&fake).transfer(79).unwrap_err();
+        assert!(
+            matches!(&gone, ApiError::Api(f) if f.status == 404),
+            "{gone:?}"
+        );
+        fake.push_json(200, r#"{"status":"OK"}"#);
+        assert!(matches!(
+            client(&fake).transfer(80),
+            Err(ApiError::Decode(_))
+        ));
     }
 
     #[test]

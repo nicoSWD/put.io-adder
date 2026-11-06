@@ -193,6 +193,17 @@ pub(crate) fn show(button: &egui::Response, app: &mut App) {
         ) {
             app.ui.prefs_open = true;
         }
+        if signed_in
+            && item(
+                ui,
+                MenuIcon::Link,
+                &Msg::MenuFriends.text(locale),
+                None,
+                Tint::Normal,
+            )
+        {
+            super::friends_card::open(app, &ctx);
+        }
         divider(ui);
         if item(
             ui,

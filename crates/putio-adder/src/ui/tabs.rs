@@ -199,7 +199,7 @@ pub(crate) fn show(ui: &mut Ui, app: &mut App) {
     );
     match app.state.tab {
         Tab::Transfers => table::sort_menu(&mut side, app),
-        Tab::Files => files::new_folder_button(&mut side, app),
+        Tab::Files => files::toolbar_buttons(&mut side, app),
         // The empty list has a big button of its own; two of them would be one too many.
         Tab::Feeds if feeds::is_empty(app) => {}
         Tab::Feeds => feeds::add_button(&mut side, app),
@@ -491,8 +491,20 @@ mod layout_tests {
         width.get()
     }
 
-    /// The widest right-hand side the bar can have in `locale`: the longest "Sort: …" label with its arrow.
+    /// The Files tab's side: the *Upload* pill and the *New folder* pill beside it.
+    fn files_side(locale: Locale) -> f32 {
+        let pill =
+            |msg: Msg| width_of(&msg.text(locale), &theme::bold(11.5)) + 10.0 + 12.0 + 6.0 + 14.0;
+        pill(Msg::UploadButton) + pill(Msg::FilesNewFolder) + 8.0
+    }
+
+    /// The widest right-hand side the bar can have in `locale`: the longest "Sort: …" label with its arrow,
+    /// or the two buttons of the Files tab.
     fn widest_side(locale: Locale) -> f32 {
+        files_side(locale).max(widest_sort(locale))
+    }
+
+    fn widest_sort(locale: Locale) -> f32 {
         [
             SortKey::Default,
             SortKey::Name,

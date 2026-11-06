@@ -207,6 +207,70 @@ pub enum Msg {
     FilesNewFolder,
     FileMenuRename,
     FileMenuMove,
+    FileMenuShare,
+    FileSharedBadge,
+    ShareTitle,
+    ShareSharedWith,
+    ShareNobody,
+    ShareStop,
+    ShareWithTitle,
+    ShareAllFriends,
+    ShareNoFriends,
+    ShareConfirm,
+    ShareNotAllowed,
+    UploadSkipped {
+        count: usize,
+    },
+    UploadDone {
+        name: String,
+    },
+    UploadCancelled {
+        name: String,
+    },
+    UploadFileFailed {
+        name: String,
+        reason: String,
+    },
+    UploadDropHere {
+        folder: String,
+    },
+    UploadWaiting,
+    /// put.io answered 402 (payment required): the account is full or its plan has run out.
+    PaymentRequired,
+    UploadNoSpace {
+        needed: String,
+        free: String,
+    },
+    UploadButton,
+    UploadPickTitle,
+    A11yUploadDismiss {
+        name: String,
+    },
+    UploadsMore {
+        count: usize,
+    },
+    A11yUploadCancel {
+        name: String,
+    },
+    MenuFriends,
+    FriendsTitle,
+    FriendsAddTitle,
+    FriendsNameHint,
+    FriendsSendRequest,
+    FriendsRequestsTitle,
+    FriendsListTitle,
+    FriendsAccept,
+    FriendsDecline,
+    FriendsNone,
+    FriendsRemove,
+    FriendsRemoveAsk {
+        name: String,
+    },
+    FriendsRemoveConfirm,
+    FriendsDoneRequest,
+    FriendsDoneApprove,
+    FriendsDoneDeny,
+    FriendsDoneUnfriend,
     FileMenuDelete,
     FileRenameTitle,
     FileRenameConfirm,
@@ -312,6 +376,10 @@ pub enum Msg {
     DetailFinished,
     DetailYes,
     DetailNo,
+    DetailSavedIn,
+    DetailFromFeed,
+    DetailFromFeedUnknown,
+    MenuShowInFiles,
     KindTorrent,
     KindUrl,
     KindPlaylist,
@@ -778,6 +846,14 @@ impl Msg {
             Self::DetailError => tr!(l, "Error", "Fehler", "Error").into(),
             Self::DetailAdded => tr!(l, "Added", "Hinzugefügt", "Añadido").into(),
             Self::DetailFinished => tr!(l, "Finished", "Abgeschlossen", "Finalizado").into(),
+            Self::DetailSavedIn => tr!(l, "Saved in", "Gespeichert in", "Guardado en").into(),
+            Self::DetailFromFeed => {
+                tr!(l, "Added by", "Hinzugefügt von", "Añadido por").into()
+            }
+            Self::DetailFromFeedUnknown => tr!(l, "RSS feed", "RSS-Feed", "Feed RSS").into(),
+            Self::MenuShowInFiles => {
+                tr!(l, "Show in Files", "In Dateien", "Ver en Archivos").into()
+            }
             Self::DetailYes => tr!(l, "Yes", "Ja", "Sí").into(),
             Self::DetailNo => tr!(l, "No", "Nein", "No").into(),
             Self::KindTorrent => tr!(l, "Torrent", "Torrent", "Torrent").into(),
@@ -850,7 +926,9 @@ impl Msg {
                 format!("Descarga iniciada · put.io omitió {missing} archivo(s)")
             ),
             Self::DetailGroupTransfer => tr!(l, "Transfer", "Übertragung", "Transferencia").into(),
-            Self::DetailGroupSharing => tr!(l, "Sharing", "Teilen", "Compartir").into(),
+            Self::DetailGroupSharing | Self::ShareTitle => {
+                tr!(l, "Sharing", "Teilen", "Compartir").into()
+            }
             Self::DetailGroupDates => tr!(l, "Dates", "Zeitpunkte", "Fechas").into(),
             Self::MenuCopyLink => tr!(
                 l,
@@ -1697,6 +1775,201 @@ impl Msg {
                 "Renombrar…"
             )
             .into(),
+            Self::FileMenuShare => tr!(l, "Share…", "Teilen …", "Compartir…").into(),
+            Self::FileSharedBadge => tr!(l, "Shared", "Geteilt", "Compartido").into(),
+            Self::ShareSharedWith => tr!(l, "Shared with", "Geteilt mit", "Compartido con").into(),
+            Self::ShareNobody => tr!(
+                l,
+                "Not shared with anyone yet.",
+                "Noch mit niemandem geteilt.",
+                "Aún no se comparte con nadie."
+            )
+            .into(),
+            Self::ShareStop => tr!(
+                l,
+                "Stop sharing",
+                "Nicht mehr teilen",
+                "Dejar de compartir"
+            )
+            .into(),
+            Self::ShareWithTitle => tr!(l, "Share with", "Teilen mit", "Compartir con").into(),
+            Self::ShareAllFriends => tr!(l, "All friends", "Alle Freunde", "Todos los amigos").into(),
+            Self::ShareNoFriends => tr!(
+                l,
+                "You have no friends on put.io yet.",
+                "Du hast noch keine Freunde auf put.io.",
+                "Aún no tienes amigos en put.io."
+            )
+            .into(),
+            Self::MenuFriends => tr!(l, "Friends…", "Freunde …", "Amigos…").into(),
+            Self::FriendsTitle => tr!(l, "Friends", "Freunde", "Amigos").into(),
+            Self::FriendsAddTitle => tr!(
+                l,
+                "Add a friend",
+                "Freund hinzufügen",
+                "Añadir un amigo"
+            )
+            .into(),
+            Self::FriendsNameHint => tr!(
+                l,
+                "put.io user name",
+                "put.io-Benutzername",
+                "Nombre de usuario de put.io"
+            )
+            .into(),
+            Self::FriendsSendRequest => tr!(
+                l,
+                "Send request",
+                "Anfrage senden",
+                "Enviar solicitud"
+            )
+            .into(),
+            Self::FriendsRequestsTitle => tr!(l, "Requests", "Anfragen", "Solicitudes").into(),
+            Self::FriendsListTitle => tr!(l, "Your friends", "Deine Freunde", "Tus amigos").into(),
+            Self::FriendsAccept => tr!(l, "Accept", "Annehmen", "Aceptar").into(),
+            Self::FriendsDecline => tr!(l, "Decline", "Ablehnen", "Rechazar").into(),
+            Self::FriendsNone => tr!(
+                l,
+                "No friends yet.",
+                "Noch keine Freunde.",
+                "Aún no tienes amigos."
+            )
+            .into(),
+            Self::FriendsRemove => tr!(l, "Remove", "Entfernen", "Eliminar").into(),
+            Self::FriendsRemoveAsk { name } => tr!(
+                l,
+                format!("Remove {name} as a friend? Files you shared with all friends disappear from their folder."),
+                format!("{name} als Freund entfernen? Dateien, die du mit allen Freunden geteilt hast, verschwinden aus dem Ordner."),
+                format!("¿Eliminar a {name} de tus amigos? Los archivos compartidos con todos los amigos desaparecen de su carpeta.")
+            ),
+            Self::FriendsRemoveConfirm => tr!(
+                l,
+                "Remove friend",
+                "Freund entfernen",
+                "Eliminar amigo"
+            )
+            .into(),
+            Self::FriendsDoneRequest => tr!(
+                l,
+                "Request sent.",
+                "Anfrage gesendet.",
+                "Solicitud enviada."
+            )
+            .into(),
+            Self::FriendsDoneApprove => tr!(
+                l,
+                "Request accepted.",
+                "Anfrage angenommen.",
+                "Solicitud aceptada."
+            )
+            .into(),
+            Self::FriendsDoneDeny => tr!(
+                l,
+                "Request declined.",
+                "Anfrage abgelehnt.",
+                "Solicitud rechazada."
+            )
+            .into(),
+            Self::FriendsDoneUnfriend => tr!(
+                l,
+                "Friend removed.",
+                "Freund entfernt.",
+                "Amigo eliminado."
+            )
+            .into(),
+            Self::UploadSkipped { count } => {
+                let one = *count == 1;
+                tr!(
+                    l,
+                    if one {
+                        "1 item was not uploaded: folders and empty files cannot be.".to_owned()
+                    } else {
+                        format!("{count} items were not uploaded: folders and empty files cannot be.")
+                    },
+                    if one {
+                        "1 Element wurde nicht hochgeladen: Ordner und leere Dateien gehen nicht.".to_owned()
+                    } else {
+                        format!("{count} Elemente wurden nicht hochgeladen: Ordner und leere Dateien gehen nicht.")
+                    },
+                    if one {
+                        "1 elemento no se subió: no se pueden subir carpetas ni archivos vacíos.".to_owned()
+                    } else {
+                        format!("{count} elementos no se subieron: no se pueden subir carpetas ni archivos vacíos.")
+                    }
+                )
+            }
+            Self::UploadDone { name } => tr!(
+                l,
+                format!("Uploaded {name}"),
+                format!("{name} hochgeladen"),
+                format!("{name} subido")
+            ),
+            Self::UploadCancelled { name } => tr!(
+                l,
+                format!("Upload of {name} cancelled"),
+                format!("Hochladen von {name} abgebrochen"),
+                format!("Subida de {name} cancelada")
+            ),
+            Self::UploadFileFailed { name, reason } => tr!(
+                l,
+                format!("Could not upload {name}: {reason}"),
+                format!("{name} konnte nicht hochgeladen werden: {reason}"),
+                format!("No se pudo subir {name}: {reason}")
+            ),
+            Self::UploadDropHere { folder } => tr!(
+                l,
+                format!("Drop to upload to {folder}"),
+                format!("Zum Hochladen nach {folder} ablegen"),
+                format!("Suelta para subir a {folder}")
+            ),
+            Self::UploadWaiting => tr!(l, "Waiting", "Wartet", "En espera").into(),
+            Self::PaymentRequired => tr!(
+                l,
+                "Refused by put.io (402): account full or plan expired.",
+                "Von put.io abgelehnt (402): Konto voll oder Tarif abgelaufen.",
+                "put.io lo rechazó (402): cuenta llena o plan caducado."
+            )
+            .into(),
+            Self::UploadNoSpace { needed, free } => tr!(
+                l,
+                format!("Not enough space on put.io: {needed} needed, {free} free."),
+                format!("Nicht genug Platz auf put.io: {needed} nötig, {free} frei."),
+                format!("Sin espacio en put.io: hacen falta {needed}, hay {free}.")
+            ),
+            Self::UploadButton => tr!(l, "Upload", "Hochladen", "Subir").into(),
+            Self::UploadPickTitle => tr!(
+                l,
+                "Choose files to upload",
+                "Dateien zum Hochladen auswählen",
+                "Elige los archivos que subir"
+            )
+            .into(),
+            Self::A11yUploadDismiss { name } => tr!(
+                l,
+                format!("Dismiss the failed upload of {name}"),
+                format!("Fehlgeschlagenes Hochladen von {name} ausblenden"),
+                format!("Descartar la subida fallida de {name}")
+            ),
+            Self::UploadsMore { count } => tr!(
+                l,
+                format!("and {count} more"),
+                format!("und {count} weitere"),
+                format!("y {count} más")
+            ),
+            Self::A11yUploadCancel { name } => tr!(
+                l,
+                format!("Cancel upload of {name}"),
+                format!("Hochladen von {name} abbrechen"),
+                format!("Cancelar la subida de {name}")
+            ),
+            Self::ShareConfirm => tr!(l, "Share", "Teilen", "Compartir").into(),
+            Self::ShareNotAllowed => tr!(
+                l,
+                "put.io does not let this app do that.",
+                "put.io erlaubt dieser App das nicht.",
+                "put.io no permite esto a esta app."
+            )
+            .into(),
             Self::FileMenuMove => tr!(
                 l,
                 "Move…",
@@ -2167,6 +2440,161 @@ mod tests {
                 reason: "Spring".into(),
             },
         ]
+    }
+
+    #[test]
+    fn the_messages_of_the_details_panel_are_written_in_every_language() {
+        let all = [
+            Msg::DetailSavedIn,
+            Msg::DetailFromFeed,
+            Msg::DetailFromFeedUnknown,
+            Msg::MenuShowInFiles,
+        ];
+        for msg in all {
+            let texts = [Locale::En, Locale::De, Locale::Es].map(|l| msg.text(l));
+            for text in &texts {
+                assert!(!text.trim().is_empty(), "{msg:?}");
+                assert_eq!(text, text.trim(), "{msg:?}");
+            }
+            assert!(
+                texts[0] != texts[1] && texts[0] != texts[2],
+                "{msg:?}: {texts:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_messages_of_uploads_are_written_in_every_language() {
+        let all = [
+            Msg::UploadSkipped { count: 1 },
+            Msg::UploadSkipped { count: 7 },
+            Msg::UploadDone {
+                name: "Spring".into(),
+            },
+            Msg::UploadCancelled {
+                name: "Spring".into(),
+            },
+            Msg::UploadFileFailed {
+                name: "Spring".into(),
+                reason: "Summer".into(),
+            },
+            Msg::UploadDropHere {
+                folder: "Spring".into(),
+            },
+            Msg::UploadWaiting,
+            Msg::PaymentRequired,
+            Msg::UploadNoSpace {
+                needed: "Spring".into(),
+                free: "Summer".into(),
+            },
+            Msg::UploadButton,
+            Msg::UploadPickTitle,
+            Msg::A11yUploadDismiss {
+                name: "Spring".into(),
+            },
+            Msg::UploadsMore { count: 7 },
+            Msg::A11yUploadCancel {
+                name: "Spring".into(),
+            },
+        ];
+        for msg in all {
+            let texts = [Locale::En, Locale::De, Locale::Es].map(|l| msg.text(l));
+            for text in &texts {
+                assert!(!text.trim().is_empty(), "{msg:?}");
+                assert_eq!(text, text.trim(), "{msg:?}");
+                assert!(!text.contains(['{', '}']), "{msg:?}: {text}");
+            }
+            assert!(
+                texts[0] != texts[1] && texts[0] != texts[2],
+                "{msg:?}: {texts:?}"
+            );
+            match &msg {
+                Msg::UploadSkipped { count } => {
+                    assert!(
+                        texts.iter().all(|t| t.contains(&count.to_string())),
+                        "{texts:?}"
+                    );
+                }
+                Msg::UploadDone { .. }
+                | Msg::UploadCancelled { .. }
+                | Msg::UploadFileFailed { .. }
+                | Msg::UploadNoSpace { .. }
+                | Msg::UploadDropHere { .. }
+                | Msg::A11yUploadDismiss { .. }
+                | Msg::A11yUploadCancel { .. } => {
+                    assert!(texts.iter().all(|t| t.contains("Spring")), "{texts:?}");
+                }
+                _ => {}
+            }
+        }
+    }
+
+    #[test]
+    fn the_messages_of_friends_are_written_in_every_language() {
+        let all = [
+            Msg::MenuFriends,
+            Msg::FriendsTitle,
+            Msg::FriendsAddTitle,
+            Msg::FriendsNameHint,
+            Msg::FriendsSendRequest,
+            Msg::FriendsRequestsTitle,
+            Msg::FriendsListTitle,
+            Msg::FriendsAccept,
+            Msg::FriendsDecline,
+            Msg::FriendsNone,
+            Msg::FriendsRemove,
+            Msg::FriendsRemoveAsk {
+                name: "Spring".into(),
+            },
+            Msg::FriendsRemoveConfirm,
+            Msg::FriendsDoneRequest,
+            Msg::FriendsDoneApprove,
+            Msg::FriendsDoneDeny,
+            Msg::FriendsDoneUnfriend,
+        ];
+        for msg in all {
+            let texts = [Locale::En, Locale::De, Locale::Es].map(|l| msg.text(l));
+            for text in &texts {
+                assert!(!text.trim().is_empty(), "{msg:?}");
+                assert_eq!(text, text.trim(), "{msg:?}");
+                assert!(!text.contains(['{', '}']), "{msg:?}: {text}");
+            }
+            assert!(
+                texts[0] != texts[1] && texts[0] != texts[2],
+                "{msg:?}: {texts:?}"
+            );
+            if matches!(msg, Msg::FriendsRemoveAsk { .. }) {
+                assert!(texts.iter().all(|t| t.contains("Spring")), "{texts:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_messages_of_sharing_are_written_in_every_language() {
+        let all = [
+            Msg::FileMenuShare,
+            Msg::FileSharedBadge,
+            Msg::ShareTitle,
+            Msg::ShareSharedWith,
+            Msg::ShareNobody,
+            Msg::ShareStop,
+            Msg::ShareWithTitle,
+            Msg::ShareAllFriends,
+            Msg::ShareNoFriends,
+            Msg::ShareConfirm,
+            Msg::ShareNotAllowed,
+        ];
+        for msg in all {
+            let texts = [Locale::En, Locale::De, Locale::Es].map(|l| msg.text(l));
+            for text in &texts {
+                assert!(!text.trim().is_empty(), "{msg:?}");
+                assert_eq!(text, text.trim(), "{msg:?}");
+            }
+            assert!(
+                texts[0] != texts[1] && texts[0] != texts[2],
+                "{msg:?}: {texts:?}"
+            );
+        }
     }
 
     #[test]

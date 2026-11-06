@@ -137,6 +137,12 @@ fn the_fields_we_read_exist_in_the_spec_schemas() {
         created.contains("created_at"),
         "File.created_at is not in the spec"
     );
+    for field in ["save_parent_id", "subscription_id"] {
+        assert!(
+            transfer.contains(field),
+            "Transfer.{field} is not in the spec"
+        );
+    }
     let extraction = props("Extraction");
     for field in ["id", "name", "status", "message", "files"] {
         assert!(
@@ -179,6 +185,8 @@ fn template(path: &str) -> String {
                 "{id}".to_owned()
             } else if segment == "ABCD1234" {
                 "{code}".to_owned()
+            } else if segment == "someuser" {
+                "{username}".to_owned()
             } else {
                 segment.to_owned()
             }
@@ -238,8 +246,19 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     ok(r#"{"status":"OK"}"#); // move_files
     ok(r#"{"status":"OK"}"#); // delete_files
     ok(r#"{"status":"OK","file":{"id":2}}"#); // create_folder
+    ok(&format!(r#"{{"transfer":{transfer}}}"#)); // transfer
     ok(r#"{"extractions":[]}"#); // extract_files
     ok(r#"{"extractions":[]}"#); // extractions
+    ok(r#"{"shared":[{"id":1,"name":"a","size":3,"share_with":"everyone"}]}"#); // shared_files
+    ok(r#"{"shared-with":[{"user_name":"jane","user_avatar_url":"/a.png","share_id":3}]}"#); // shared_with
+    ok(r#"{"friends":[{"id":1,"name":"jane"}]}"#); // friends
+    ok(r#"{"status":"OK"}"#); // share_file
+    ok(r#"{"status":"OK"}"#); // unshare_file
+    ok(r#"{"status":"OK","file":{"id":9,"name":"a.bin"}}"#); // upload_file
+    ok(r#"{"friends":[{"id":1,"name":"jane"}]}"#); // friend_requests
+    for _ in 0..4 {
+        ok(r#"{"status":"OK"}"#); // request, approve, deny, unfriend
+    }
     ok(r#"{"feeds":[]}"#); // rss_feeds
     ok(r#"{"status":"OK"}"#); // create_rss_feed
     ok(r#"{"status":"OK"}"#); // update_rss_feed
@@ -283,8 +302,35 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     client.move_files(&[1, 2], 3).unwrap();
     client.delete_files(&[1, 2]).unwrap();
     client.create_folder("folder", 0).unwrap();
+    client.transfer(1).unwrap();
     client.extract_files(&[1, 2], Some("secret")).unwrap();
     client.extractions().unwrap();
+    client.shared_files().unwrap();
+    client.shared_with(1).unwrap();
+    client.friends().unwrap();
+    client
+        .share_file(1, &crate::models::ShareWith::Friends(vec!["jane".into()]))
+        .unwrap();
+    client.unshare_file(1, &[3]).unwrap();
+    client
+        .upload_file(crate::client::FileUpload {
+            path: "/tmp/a.bin".into(),
+            name: "a.bin".into(),
+            len: 3,
+            parent_id: 1,
+            progress: None,
+            cancel: None,
+        })
+        .unwrap();
+    client.friend_requests().unwrap();
+    for change in [
+        crate::models::FriendChange::Request("someuser".into()),
+        crate::models::FriendChange::Approve("someuser".into()),
+        crate::models::FriendChange::Deny("someuser".into()),
+        crate::models::FriendChange::Unfriend("someuser".into()),
+    ] {
+        client.change_friend(&change).unwrap();
+    }
     client.rss_feeds().unwrap();
     client.create_rss_feed(&feed).unwrap();
     client.update_rss_feed(5, &feed).unwrap();
@@ -293,7 +339,7 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     client.delete_rss_feed(5).unwrap();
 
     let requests: Vec<Request> = fake.requests();
-    assert_eq!(requests.len(), 28);
+    assert_eq!(requests.len(), 40);
     for request in &requests {
         let path = template(&request.path);
         let method = match request.method {

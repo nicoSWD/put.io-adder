@@ -37,6 +37,9 @@ pub enum ApiError {
     /// A response grew past the size limit.
     #[error("response too large")]
     TooLarge,
+    /// The file being uploaded could not be read, or changed while it was read.
+    #[error("file error: {0}")]
+    File(String),
     /// The caller passed something that must never be sent.
     #[error("invalid input: {0}")]
     InvalidInput(&'static str),
@@ -47,6 +50,7 @@ impl From<TransportError> for ApiError {
         match error {
             TransportError::Network(message) => Self::Network(message),
             TransportError::TooLarge => Self::TooLarge,
+            TransportError::File(message) => Self::File(message),
         }
     }
 }
