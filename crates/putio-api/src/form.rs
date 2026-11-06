@@ -26,6 +26,30 @@ pub fn urlencoded(pairs: &[(&str, &str)]) -> String {
         .join("&")
 }
 
+/// Standard base64 (with padding), as the resumable upload's metadata wants it.
+#[must_use]
+pub fn base64(input: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
+    for chunk in input.chunks(3) {
+        let [a, b, c] = [
+            chunk.first().copied().unwrap_or(0),
+            chunk.get(1).copied().unwrap_or(0),
+            chunk.get(2).copied().unwrap_or(0),
+        ];
+        let group = (u32::from(a) << 16) | (u32::from(b) << 8) | u32::from(c);
+        for shift in [18, 12, 6, 0] {
+            let index = usize::try_from((group >> shift) & 0x3f).unwrap_or(0);
+            out.push(char::from(ALPHABET.get(index).copied().unwrap_or(b'=')));
+        }
+        // The last group of one or two bytes carries two or three letters, then padding.
+        let padding = 3usize.saturating_sub(chunk.len());
+        out.truncate(out.len() - padding);
+        out.push_str(&"=".repeat(padding));
+    }
+    out
+}
+
 /// A built `multipart/form-data` body.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Multipart {
@@ -217,6 +241,26 @@ mod tests {
             streamed(&[], "f", "x", "t").content_type,
             streamed(&[], "f", "x", "t").content_type
         );
+    }
+
+    #[test]
+    fn base64_matches_the_standard_test_vectors() {
+        for (plain, encoded) in [
+            ("", ""),
+            ("f", "Zg=="),
+            ("fo", "Zm8="),
+            ("foo", "Zm9v"),
+            ("foob", "Zm9vYg=="),
+            ("fooba", "Zm9vYmE="),
+            ("foobar", "Zm9vYmFy"),
+            ("parent_id", "cGFyZW50X2lk"),
+            ("true", "dHJ1ZQ=="),
+        ] {
+            assert_eq!(base64(plain.as_bytes()), encoded, "{plain:?}");
+        }
+        // Bytes outside ASCII, and every byte value, round through the same table.
+        assert_eq!(base64("é".as_bytes()), "w6k=");
+        assert_eq!(base64(&[0xfb, 0xff, 0xbf]), "+/+/");
     }
 
     #[test]

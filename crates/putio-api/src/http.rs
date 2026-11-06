@@ -20,6 +20,7 @@ const FILE_UPLOAD_TIMEOUT: Duration = Duration::from_hours(12);
 struct Bases {
     api: String,
     upload: String,
+    upload_tus: String,
     github: String,
 }
 
@@ -28,6 +29,7 @@ impl Bases {
         Self {
             api: "https://api.put.io/v2".into(),
             upload: "https://upload.put.io/v2".into(),
+            upload_tus: "https://upload.put.io".into(),
             github: "https://api.github.com".into(),
         }
     }
@@ -36,6 +38,7 @@ impl Bases {
         let base = match host {
             Host::Api => &self.api,
             Host::Upload => &self.upload,
+            Host::UploadTus => &self.upload_tus,
             Host::GitHub => &self.github,
         };
         format!("{base}{path}")
@@ -79,7 +82,7 @@ impl UreqTransport {
 
     /// Plain-HTTP transport pointing every host at a loopback test server. Tests only.
     #[cfg(test)]
-    fn for_local_tests(port: u16) -> Self {
+    pub(crate) fn for_local_tests(port: u16) -> Self {
         let base = format!("http://127.0.0.1:{port}");
         Self {
             agent: agent(Duration::from_secs(5), "putio-adder-test", false),
@@ -88,6 +91,7 @@ impl UreqTransport {
             bases: Bases {
                 api: base.clone(),
                 upload: base.clone(),
+                upload_tus: base.clone(),
                 github: base,
             },
         }
@@ -105,12 +109,37 @@ fn with_headers<B>(
     builder: ureq::RequestBuilder<B>,
     accept: &str,
     authorization: Option<&str>,
+    extra: &[(&'static str, String)],
 ) -> ureq::RequestBuilder<B> {
-    let builder = builder.header("Accept", accept);
+    let mut builder = builder.header("Accept", accept);
+    for (name, value) in extra {
+        builder = builder.header(*name, value);
+    }
     match authorization {
         Some(value) => builder.header("Authorization", value),
         None => builder,
     }
+}
+
+/// Send a file body (a whole multipart upload, or one part of a resumable one) and turn a send that failed
+/// because the file could not be read into a file error, not a network one.
+fn send_file(
+    builder: ureq::RequestBuilder<ureq::typestate::WithBody>,
+    file: &crate::transport::FileBody,
+) -> Result<Result<ureq::http::Response<ureq::Body>, ureq::Error>, TransportError> {
+    let (reader, total) = FileReader::open(file)?;
+    let failure = std::sync::Arc::clone(&reader.failure);
+    let sent = builder
+        .header("Content-Type", &file.content_type)
+        .header("Content-Length", total.to_string())
+        .send(ureq::SendBody::from_owned_reader(reader));
+    let why = failure.lock().ok().and_then(|slot| slot.clone());
+    if sent.is_err()
+        && let Some(why) = why
+    {
+        return Err(TransportError::File(why));
+    }
+    Ok(sent)
 }
 
 /// The body of a file upload as one stream: the head, the file's bytes, the tail. Reads the file as it is
@@ -150,12 +179,21 @@ impl FileReader {
                 "the file changed while it was being prepared".into(),
             ));
         }
-        let total = body.head.len() as u64 + body.len + body.tail.len() as u64;
+        if body.offset.saturating_add(body.count) > body.len {
+            return Err(refuse("the part to send is not inside the file".into()));
+        }
+        let mut file = file;
+        {
+            use std::io::Seek;
+            file.seek(std::io::SeekFrom::Start(body.offset))
+                .map_err(|error| refuse(format!("cannot read the file: {error}")))?;
+        }
+        let total = body.head.len() as u64 + body.count + body.tail.len() as u64;
         Ok((
             Self {
                 head: std::io::Cursor::new(body.head.clone()),
                 file,
-                file_left: body.len,
+                file_left: body.count,
                 tail: std::io::Cursor::new(body.tail.clone()),
                 sent: 0,
                 reported: 0,
@@ -230,7 +268,7 @@ impl Transport for UreqTransport {
         let url = self.bases.url(request.host, &request.path);
         let agent = match (&request.body, request.host) {
             (Body::File(_), _) => &self.file_agent,
-            (_, Host::Upload) => &self.upload_agent,
+            (_, Host::Upload | Host::UploadTus) => &self.upload_agent,
             _ => &self.agent,
         };
 
@@ -242,12 +280,14 @@ impl Transport for UreqTransport {
         let accept = request.accept;
 
         let result = match (request.method, &request.body) {
-            (Method::Get, _) => with_headers(agent.get(&url), accept, authorization).call(),
+            (Method::Get, _) => {
+                with_headers(agent.get(&url), accept, authorization, &request.headers).call()
+            }
             (Method::Post, Body::None) => {
-                with_headers(agent.post(&url), accept, authorization).send_empty()
+                with_headers(agent.post(&url), accept, authorization, &request.headers).send_empty()
             }
             (Method::Post, Body::Form(form)) => {
-                with_headers(agent.post(&url), accept, authorization)
+                with_headers(agent.post(&url), accept, authorization, &request.headers)
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .send(form.as_str())
             }
@@ -257,25 +297,25 @@ impl Transport for UreqTransport {
                     content_type,
                     bytes,
                 },
-            ) => with_headers(agent.post(&url), accept, authorization)
+            ) => with_headers(agent.post(&url), accept, authorization, &request.headers)
                 .header("Content-Type", content_type)
                 .send(bytes.as_slice()),
-            (Method::Post, Body::File(file)) => {
-                let (reader, total) = FileReader::open(file)?;
-                let failure = std::sync::Arc::clone(&reader.failure);
-                let sent = with_headers(agent.post(&url), accept, authorization)
-                    .header("Content-Type", &file.content_type)
-                    .header("Content-Length", total.to_string())
-                    .send(ureq::SendBody::from_owned_reader(reader));
-                // A send that failed because the file could not be read is a file problem, not a network
-                // one.
-                let why = failure.lock().ok().and_then(|slot| slot.clone());
-                if sent.is_err()
-                    && let Some(why) = why
-                {
-                    return Err(TransportError::File(why));
-                }
-                sent
+            (Method::Post, Body::File(file)) => send_file(
+                with_headers(agent.post(&url), accept, authorization, &request.headers),
+                file,
+            )?,
+            (Method::Patch, Body::File(file)) => send_file(
+                with_headers(agent.patch(&url), accept, authorization, &request.headers),
+                file,
+            )?,
+            (Method::Head, _) => {
+                with_headers(agent.head(&url), accept, authorization, &request.headers).call()
+            }
+            // The client never builds these; refusing is better than guessing what was meant.
+            (Method::Patch, _) => {
+                return Err(TransportError::Network(
+                    "this method does not take that kind of body".into(),
+                ));
             }
         };
 
@@ -407,11 +447,14 @@ mod tests {
             path: "/files/upload".into(),
             accept: "application/json",
             bearer: Some(Token::new("sekrit").unwrap()),
+            headers: Vec::new(),
             body: Body::File(crate::transport::FileBody {
                 content_type: "multipart/form-data; boundary=x".into(),
                 head,
                 path: file.0.clone(),
                 len,
+                offset: 0,
+                count: len,
                 tail,
                 progress: None,
                 cancel: None,
@@ -541,6 +584,205 @@ mod tests {
         assert!(matches!(error, TransportError::Network(_)), "{error:?}");
     }
 
+    /// What the loopback tus server has been told and has received.
+    #[derive(Debug, Default)]
+    struct TusState {
+        /// The file's bytes as far as they arrived.
+        received: Vec<u8>,
+        /// The `Upload-Metadata` of the creation.
+        metadata: String,
+        /// Every request line, in order.
+        log: Vec<String>,
+        /// The next part is cut off after this many bytes: they are kept, and the connection is closed
+        /// without an answer.
+        break_next_part_after: Option<usize>,
+    }
+
+    /// A small resumable-upload server (create, offset, parts), a thread for each connection.
+    #[allow(clippy::too_many_lines)] // one server, read top to bottom
+    fn serve_tus(
+        expected_len: usize,
+        break_second_part_after: Option<usize>,
+    ) -> (u16, std::sync::Arc<std::sync::Mutex<TusState>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let state = std::sync::Arc::new(std::sync::Mutex::new(TusState::default()));
+        let shared = std::sync::Arc::clone(&state);
+        let parts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { return };
+                let shared = std::sync::Arc::clone(&shared);
+                let parts = std::sync::Arc::clone(&parts);
+                // A thread for each connection (the transport uses one per agent); requests come one after
+                // the other on a connection until the client closes it.
+                thread::spawn(move || {
+                    loop {
+                        let mut buf = vec![0u8; 65536];
+                        let mut head = Vec::new();
+                        let split = loop {
+                            if let Some(at) = head.windows(4).position(|w| w == b"\r\n\r\n") {
+                                break Some(at + 4);
+                            }
+                            match stream.read(&mut buf) {
+                                Ok(0) | Err(_) => break None,
+                                Ok(n) => head.extend_from_slice(&buf[..n]),
+                            }
+                        };
+                        let Some(split) = split else { break };
+                        let text = String::from_utf8_lossy(&head[..split]).into_owned();
+                        let line = text.lines().next().unwrap_or("").to_owned();
+                        let header = |name: &str| {
+                            text.lines().skip(1).find_map(|l| {
+                                let (key, value) = l.split_once(':')?;
+                                key.eq_ignore_ascii_case(name)
+                                    .then(|| value.trim().to_owned())
+                            })
+                        };
+                        let length: usize = header("content-length")
+                            .and_then(|v| v.parse().ok())
+                            .unwrap_or(0);
+                        let mut body = head[split..].to_vec();
+                        let mut cut_short = false;
+                        let break_after = if line.starts_with("PATCH") {
+                            let nth = parts.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+                            shared
+                                .lock()
+                                .unwrap()
+                                .break_next_part_after
+                                .take()
+                                .or((nth == 2).then_some(break_second_part_after).flatten())
+                        } else {
+                            None
+                        };
+                        while body.len() < length {
+                            if break_after.is_some_and(|k| body.len() >= k) {
+                                cut_short = true;
+                                break;
+                            }
+                            match stream.read(&mut buf) {
+                                Ok(0) | Err(_) => break,
+                                Ok(n) => body.extend_from_slice(&buf[..n]),
+                            }
+                        }
+                        let mut state = shared.lock().unwrap();
+                        state.log.push(line.clone());
+                        let reply = if line.starts_with("POST /files/ ") {
+                            state.metadata = header("upload-metadata").unwrap_or_default();
+                            "HTTP/1.1 201 Created\r\nLocation: /files/abc123\r\nContent-Length: 0\r\n\r\n"
+                            .to_owned()
+                        } else if line.starts_with("HEAD /files/abc123 ") {
+                            format!(
+                                "HTTP/1.1 200 OK\r\nUpload-Offset: {}\r\nContent-Length: 0\r\n\r\n",
+                                state.received.len()
+                            )
+                        } else if line.starts_with("PATCH /files/abc123 ") {
+                            let said: usize = header("upload-offset")
+                                .and_then(|v| v.parse().ok())
+                                .unwrap_or(usize::MAX);
+                            let type_ok = header("content-type").as_deref()
+                                == Some("application/offset+octet-stream");
+                            if said != state.received.len() || !type_ok {
+                                "HTTP/1.1 409 Conflict\r\nContent-Length: 0\r\n\r\n".to_owned()
+                            } else {
+                                let keep = break_after.map_or(body.len(), |k| k.min(body.len()));
+                                state.received.extend_from_slice(&body[..keep]);
+                                if cut_short || break_after.is_some() {
+                                    // Dropped without an answer.
+                                    return_drop(&mut stream);
+                                    break;
+                                }
+                                let done = state.received.len() == expected_len;
+                                format!(
+                                    "HTTP/1.1 204 No Content\r\nUpload-Offset: {}\r\n{}\r\n",
+                                    state.received.len(),
+                                    if done { "Putio-File-Id: 77\r\n" } else { "" }
+                                )
+                            }
+                        } else {
+                            "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n".to_owned()
+                        };
+                        drop(state);
+                        stream.write_all(reply.as_bytes()).unwrap();
+                    }
+                });
+            }
+        });
+        (port, state)
+    }
+
+    fn return_drop(stream: &mut std::net::TcpStream) {
+        let _ = stream.shutdown(std::net::Shutdown::Both);
+    }
+
+    #[test]
+    fn a_big_file_goes_up_in_parts_through_the_real_transport_and_survives_a_broken_connection() {
+        let data: Vec<u8> = (0..300_000u32).map(|i| (i * 7 % 251) as u8).collect();
+        let file = TempFile::new("tus.bin", &data);
+        let (port, state) = serve_tus(data.len(), Some(40_000));
+        let client = crate::client::Client::with_token(
+            UreqTransport::for_local_tests(port),
+            Token::new("sekrit").unwrap(),
+        );
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let log = std::sync::Arc::clone(&seen);
+        let outcome = client
+            .upload_resumable(
+                &crate::client::FileUpload {
+                    path: file.0.clone(),
+                    name: "Großes Video.mkv".into(),
+                    len: data.len() as u64,
+                    parent_id: 12,
+                    progress: Some(std::sync::Arc::new(move |sent| {
+                        log.lock().unwrap().push(sent);
+                    })),
+                    cancel: None,
+                },
+                crate::client::Tuning {
+                    chunk: 100_000,
+                    retries: 3,
+                    first_wait: Duration::ZERO,
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            outcome,
+            crate::models::UploadOutcome::Resumable { file_id: Some(77) }
+        );
+        let state = state.lock().unwrap();
+        assert_eq!(state.received, data, "every byte arrived, once, in order");
+        // The second part was cut at 40 000 bytes; the client asked, and sent on from there.
+        let verbs: Vec<&str> = state
+            .log
+            .iter()
+            .map(|l| l.split(' ').next().unwrap())
+            .collect();
+        assert_eq!(
+            verbs,
+            ["POST", "PATCH", "PATCH", "HEAD", "PATCH", "PATCH"],
+            "{:?}",
+            state.log
+        );
+        // The metadata is the protocol's: `key base64(value)` pairs.
+        assert!(
+            state.metadata.contains(&format!(
+                "name {}",
+                crate::form::base64("Großes Video.mkv".as_bytes())
+            )),
+            "{}",
+            state.metadata
+        );
+        assert!(
+            state
+                .metadata
+                .contains(&format!("parent_id {}", crate::form::base64(b"12")))
+        );
+        // Progress is of the whole file: it never goes back and ends at its length.
+        let seen = seen.lock().unwrap();
+        assert!(seen.windows(2).all(|w| w[0] <= w[1]), "{seen:?}");
+        assert_eq!(seen.last().copied(), Some(data.len() as u64));
+    }
+
     fn get(path: &str) -> Request {
         Request {
             method: Method::Get,
@@ -548,6 +790,7 @@ mod tests {
             path: path.into(),
             accept: "application/json",
             bearer: Some(Token::new("sekrit").unwrap()),
+            headers: Vec::new(),
             body: Body::None,
         }
     }

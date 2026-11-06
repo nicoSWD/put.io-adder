@@ -85,6 +85,8 @@ impl Request {
         let verb = match self.method {
             Method::Get => "GET",
             Method::Post => "POST",
+            Method::Head => "HEAD",
+            Method::Patch => "PATCH",
         };
         format!("{verb} {}", self.path)
     }

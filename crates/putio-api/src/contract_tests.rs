@@ -345,6 +345,7 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
         let method = match request.method {
             Method::Get => "get",
             Method::Post => "post",
+            Method::Head | Method::Patch => panic!("the spec has no resumable upload"),
         };
         let operation = spec["paths"]
             .get(&path)
