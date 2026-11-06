@@ -397,9 +397,17 @@ impl App {
             }
             Effect::Poll => self.send(Job::Poll),
             Effect::AddMagnet { op, uri, parent } => self.send(Job::AddMagnet { op, uri, parent }),
-            Effect::UploadTorrent { op, path, parent } => {
-                self.send(Job::UploadTorrent { op, path, parent });
-            }
+            Effect::UploadTorrent {
+                op,
+                path,
+                parent,
+                trash_after,
+            } => self.send(Job::UploadTorrent {
+                op,
+                path,
+                parent,
+                trash_after,
+            }),
             Effect::CancelTransfer { op, id } => self.send(Job::Cancel { op, id }),
             Effect::RetryTransfer { op, id } => self.send(Job::Retry { op, id }),
             Effect::CleanTransfers { op, ids } => self.send(Job::Clean { op, ids }),

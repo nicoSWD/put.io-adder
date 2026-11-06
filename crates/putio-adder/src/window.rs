@@ -17,7 +17,7 @@ pub(crate) const COLLAPSED_HEIGHT: f32 = TOP_HEIGHT + STRIP_HEIGHT + COLLAPSED_M
 /// The sign-in panel needs room for the code.
 pub(crate) const LOGIN_HEIGHT: f32 = 600.0;
 /// Tall enough for every section of Preferences without scrolling.
-pub(crate) const PREFS_HEIGHT: f32 = 760.0;
+pub(crate) const PREFS_HEIGHT: f32 = 812.0;
 /// The height of the open list until the user picks another.
 pub(crate) const DEFAULT_LIST_HEIGHT: f32 = 600.0;
 

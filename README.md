@@ -3,7 +3,7 @@
 Click a `magnet:` link or open a `.torrent` file and it lands in your [put.io](https://put.io) queue.
 A small cross-platform app for **macOS, Windows and Linux** (x86-64 and arm64), written in Rust.
 
-- **Magnet links and `.torrent` files** go straight to your put.io queue. The app asks once whether it should be the default app for them, and sets itself up if you say yes
+- **Magnet links and `.torrent` files** go straight to your put.io queue. The app asks once whether it should be the default app for them, and sets itself up if you say yes. Optionally it moves a `.torrent` to the Trash once put.io has taken it
 - **Your transfers** at a glance: progress, speed, ETA and size, sorted how you like, with a notification when one finishes
 - **Right-click a transfer** (or use its "⋯" button) for a details panel (peers, share ratio, tracker message, dates), retry, copy the put.io link or the magnet link, cancel or stop seeding, clear finished ones, stream in [VLC](https://www.videolan.org/vlc/), or download the file or folder through your browser
 - **Updates itself** from GitHub releases when you press *Update now* (see [What the updater checks](#updates))
