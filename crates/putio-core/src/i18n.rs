@@ -155,6 +155,8 @@ pub enum Msg {
     SecretLoadFailed,
     SecretSaveFailed,
     SecretDeleteFailed,
+    SettingsUnreadable,
+    SettingsNotSaved,
     CopyCode,
     HandlerKeptOther,
     A11yClose,
@@ -546,7 +548,7 @@ impl Msg {
                 l,
                 "Signed in and ready to go!",
                 "Angemeldet und startklar!",
-                "¡Sesión iniciada y listo!"
+                "¡Sesión iniciada! Todo listo."
             )
             .into(),
             Self::AccountFailed => tr!(
@@ -928,12 +930,24 @@ impl Msg {
                 "put.io devolvió una dirección de descarga inesperada"
             )
             .into(),
-            Self::DownloadStartedPartial { missing } => tr!(
-                l,
-                format!("Download started · put.io left out {missing} file(s)"),
-                format!("Download gestartet · put.io hat {missing} Datei(en) ausgelassen"),
-                format!("Descarga iniciada · put.io omitió {missing} archivo(s)")
-            ),
+            Self::DownloadStartedPartial { missing } => {
+                let one = *missing == 1;
+                tr!(
+                    l,
+                    format!(
+                        "Download started · put.io left out {missing} {}",
+                        if one { "file" } else { "files" }
+                    ),
+                    format!(
+                        "Download gestartet · put.io hat {missing} {} ausgelassen",
+                        if one { "Datei" } else { "Dateien" }
+                    ),
+                    format!(
+                        "Descarga iniciada · put.io omitió {missing} {}",
+                        if one { "archivo" } else { "archivos" }
+                    )
+                )
+            }
             Self::DetailGroupTransfer => tr!(l, "Transfer", "Übertragung", "Transferencia").into(),
             Self::DetailGroupSharing | Self::ShareTitle => {
                 tr!(l, "Sharing", "Teilen", "Compartir").into()
@@ -1354,6 +1368,20 @@ impl Msg {
                 "No secure storage here. You'll need to sign in again next time.",
                 "Kein sicherer Speicher verfügbar. Du musst dich beim nächsten Mal erneut anmelden.",
                 "No hay almacenamiento seguro. Tendrás que iniciar sesión de nuevo la próxima vez."
+            )
+            .into(),
+            Self::SettingsUnreadable => tr!(
+                l,
+                "Couldn't read your saved preferences. Using the defaults.",
+                "Gespeicherte Einstellungen konnten nicht gelesen werden. Es gelten die Standardwerte.",
+                "No se pudieron leer tus preferencias guardadas. Se usan las predeterminadas."
+            )
+            .into(),
+            Self::SettingsNotSaved => tr!(
+                l,
+                "Couldn't save your preferences. Changes will be lost when you quit.",
+                "Einstellungen konnten nicht gespeichert werden. Änderungen gehen beim Beenden verloren.",
+                "No se pudieron guardar tus preferencias. Los cambios se perderán al salir."
             )
             .into(),
             Self::SecretLoadFailed => tr!(
@@ -2260,7 +2288,7 @@ impl Msg {
             Self::FileDeleteFolderBody { name } => tr!(
                 l,
                 format!("“{name}” and everything in it will be deleted from put.io. This cannot be undone."),
-                format!("„{name}“ und alles darin wird von put.io gelöscht. Das lässt sich nicht rückgängig machen."),
+                format!("„{name}“ und alles darin werden von put.io gelöscht. Das lässt sich nicht rückgängig machen."),
                 format!("«{name}» y todo lo que contiene se eliminará de put.io. No se puede deshacer.")
             ),
             Self::FileActionFailed { reason } => tr!(
@@ -2286,6 +2314,20 @@ impl Msg {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn counts_of_left_out_files_use_the_singular_for_one() {
+        for (locale, one, many) in [
+            (Locale::En, "1 file", "2 files"),
+            (Locale::De, "1 Datei ", "2 Dateien "),
+            (Locale::Es, "1 archivo", "2 archivos"),
+        ] {
+            let text = |missing| Msg::DownloadStartedPartial { missing }.text(locale);
+            assert!(text(1).contains(one), "{}", text(1));
+            assert!(text(2).contains(many), "{}", text(2));
+            assert!(!text(2).contains("(s)") && !text(2).contains("(en)"));
+        }
+    }
 
     #[test]
     fn locale_tags() {
@@ -2803,6 +2845,8 @@ mod tests {
             Msg::SecretLoadFailed,
             Msg::SecretSaveFailed,
             Msg::SecretDeleteFailed,
+            Msg::SettingsUnreadable,
+            Msg::SettingsNotSaved,
             Msg::CopyCode,
             Msg::HandlerKeptOther,
             Msg::A11yClose,

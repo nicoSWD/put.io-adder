@@ -80,6 +80,15 @@ pub enum SecretProblem {
     Delete,
 }
 
+/// What went wrong with the preferences file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SettingsProblem {
+    /// There is a file, but it could not be read or is not valid: the defaults are in use.
+    Unreadable,
+    /// Changes cannot be written, so they are lost when the app quits.
+    NotSaved,
+}
+
 /// Identifies one outstanding operation, so a late result can never be attributed to the wrong request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct OpId(pub u64);
@@ -320,6 +329,8 @@ pub enum Event {
     PageOpenFailed,
     /// The place the sign-in is kept (the system keychain) did not do what was asked.
     SecretStoreFailed(SecretProblem),
+    /// The preferences file could not be read at startup, or a change to it could not be written.
+    SettingsFailed(SettingsProblem),
     NotificationClicked {
         file_id: Option<i64>,
     },
@@ -1241,6 +1252,14 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
             };
             state.say(msg, now, ERROR_NOTICE_TIME);
         }
+        Event::SettingsFailed(problem) => {
+            let msg = match problem {
+                SettingsProblem::Unreadable => Msg::SettingsUnreadable,
+                SettingsProblem::NotSaved => Msg::SettingsNotSaved,
+            };
+            // Stays until something else is said: the user must not miss that changes are being lost.
+            state.say_until_replaced(msg);
+        }
         Event::NotificationClicked { file_id } => fx.push(Effect::OpenUrl(open_file_url(file_id))),
         Event::OpenProjectPage => fx.push(Effect::OpenUrl(PROJECT_URL.to_owned())),
         Event::OpenSupportPage => fx.push(Effect::OpenUrl(SUPPORT_URL.to_owned())),
@@ -1915,10 +1934,9 @@ fn polled(
         return;
     }
 
-    match account {
-        Ok(account) => state.account = Some(account),
-        Err(_) if state.account.is_none() => state.base = Msg::AccountFailed,
-        Err(_) => {}
+    // A failed account call keeps what was loaded before; with nothing loaded, the status line says so (below).
+    if let Ok(account) = account {
+        state.account = Some(account);
     }
 
     match transfers {
@@ -1935,10 +1953,15 @@ fn polled(
             transfers::sort(&mut list, transfers::SortKey::Default, true);
             state.summary = transfers::summarize(&list);
             state.transfers = list;
-            state.base = Msg::Summary {
-                pending: state.summary.pending,
-                finished: state.summary.finished,
-                failed: state.summary.failed,
+            // No account after this poll means loading it failed: say so rather than hide it.
+            state.base = if state.account.is_none() {
+                Msg::AccountFailed
+            } else {
+                Msg::Summary {
+                    pending: state.summary.pending,
+                    finished: state.summary.finished,
+                    failed: state.summary.failed,
+                }
             };
             let badge = state.summary.average_percent;
             if badge != state.badge {
@@ -2448,6 +2471,15 @@ mod tests {
         );
         assert_eq!(state.transfers.len(), 1);
         assert!(state.account.is_none());
+        // ...and the status line says why the account is missing, until the next poll brings it.
+        assert_eq!(state.status(0), &Msg::AccountFailed);
+        poll_ok(
+            &mut state,
+            POLL_INTERVAL,
+            vec![transfer(1, "a", TransferStatus::Waiting, 0, None)],
+        );
+        assert!(state.account.is_some());
+        assert!(matches!(state.status(POLL_INTERVAL), Msg::Summary { .. }));
     }
 
     #[test]
@@ -3059,6 +3091,19 @@ mod tests {
         ] {
             update(&mut state, 2, Event::SecretStoreFailed(problem));
             assert_eq!(*state.status(2), msg);
+        }
+    }
+
+    #[test]
+    fn preferences_that_cannot_be_read_or_written_are_told_and_the_message_stays() {
+        let (mut state, _) = signed_in(no_updates());
+        for (problem, msg) in [
+            (SettingsProblem::Unreadable, Msg::SettingsUnreadable),
+            (SettingsProblem::NotSaved, Msg::SettingsNotSaved),
+        ] {
+            update(&mut state, 2, Event::SettingsFailed(problem));
+            assert_eq!(*state.status(2), msg);
+            assert_eq!(*state.status(10_000_000), msg);
         }
     }
 

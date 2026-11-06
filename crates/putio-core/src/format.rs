@@ -6,11 +6,19 @@ use crate::i18n::{Locale, Msg};
 
 const UNITS: [&str; 6] = ["B", "KB", "MB", "GB", "TB", "PB"];
 
-/// Binary (1024-based) size with one decimal: `0 B`, `1023 B`, `1.0 KB`, `12.3 GB`.
-/// Negative input is shown as `0 B`.
+/// A number written with `.` as its decimal point, in the way `locale` writes it (German and Spanish use `,`).
+fn decimal(number: String, locale: Locale) -> String {
+    match locale {
+        Locale::En => number,
+        Locale::De | Locale::Es => number.replace('.', ","),
+    }
+}
+
+/// Binary (1024-based) size with one decimal: `0 B`, `1023 B`, `1.0 KB`, `12.3 GB` (`12,3 GB` in German
+/// and Spanish). Negative input is shown as `0 B`.
 #[must_use]
 #[allow(clippy::cast_precision_loss)]
-pub fn bytes(value: i64) -> String {
+pub fn bytes(value: i64, locale: Locale) -> String {
     if value <= 0 {
         return "0 B".into();
     }
@@ -29,14 +37,14 @@ pub fn bytes(value: i64) -> String {
     if unit == 0 {
         format!("{value} B")
     } else {
-        format!("{scaled:.1} {unit_name}")
+        decimal(format!("{scaled:.1}"), locale) + " " + unit_name
     }
 }
 
 /// Download speed, e.g. `1.5 MB/s`.
 #[must_use]
-pub fn speed(bytes_per_second: i64) -> String {
-    format!("{}/s", bytes(bytes_per_second))
+pub fn speed(bytes_per_second: i64, locale: Locale) -> String {
+    format!("{}/s", bytes(bytes_per_second, locale))
 }
 
 /// Remaining time as `3h 05m`, `4m 07s` or `9s`.
@@ -81,7 +89,7 @@ pub fn detail(transfer: &Transfer, locale: Locale) -> String {
         TransferStatus::Downloading => {
             let mut parts = vec![Msg::StatusDownloading.text(locale)];
             if transfer.down_speed > 0 {
-                parts.push(speed(transfer.down_speed));
+                parts.push(speed(transfer.down_speed, locale));
             }
             if let Some(seconds) = transfer.estimated_time.filter(|seconds| *seconds >= 0) {
                 parts.push(
@@ -168,20 +176,24 @@ pub fn details(transfer: &Transfer, locale: Locale) -> Vec<DetailRow> {
         add(transfer_group, Msg::DetailType, kind.text(locale));
     }
     if transfer.size > 0 {
-        add(transfer_group, Msg::ColSize, bytes(transfer.size));
+        add(transfer_group, Msg::ColSize, bytes(transfer.size, locale));
     }
     if let Some(value) = transfer.downloaded.filter(|v| *v > 0) {
-        add(transfer_group, Msg::DetailDownloaded, bytes(value));
+        add(transfer_group, Msg::DetailDownloaded, bytes(value, locale));
     }
 
     if let Some(value) = transfer.uploaded.filter(|v| *v > 0) {
-        add(sharing, Msg::DetailUploaded, bytes(value));
+        add(sharing, Msg::DetailUploaded, bytes(value, locale));
     }
     if let Some(ratio) = transfer
         .current_ratio
         .filter(|r| r.is_finite() && *r >= 0.0)
     {
-        add(sharing, Msg::DetailRatio, format!("{ratio:.2}"));
+        add(
+            sharing,
+            Msg::DetailRatio,
+            decimal(format!("{ratio:.2}"), locale),
+        );
     }
     if let Some(seconds) = transfer.seconds_seeding.filter(|s| *s > 0) {
         add(sharing, Msg::DetailSeedingFor, duration(seconds));
@@ -505,7 +517,7 @@ mod tests {
         );
         assert_eq!(
             detail(&t, Locale::De),
-            "Lädt herunter · 1.5 MB/s · noch 4m 07s"
+            "Lädt herunter · 1,5 MB/s · noch 4m 07s"
         );
     }
 
@@ -555,27 +567,46 @@ mod tests {
 
     #[test]
     fn bytes_cover_units_and_edges() {
-        assert_eq!(bytes(-5), "0 B");
-        assert_eq!(bytes(0), "0 B");
-        assert_eq!(bytes(1), "1 B");
-        assert_eq!(bytes(1023), "1023 B");
-        assert_eq!(bytes(1024), "1.0 KB");
-        assert_eq!(bytes(1536), "1.5 KB");
-        assert_eq!(bytes(1024 * 1024), "1.0 MB");
-        assert_eq!(bytes(13_194_139_533_312), "12.0 TB");
-        assert_eq!(bytes(i64::MAX), "8192.0 PB");
+        assert_eq!(bytes(-5, Locale::En), "0 B");
+        assert_eq!(bytes(0, Locale::En), "0 B");
+        assert_eq!(bytes(1, Locale::En), "1 B");
+        assert_eq!(bytes(1023, Locale::En), "1023 B");
+        assert_eq!(bytes(1024, Locale::En), "1.0 KB");
+        assert_eq!(bytes(1536, Locale::En), "1.5 KB");
+        assert_eq!(bytes(1024 * 1024, Locale::En), "1.0 MB");
+        assert_eq!(bytes(13_194_139_533_312, Locale::En), "12.0 TB");
+        assert_eq!(bytes(i64::MAX, Locale::En), "8192.0 PB");
     }
 
     #[test]
     fn rounding_never_shows_1024_of_a_unit() {
         // 1 MiB - 1 byte is 1023.999 KB, which must read 1.0 MB, not 1024.0 KB.
-        assert_eq!(bytes(1024 * 1024 - 1), "1.0 MB");
+        assert_eq!(bytes(1024 * 1024 - 1, Locale::En), "1.0 MB");
     }
 
     #[test]
     fn speed_has_a_suffix() {
-        assert_eq!(speed(0), "0 B/s");
-        assert_eq!(speed(1_572_864), "1.5 MB/s");
+        assert_eq!(speed(0, Locale::En), "0 B/s");
+        assert_eq!(speed(1_572_864, Locale::En), "1.5 MB/s");
+    }
+
+    #[test]
+    fn german_and_spanish_write_a_decimal_comma() {
+        for locale in [Locale::De, Locale::Es] {
+            assert_eq!(bytes(1536, locale), "1,5 KB");
+            assert_eq!(bytes(1023, locale), "1023 B");
+            assert_eq!(speed(1_572_864, locale), "1,5 MB/s");
+        }
+        let mut t = transfer(TransferStatus::Seeding);
+        t.current_ratio = Some(1.5);
+        let ratio = |locale| {
+            details(&t, locale)
+                .into_iter()
+                .find(|row| row.label == Msg::DetailRatio)
+                .map(|row| row.value)
+        };
+        assert_eq!(ratio(Locale::En).as_deref(), Some("1.50"));
+        assert_eq!(ratio(Locale::De).as_deref(), Some("1,50"));
     }
 
     #[test]
@@ -607,7 +638,7 @@ mod tests {
         proptest! {
             #[test]
             fn bytes_never_panics_and_never_shows_four_digit_units(n in any::<i64>()) {
-                let text = bytes(n);
+                let text = bytes(n, Locale::En);
                 prop_assert!(!text.is_empty());
                 if let Some((number, unit)) = text.split_once(' ')
                     && unit != "B"

@@ -244,6 +244,15 @@ pub(super) fn search_requested(state: &mut State, query: &str, fx: &mut Vec<Effe
         return;
     }
     let query = clean(query);
+    // The same question is already on its way: asking again could only race with it.
+    if state
+        .files
+        .search
+        .as_ref()
+        .is_some_and(|search| search.loading && search.query == query)
+    {
+        return;
+    }
     state.files.search = Some(Search {
         query: query.clone(),
         items: Vec::new(),
@@ -793,6 +802,27 @@ mod tests {
         // An empty question is no question.
         assert!(update(&mut state, 5, Event::FilesSearchRequested("   ".into())).is_empty());
         assert!(state.files.search.is_none());
+    }
+
+    #[test]
+    fn asking_the_same_question_while_it_is_on_its_way_sends_nothing_new() {
+        let mut state = signed_in();
+        with_files(&mut state, 0, vec![]);
+        assert_eq!(
+            update(&mut state, 1, Event::FilesSearchRequested("x".into())).len(),
+            1
+        );
+        assert!(update(&mut state, 2, Event::FilesSearchRequested(" x ".into())).is_empty());
+        // Once answered, asking again searches again.
+        update(
+            &mut state,
+            3,
+            Event::FilesSearched {
+                query: "x".into(),
+                result: found(vec![], 0),
+            },
+        );
+        assert!(!update(&mut state, 4, Event::FilesSearchRequested("x".into())).is_empty());
     }
 
     #[test]

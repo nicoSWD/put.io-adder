@@ -115,8 +115,13 @@ impl Settings {
     /// must never stop the app from starting), and loaded values are sanitised.
     #[must_use]
     pub fn from_json_or_default(text: Option<&str>) -> Self {
-        let parsed = text.and_then(|text| serde_json::from_str::<Self>(text).ok());
-        parsed.map_or_else(Self::default, Self::sanitised)
+        text.and_then(Self::parse).unwrap_or_default()
+    }
+
+    /// Parse a settings document (loaded values are sanitised); `None` when it is not one.
+    #[must_use]
+    pub fn parse(text: &str) -> Option<Self> {
+        serde_json::from_str::<Self>(text).ok().map(Self::sanitised)
     }
 
     /// Pretty JSON for writing to disk.
@@ -158,6 +163,16 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_document_that_is_not_settings_does_not_parse() {
+        assert!(Settings::parse("{ not json").is_none());
+        assert!(Settings::parse("").is_none());
+        assert!(
+            Settings::parse(r#"{"close_after_magnet": true}"#)
+                .is_some_and(|s| s.close_after_magnet)
+        );
+    }
 
     #[test]
     fn defaults() {

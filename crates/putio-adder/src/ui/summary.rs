@@ -58,7 +58,7 @@ fn chips(app: &App) -> Vec<Chip> {
         kind,
         count,
         speed: (kind == Kind::Active && summary.down_speed > 0)
-            .then(|| format::speed(summary.down_speed)),
+            .then(|| format::speed(summary.down_speed, app.state.locale)),
     })
     .collect()
 }

@@ -11,7 +11,9 @@ use putio_api::Token;
 use putio_core::i18n::Locale;
 use putio_core::intake::Intake;
 use putio_core::settings::{Settings, ThemeChoice};
-use putio_core::state::{Auth, Effect, Event, Millis, SecretProblem, State, update};
+use putio_core::state::{
+    Auth, Effect, Event, Millis, SecretProblem, SettingsProblem, State, update,
+};
 use putio_platform::badge;
 use putio_platform::ipc::Server;
 use putio_platform::notify::Notifier;
@@ -31,6 +33,8 @@ const FRAME_INTERVAL: Duration = Duration::from_millis(250);
 pub(crate) struct Startup {
     pub(crate) settings: Settings,
     pub(crate) settings_file: Option<SettingsFile>,
+    /// What was wrong with the preferences at startup, if anything (to be told to the user).
+    pub(crate) settings_problem: Option<SettingsProblem>,
     pub(crate) locale: Locale,
     pub(crate) secrets: Arc<dyn SecretStore>,
     /// Whether `secrets` keeps the sign-in beyond this run.
@@ -137,6 +141,7 @@ impl App {
         let Startup {
             settings,
             settings_file,
+            settings_problem,
             locale,
             secrets,
             secrets_persist,
@@ -215,6 +220,9 @@ impl App {
                 &cc.egui_ctx,
                 Event::SecretStoreFailed(SecretProblem::Unavailable),
             );
+        }
+        if let Some(problem) = settings_problem {
+            app.dispatch(&cc.egui_ctx, Event::SettingsFailed(problem));
         }
         // `Started` is sent when the keychain thread reports (see `pump`), except in demo mode.
         #[cfg(debug_assertions)]
@@ -581,6 +589,21 @@ impl App {
         self.send(job);
     }
 
+    /// Write the preferences; when that cannot be done, say so (changes would be lost on quit).
+    fn save_settings(&mut self, ctx: &egui::Context, settings: &Settings) {
+        let saved = match &self.settings_file {
+            Some(file) => file.save(&settings.to_json()).map_err(|error| {
+                eprintln!("could not save settings: {error}");
+            }),
+            // A demo run has no file on purpose; otherwise there is nowhere to write to.
+            None if self.is_demo() => Ok(()),
+            None => Err(()),
+        };
+        if saved.is_err() {
+            self.dispatch(ctx, Event::SettingsFailed(SettingsProblem::NotSaved));
+        }
+    }
+
     fn run(&mut self, ctx: &egui::Context, effect: Effect) {
         match effect {
             // Demo mode never touches the network.
@@ -600,13 +623,7 @@ impl App {
                 self.keychain.delete();
                 self.workers.set_token(None);
             }
-            Effect::SaveSettings(settings) => {
-                if let Some(file) = &self.settings_file
-                    && let Err(error) = file.save(&settings.to_json())
-                {
-                    eprintln!("could not save settings: {error}");
-                }
-            }
+            Effect::SaveSettings(settings) => self.save_settings(ctx, &settings),
             Effect::Poll => self.send(Job::Poll),
             Effect::AddMagnet { op, uri, parent } => self.send(Job::AddMagnet { op, uri, parent }),
             Effect::UploadTorrent {
