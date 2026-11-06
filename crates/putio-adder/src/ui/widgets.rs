@@ -530,6 +530,10 @@ fn field(
             .margin(egui::Margin::ZERO)
             .font(theme::text(12.5))
             .char_limit(max_chars)
+            // The edit is as tall as the field and centres its text in that, instead of sitting at the top
+            // of a row of its own that the layout then centres (which leaves the text high).
+            .min_size(inner.size())
+            .align(egui::Align2::LEFT_CENTER)
             .desired_width(inner.width())
             .hint_text(
                 egui::RichText::new(hint)
@@ -680,6 +684,40 @@ mod tests {
     use super::*;
     use crate::ui::test_support::accessible_names;
     use crate::ui::test_support::text_with_and_without_hover;
+
+    /// How far the middle of a field's text is from the middle of the field (negative: too high), for what
+    /// it shows empty (its hint) and with something typed in.
+    fn text_offsets() -> Vec<(&'static str, f32)> {
+        let mut out = Vec::new();
+        for (what, typed) in [("hint", ""), ("typed", "Search files")] {
+            let mut used = egui::Rect::NOTHING;
+            let boxes = crate::ui::test_support::text_boxes(|ui| {
+                ui.allocate_ui(Vec2::new(300.0, FIELD_HEIGHT), |ui| {
+                    let mut value = typed.to_owned();
+                    text_field(ui, &mut value, "Search files", None, 40);
+                    used = ui.min_rect();
+                });
+            });
+            let text = boxes
+                .iter()
+                .find(|b| {
+                    b.text == "Search files" || b.text == typed || b.text.starts_with('\u{2022}')
+                })
+                .expect("the field draws its text");
+            out.push((what, text.full.center().y - used.center().y));
+        }
+        out
+    }
+
+    #[test]
+    fn the_text_of_a_field_is_in_the_middle_of_it_whether_it_is_a_hint_or_typed() {
+        for (what, offset) in text_offsets() {
+            assert!(
+                offset.abs() <= 0.5,
+                "{what}: the text is {offset} points off the middle"
+            );
+        }
+    }
 
     #[test]
     fn a_choice_row_does_not_move_its_text_when_hovered() {
