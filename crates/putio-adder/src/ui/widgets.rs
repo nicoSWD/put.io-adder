@@ -31,7 +31,7 @@ pub(crate) fn focus_ring(
 }
 
 /// Tell assistive technology what a hand-painted control is.
-pub(crate) fn describe(response: &Response, kind: egui::WidgetType, label: &str) {
+pub(crate) fn describe(response: &Response, kind: egui::Role, label: &str) {
     response.widget_info(|| egui::WidgetInfo::labeled(kind, true, label));
 }
 
@@ -46,7 +46,7 @@ pub(crate) fn switch(ui: &mut egui::Ui, on: &mut bool, label: &str) -> Response 
         response.mark_changed();
     }
     response.widget_info(|| {
-        egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), *on, label)
+        egui::WidgetInfo::selected(egui::Role::CheckBox, ui.is_enabled(), *on, label)
     });
     let t = ui.ctx().animate_bool_with_time(response.id, *on, 0.14);
     let p = theme::pal();
@@ -109,11 +109,11 @@ pub(crate) fn segmented<T: Copy + PartialEq>(
             Vec2::new(width, height - inner * 2.0),
         );
         let response = ui
-            .interact(rect, ui.id().with(label), Sense::click())
+            .interact(rect, ui.scope_id().with(label), Sense::click())
             .on_hover_cursor(egui::CursorIcon::PointingHand);
         let selected = *value == current;
         response.widget_info(|| {
-            egui::WidgetInfo::selected(egui::WidgetType::RadioButton, true, selected, label)
+            egui::WidgetInfo::selected(egui::Role::RadioButton, true, selected, label)
         });
         focus_ring(ui, &response, rect, CornerRadius::same(8));
         if selected {
@@ -207,7 +207,7 @@ pub(crate) fn row(
 pub(crate) fn close_button(ui: &mut egui::Ui, label: &str) -> bool {
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(30.0), Sense::click());
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
-    describe(&response, egui::WidgetType::Button, label);
+    describe(&response, egui::Role::Button, label);
     focus_ring(ui, &response, rect, CornerRadius::same(15));
     let p = theme::pal();
     if response.hovered() {
@@ -227,7 +227,7 @@ pub(crate) fn close_button(ui: &mut egui::Ui, label: &str) -> bool {
 pub(crate) fn back_button(ui: &mut egui::Ui, label: &str) -> bool {
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(30.0), Sense::click());
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
-    describe(&response, egui::WidgetType::Button, label);
+    describe(&response, egui::Role::Button, label);
     focus_ring(ui, &response, rect, CornerRadius::same(15));
     let p = theme::pal();
     if response.hovered() {
@@ -322,7 +322,7 @@ fn button(ui: &mut egui::Ui, icon: Option<MenuIcon>, label: &str, kind: Kind) ->
     let size = Vec2::new(text_left + galley.size().x + 18.0, ACTION_HEIGHT);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
-    describe(&response, egui::WidgetType::Button, label);
+    describe(&response, egui::Role::Button, label);
     focus_ring(ui, &response, rect, CornerRadius::same(10));
     let (fill, hover_fill, ink, quiet_ink) = match kind {
         Kind::Primary => (theme::YELLOW, p.yellow_pressed, p.on_yellow, p.on_yellow),
@@ -398,7 +398,7 @@ pub(crate) fn pill(ui: &mut egui::Ui, label: &str, symbol: icons::Glyph, accent:
     );
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, label));
     focus_ring(ui, &response, rect, CornerRadius::same(13));
     let (fill, ink) = match (accent, response.hovered()) {
         (true, true) => (p.yellow_pressed, p.on_yellow),
@@ -423,6 +423,41 @@ pub(crate) fn pill(ui: &mut egui::Ui, label: &str, symbol: icons::Glyph, accent:
         ink,
     );
     response
+}
+
+/// How a [`status_pill`] looks: its fill, its text colour and, when it has one, its edge.
+pub(crate) type PillLook = (Color32, Color32, Option<Color32>);
+
+/// A small rounded pill, vertically centred in `card`, whose right end is `inset` from the card's right
+/// edge: the state of a row ("Paused", "Extracting"). Returns where the pill starts, so the row's text can
+/// stop before it.
+pub(crate) fn status_pill(
+    painter: &egui::Painter,
+    card: Rect,
+    inset: f32,
+    text: &str,
+    (fill, ink, edge): PillLook,
+) -> f32 {
+    let galley = painter.layout_no_wrap(text.to_owned(), theme::bold(10.5), ink);
+    let size = Vec2::new(galley.size().x + 20.0, 20.0);
+    let rect = Rect::from_min_size(
+        Pos2::new(
+            card.right() - inset - size.x,
+            card.center().y - size.y / 2.0,
+        ),
+        size,
+    );
+    painter.rect_filled(rect, CornerRadius::same(10), fill);
+    if let Some(edge) = edge {
+        painter.rect_stroke(
+            rect,
+            CornerRadius::same(10),
+            Stroke::new(1.0, edge),
+            egui::StrokeKind::Inside,
+        );
+    }
+    painter.galley(rect.center() - galley.size() / 2.0, galley, ink);
+    rect.left()
 }
 
 /// Height of a [`text_field`].
@@ -451,6 +486,28 @@ pub(crate) fn text_field_with_room(
     max_chars: usize,
     trailing: f32,
 ) -> Response {
+    field(ui, value, hint, labelled_by, max_chars, trailing, false)
+}
+
+/// A [`text_field`] that shows dots instead of what is typed (a password).
+pub(crate) fn password_field(
+    ui: &mut egui::Ui,
+    value: &mut String,
+    labelled_by: Option<egui::Id>,
+    max_chars: usize,
+) -> Response {
+    field(ui, value, "", labelled_by, max_chars, 0.0, true)
+}
+
+fn field(
+    ui: &mut egui::Ui,
+    value: &mut String,
+    hint: &str,
+    labelled_by: Option<egui::Id>,
+    max_chars: usize,
+    trailing: f32,
+    password: bool,
+) -> Response {
     let p = theme::pal();
     let (rect, _) = ui.allocate_exact_size(
         Vec2::new(ui.available_width(), FIELD_HEIGHT),
@@ -468,6 +525,7 @@ pub(crate) fn text_field_with_room(
     );
     let mut response = child.add(
         egui::TextEdit::singleline(value)
+            .password(password)
             .frame(egui::Frame::NONE)
             .margin(egui::Margin::ZERO)
             .font(theme::text(12.5))

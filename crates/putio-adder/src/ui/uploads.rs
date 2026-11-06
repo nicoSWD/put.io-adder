@@ -144,7 +144,10 @@ pub(crate) fn drop_hint(ctx: &egui::Context, app: &App) {
     let p = theme::pal();
     let locale = app.state.locale;
     let rect = ctx.content_rect();
-    let painter = ctx.layer_painter(LayerId::new(Order::Foreground, Id::new("upload-drop-hint")));
+    let painter = ctx.layer_painter(LayerId::new(
+        Order::Foreground,
+        Id::unique("upload-drop-hint"),
+    ));
     painter.rect_filled(rect, 0.0, Color32::from_black_alpha(96));
     let frame = rect.shrink(12.0);
     painter.rect_filled(frame, CornerRadius::same(16), p.card.gamma_multiply(0.92));
@@ -303,7 +306,7 @@ fn stop_button(ui: &mut egui::Ui, cancel_rect: Rect, upload: &Upload, locale: Lo
     let response = ui
         .interact(
             cancel_rect,
-            Id::new(("upload-cancel", upload.op.0)),
+            Id::unique(("upload-cancel", upload.op.0)),
             Sense::click(),
         )
         .on_hover_cursor(egui::CursorIcon::PointingHand);
@@ -317,7 +320,7 @@ fn stop_button(ui: &mut egui::Ui, cancel_rect: Rect, upload: &Upload, locale: Lo
         }
     }
     .text(locale);
-    widgets::describe(&response, egui::WidgetType::Button, &label);
+    widgets::describe(&response, egui::Role::Button, &label);
     widgets::focus_ring(ui, &response, cancel_rect, CornerRadius::same(12));
     if response.hovered() {
         ui.painter()

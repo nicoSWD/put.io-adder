@@ -89,6 +89,16 @@ impl FolderPicker {
         workers.send(Job::ListFolders { parent });
     }
 
+    /// Debug builds only: the folder page inside a folder with a very long name.
+    #[cfg(debug_assertions)]
+    pub(crate) fn demo_long() -> Self {
+        let mut picker = Self::demo();
+        if let Some(last) = picker.trail.last_mut() {
+            last.1 = "Some.Extremely.Long.Folder.Name.With.No.Spaces.2160p.UHD.BluRay.REMUX.HDR10Plus.DV.TrueHD.7.1.Atmos".into();
+        }
+        picker
+    }
+
     /// Debug builds only: a populated folder page for previews.
     #[cfg(debug_assertions)]
     pub(crate) fn demo() -> Self {
@@ -137,7 +147,7 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
     let locale = app.state.locale;
     let mut actions = Vec::new();
     let mut folder_chosen: Option<Folder> = None;
-    let response = egui::Modal::new(egui::Id::new("preferences"))
+    let response = egui::Modal::new(egui::Id::unique("preferences"))
         .backdrop_color(backdrop)
         .frame(frame)
         .show(ctx, |ui| {
@@ -231,6 +241,22 @@ pub(crate) fn body_height(ui: &egui::Ui) -> f32 {
     (ui.ctx().content_rect().height() - 150.0).max(160.0)
 }
 
+/// A row with a title, a hint and an on/off switch; flipping it asks for `change(new value)`.
+fn switch_row(
+    ui: &mut egui::Ui,
+    (title, hint): (&str, &str),
+    current: bool,
+    actions: &mut Vec<Action>,
+    change: fn(bool) -> SettingsChange,
+) {
+    let mut on = current;
+    widgets::row(ui, title, Some(hint), |ui| {
+        if widgets::switch(ui, &mut on, title).changed() {
+            actions.push(Action::Settings(change(on)));
+        }
+    });
+}
+
 /// Returns `true` when the dialog should close.
 fn settings_page(
     ui: &mut egui::Ui,
@@ -273,6 +299,17 @@ fn settings_page(
                         actions.push(Action::Settings(SettingsChange::CloseAfterTorrent(torrent)));
                     }
                 },
+            );
+            widgets::divider(ui);
+            switch_row(
+                ui,
+                (
+                    &Msg::PrefsTrashTorrent.text(locale),
+                    &Msg::PrefsTrashTorrentHint.text(locale),
+                ),
+                settings.trash_torrent_after_upload,
+                actions,
+                SettingsChange::TrashTorrentAfterUpload,
             );
             widgets::divider(ui);
             default_app_row(ui, app, locale, actions);
@@ -505,10 +542,11 @@ fn breadcrumb(ui: &mut egui::Ui, app: &mut App, workers: &Workers) {
     let p = theme::pal();
     let mut jump = None;
     let trail_len = app.ui.folders.trail.len();
+    let locale = app.state.locale;
     ui.horizontal_wrapped(|ui| {
-        for (index, (_, name)) in app.ui.folders.trail.iter().enumerate() {
+        for (index, (id, name)) in app.ui.folders.trail.iter().enumerate() {
             let last = index + 1 == trail_len;
-            let text = RichText::new(name)
+            let text = RichText::new(crumb_label(*id, name, locale))
                 .font(if last {
                     theme::bold(12.0)
                 } else {
@@ -533,6 +571,15 @@ fn breadcrumb(ui: &mut egui::Ui, app: &mut App, workers: &Workers) {
         app.ui.folders.jump_to(workers, index);
     }
     ui.add_space(4.0);
+}
+
+/// What a step of the way is called: the top level in the user's language, any other folder by its name.
+fn crumb_label(id: i64, name: &str, locale: Locale) -> String {
+    if id == 0 {
+        Msg::FilesRoot.text(locale)
+    } else {
+        name.to_owned()
+    }
 }
 
 /// The subfolders of the folder being shown. Returns the one the user opened, if any.
@@ -660,25 +707,126 @@ pub(crate) fn folder_page(
         ui.add_space(6.0);
     }
     let here = app.ui.folders.trail.last().cloned();
+    let (confirmed, cancelled) = confirm_row(ui, page, here.as_ref().map(|(_, name)| name), locale);
+    if confirmed
+        && !page.busy
+        && let Some((id, name)) = here
+    {
+        *chosen = Some(Folder { id, name });
+    }
+    if cancelled {
+        app.ui.folders.open = false;
+    }
+    close
+}
+
+/// The width of a button that holds `label`: the text and the padding either side.
+fn button_width(ui: &egui::Ui, label: &str, font: egui::FontId) -> f32 {
+    ui.painter()
+        .layout_no_wrap(label.to_owned(), font, egui::Color32::PLACEHOLDER)
+        .size()
+        .x
+        + ui.spacing().button_padding.x * 2.0
+}
+
+/// The row of the two buttons under the folder list: *Cancel*, and the one that chooses the folder being
+/// shown. The folder's name is in the second one's label, so a long name is cut to what *Cancel* leaves,
+/// never pushed out of the card. Returns (chosen, cancelled).
+fn confirm_row(
+    ui: &mut egui::Ui,
+    page: &FolderPage,
+    here: Option<&String>,
+    locale: Locale,
+) -> (bool, bool) {
+    let cancel = Msg::PrefsCancel.text(locale);
+    let room = ui.available_width()
+        - button_width(ui, &cancel, theme::text(12.0))
+        - ui.spacing().item_spacing.x;
+    let label = here.map(|name| {
+        let (name, _) = widgets::fit(name, room.max(0.0), |candidate| {
+            button_width(
+                ui,
+                &(page.confirm)(candidate.to_owned()).text(locale),
+                theme::bold(12.0),
+            )
+        });
+        (page.confirm)(name).text(locale)
+    });
+    let (mut chosen, mut cancelled) = (false, false);
     ui.horizontal(|ui| {
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if let Some((id, name)) = here
-                && theme::primary_button(ui, (page.confirm)(name.clone()).text(locale)).clicked()
-                && !page.busy
+            if let Some(label) = label
+                && theme::primary_button(ui, label).clicked()
             {
-                *chosen = Some(Folder { id, name });
+                chosen = true;
             }
-            if theme::secondary_button(ui, Msg::PrefsCancel.text(locale)).clicked() {
-                app.ui.folders.open = false;
+            if theme::secondary_button(ui, cancel).clicked() {
+                cancelled = true;
             }
         });
     });
-    close
+    (chosen, cancelled)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ui::test_support::text_boxes;
+
+    #[test]
+    fn the_top_level_is_named_in_the_users_language_in_the_way_to_a_folder() {
+        assert_eq!(crumb_label(0, ROOT_NAME, Locale::En), "Your Files");
+        assert_eq!(crumb_label(0, ROOT_NAME, Locale::De), "Deine Dateien");
+        assert_eq!(crumb_label(0, ROOT_NAME, Locale::Es), "Tus archivos");
+        assert_eq!(crumb_label(7, "Movies", Locale::De), "Movies");
+    }
+
+    #[test]
+    fn the_buttons_under_the_folder_list_stay_in_the_card_whatever_the_folders_name() {
+        let long = "An.Extremely.Long.Folder.Name.That.Keeps.Going.".repeat(5);
+        for locale in [Locale::En, Locale::De, Locale::Es] {
+            let pages = [
+                FolderPage::choose(),
+                FolderPage {
+                    title: Msg::FileMoveTitle,
+                    confirm: |name| Msg::FileMoveHere { name },
+                    error: None,
+                    busy: false,
+                },
+            ];
+            for page in pages {
+                for name in ["Movies".to_owned(), long.clone(), String::new()] {
+                    let boxes = text_boxes(|ui| {
+                        ui.allocate_ui(Vec2::new(CONTENT_WIDTH, 100.0), |ui| {
+                            confirm_row(ui, &page, Some(&name), locale);
+                        });
+                    });
+                    let cancel = boxes
+                        .iter()
+                        .find(|b| b.text == Msg::PrefsCancel.text(locale))
+                        .expect("a cancel button");
+                    let confirm = boxes
+                        .iter()
+                        .find(|b| b.text != cancel.text)
+                        .expect("a button that chooses the folder");
+                    let left = cancel.full.left().min(confirm.full.left());
+                    assert!(
+                        confirm.full.right() <= left + CONTENT_WIDTH + 0.5,
+                        "{locale:?} {name:?}: {:?} sticks out ({:?})",
+                        confirm.text,
+                        confirm.full
+                    );
+                    assert!(
+                        cancel.full.right() <= confirm.full.left(),
+                        "{locale:?}: the buttons overlap: {boxes:?}"
+                    );
+                    if name == long {
+                        assert!(confirm.text.contains('…'), "{locale:?}: {:?}", confirm.text);
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn the_rows_of_the_folder_being_left_are_gone_while_the_next_one_loads() {

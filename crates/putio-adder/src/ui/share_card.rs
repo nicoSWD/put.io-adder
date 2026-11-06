@@ -116,7 +116,7 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
     let (frame, backdrop) = widgets::dialog_frame();
     let mut stop = None;
     let mut share = None;
-    let response = egui::Modal::new(Id::new("file-share"))
+    let response = egui::Modal::new(Id::unique("file-share"))
         .backdrop_color(backdrop)
         .frame(frame)
         .show(ctx, |ui| {

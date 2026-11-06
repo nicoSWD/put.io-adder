@@ -56,6 +56,8 @@ pub(crate) struct UiState {
     pub(crate) sort: SortKey,
     pub(crate) ascending: bool,
     pub(crate) prefs_open: bool,
+    /// The "..." menu is open (as of the last frame it was drawn). The collapsed window grows to hold it.
+    pub(crate) menu_open: bool,
     /// Debug previews: a drop-down to open on the first frame.
     pub(crate) open_once: Option<Overlay>,
     /// The transfer last clicked (highlighted).
@@ -85,6 +87,7 @@ impl Default for UiState {
             sort: SortKey::Default,
             ascending: true,
             prefs_open: false,
+            menu_open: false,
             open_once: None,
             selected: None,
             selected_feed: None,
