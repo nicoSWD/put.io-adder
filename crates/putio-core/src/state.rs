@@ -9,6 +9,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 
+use putio_api::client::{FileListing, FileSearch};
 use putio_api::{
     Account, ApiError, DeviceCode, Release, RssFeed, RssFeedSettings, Token, Transfer, ZipState,
     ZipStatus,
@@ -25,8 +26,11 @@ use crate::transfers::{self, Summary, Tracker};
 use crate::update::{self, UpdateStatus};
 
 mod feeds;
+mod files;
+mod refresh;
 
 pub use feeds::{FeedList, FeedSave};
+pub use files::{Crumb, FileAction, FilesView, Search};
 
 /// Monotonic milliseconds supplied by the shell.
 pub type Millis = u64;
@@ -107,6 +111,10 @@ enum Op {
     FeedUpdate,
     FeedPause,
     FeedDelete,
+    FileRename,
+    FileCreate,
+    FileMove,
+    FileDelete,
 }
 
 /// Where an in-place update has got to.
@@ -330,6 +338,54 @@ pub enum Event {
     },
     FeedDeleteRequested(i64),
     FeedCopyAddressRequested(i64),
+
+    /// Go into a folder of the Files tab.
+    FilesOpenFolder {
+        id: i64,
+        name: String,
+    },
+    /// Go back up to the `n`-th folder of the breadcrumb.
+    FilesGoTo(usize),
+    FilesRefreshRequested,
+    /// The answer to `Effect::ListFiles`.
+    FilesListed {
+        parent: i64,
+        result: Result<FileListing, ApiError>,
+    },
+    FilesSearchRequested(String),
+    FilesSearchCleared,
+    /// The answer to `Effect::SearchFiles`.
+    FilesSearched {
+        query: String,
+        result: Result<FileSearch, ApiError>,
+    },
+    FileRenameRequested {
+        id: i64,
+        name: String,
+    },
+    /// Make a folder in the folder being shown.
+    FolderCreateRequested(String),
+    FileMoveRequested {
+        id: i64,
+        to: i64,
+    },
+    /// The answer to a rename, a new folder or a move.
+    FileChangeFinished {
+        op: OpId,
+        result: Result<(), ApiError>,
+    },
+    /// The dialog has seen how its request ended and closed.
+    FileActionDismissed,
+    FileDeleteRequested(i64),
+    FileDeleteFinished {
+        op: OpId,
+        id: i64,
+        result: Result<(), ApiError>,
+    },
+    FileOpenRequested(i64),
+    FileCopyLinkRequested(i64),
+    FileDownloadRequested(i64),
+    FileStreamRequested(i64),
     FeedDeleteFinished {
         op: OpId,
         id: i64,
@@ -402,6 +458,32 @@ pub enum Effect {
         op: OpId,
         id: i64,
     },
+    /// List the files in a folder (answered with `Event::FilesListed`).
+    ListFiles {
+        parent: i64,
+    },
+    SearchFiles {
+        query: String,
+    },
+    RenameFile {
+        op: OpId,
+        id: i64,
+        name: String,
+    },
+    CreateFolder {
+        op: OpId,
+        parent: i64,
+        name: String,
+    },
+    MoveFile {
+        op: OpId,
+        id: i64,
+        to: i64,
+    },
+    DeleteFile {
+        op: OpId,
+        id: i64,
+    },
     /// Put text on the system clipboard. Only ever built here, from validated data.
     CopyText(String),
     /// Ask the system whether this app is the default for magnet links and `.torrent` files.
@@ -462,6 +544,8 @@ pub struct State {
     pub tab: Tab,
     /// The account's RSS feeds as last fetched.
     pub feeds: FeedList,
+    /// The Files tab: the folder being shown, or the search.
+    pub files: FilesView,
     pub update: UpdateStatus,
     pub install: Install,
     pub install_target: InstallTarget,
@@ -486,7 +570,11 @@ pub struct State {
     next_poll_at: Option<Millis>,
     zip: Option<ZipJob>,
     feed_save: FeedSave,
-    feed_schedule: feeds::Schedule,
+    feed_refresh: refresh::Refresh,
+    file_action: FileAction,
+    file_refresh: refresh::Refresh,
+    /// The folder whose listing is on its way.
+    files_requested: Option<i64>,
     failures: u32,
     close_at: Option<Millis>,
     badge: Option<u8>,
@@ -507,6 +595,7 @@ impl State {
             transfers_expanded: settings.transfers_expanded,
             tab: settings.tab,
             feeds: FeedList::default(),
+            files: FilesView::default(),
             settings,
             locale,
             auth: Auth::Starting,
@@ -532,7 +621,10 @@ impl State {
             next_poll_at: None,
             zip: None,
             feed_save: FeedSave::Idle,
-            feed_schedule: feeds::Schedule::default(),
+            feed_refresh: refresh::Refresh::default(),
+            file_action: FileAction::Idle,
+            file_refresh: refresh::Refresh::default(),
+            files_requested: None,
             failures: 0,
             close_at: None,
             badge: None,
@@ -542,6 +634,12 @@ impl State {
             opening: None,
             handler_asked: false,
         }
+    }
+
+    /// How the rename, new folder or move dialog's request stands.
+    #[must_use]
+    pub fn file_action(&self) -> &FileAction {
+        &self.file_action
     }
 
     /// How the add / edit feed form's request stands.
@@ -652,6 +750,36 @@ impl State {
         POLL_INTERVAL
             .saturating_mul(1u64 << self.failures.min(4))
             .min(MAX_BACKOFF)
+    }
+}
+
+/// Show another list under the header, remember it, and ask for what is old in it.
+fn select_tab(state: &mut State, now: Millis, tab: Tab, fx: &mut Vec<Effect>) {
+    if state.tab == tab {
+        return;
+    }
+    state.tab = tab;
+    state.settings.tab = tab;
+    fx.push(Effect::SaveSettings(state.settings.clone()));
+    match tab {
+        Tab::Feeds => feeds::tab_opened(state, now),
+        Tab::Files => files::tab_opened(state, now),
+        Tab::Transfers => {}
+    }
+}
+
+/// Start handing a file (or a folder, as a ZIP) to the browser. `None`: there is no file to hand over yet.
+fn start_download(state: &mut State, now: Millis, file_id: Option<i64>, fx: &mut Vec<Effect>) {
+    match file_id {
+        _ if !state.is_signed_in() => {}
+        None => state.say(Msg::DownloadNotReady, now, NOTICE_TIME),
+        Some(_) if state.zip.is_some() => state.say(Msg::DownloadBusy, now, NOTICE_TIME),
+        Some(file_id) => {
+            state.close_at = None;
+            let op = state.op(Op::Download);
+            state.say_until_replaced(Msg::DownloadPreparing);
+            fx.push(Effect::PrepareDownload { op, file_id });
+        }
     }
 }
 
@@ -822,17 +950,7 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
                 .find(|t| t.id == id)
                 .and_then(|t| t.file_id)
                 .filter(|file_id| *file_id >= 0);
-            match file_id {
-                _ if !state.is_signed_in() => {}
-                None => state.say(Msg::DownloadNotReady, now, NOTICE_TIME),
-                Some(_) if state.zip.is_some() => state.say(Msg::DownloadBusy, now, NOTICE_TIME),
-                Some(file_id) => {
-                    state.close_at = None;
-                    let op = state.op(Op::Download);
-                    state.say_until_replaced(Msg::DownloadPreparing);
-                    fx.push(Effect::PrepareDownload { op, file_id });
-                }
-            }
+            start_download(state, now, file_id, &mut fx);
         }
         Event::DownloadPrepared { op, result } => {
             if state.ops.get(&op) == Some(&Op::Download) {
@@ -928,7 +1046,7 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
             state.settings.transfers_expanded = state.transfers_expanded;
             fx.push(Effect::SaveSettings(state.settings.clone()));
         }
-        Event::SelectTab(tab) => feeds::select_tab(state, now, tab, &mut fx),
+        Event::SelectTab(tab) => select_tab(state, now, tab, &mut fx),
         Event::FeedsLoaded(result) => feeds::loaded(state, now, result, &mut fx),
         Event::FeedsRefreshRequested => feeds::retry(state, now),
         Event::FeedSaveRequested { id, settings } => {
@@ -950,6 +1068,34 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
             feeds::delete_finished(state, now, (op, id), result, &mut fx);
         }
         Event::FeedCopyAddressRequested(id) => feeds::copy_address(state, now, id, &mut fx),
+        Event::FilesOpenFolder { id, name } => files::open_folder(state, now, id, &name),
+        Event::FilesGoTo(index) => files::go_to(state, now, index),
+        Event::FilesRefreshRequested => files::retry(state, now),
+        Event::FilesListed { parent, result } => {
+            files::listed(state, now, parent, result, &mut fx);
+        }
+        Event::FilesSearchRequested(query) => files::search_requested(state, &query, &mut fx),
+        Event::FilesSearchCleared => state.files.search = None,
+        Event::FilesSearched { query, result } => {
+            files::searched(state, &query, result, &mut fx);
+        }
+        Event::FileRenameRequested { id, name } => {
+            files::rename_requested(state, id, &name, &mut fx);
+        }
+        Event::FolderCreateRequested(name) => files::create_requested(state, &name, &mut fx),
+        Event::FileMoveRequested { id, to } => files::move_requested(state, id, to, &mut fx),
+        Event::FileChangeFinished { op, result } => {
+            files::changed(state, now, op, result, &mut fx);
+        }
+        Event::FileActionDismissed => files::action_dismissed(state),
+        Event::FileDeleteRequested(id) => files::delete_requested(state, id, &mut fx),
+        Event::FileDeleteFinished { op, id, result } => {
+            files::delete_finished(state, now, (op, id), result, &mut fx);
+        }
+        Event::FileOpenRequested(id) => files::open_on_putio(state, id, &mut fx),
+        Event::FileCopyLinkRequested(id) => files::copy_link(state, now, id, &mut fx),
+        Event::FileDownloadRequested(id) => files::download(state, now, id, &mut fx),
+        Event::FileStreamRequested(id) => files::stream(state, id, &mut fx),
         Event::SettingsChanged(change) => {
             match change {
                 SettingsChange::CloseAfterMagnet(on) => state.settings.close_after_magnet = on,
@@ -1120,6 +1266,7 @@ fn sign_out(state: &mut State, fx: &mut Vec<Effect>) {
     state.close_at = None;
     state.zip = None;
     feeds::reset(state);
+    files::reset(state);
     // What was running for this account has no one to report to. (An update is not tied to the account.)
     state.ops.retain(|_, kind| *kind == Op::Update);
     state.busy = u32::try_from(state.ops.len()).unwrap_or(u32::MAX);
@@ -1546,6 +1693,7 @@ fn polled(
 
 fn maybe_poll(state: &mut State, now: Millis, fx: &mut Vec<Effect>) {
     feeds::maybe_load(state, now, fx);
+    files::maybe_load(state, now, fx);
     if state.is_signed_in()
         && !state.poll_in_flight
         && state.next_poll_at.is_some_and(|at| now >= at)

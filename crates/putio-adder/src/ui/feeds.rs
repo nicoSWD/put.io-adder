@@ -5,15 +5,13 @@
 //! (paused, or put.io could not read it). Everything is painted at fixed positions, so hovering changes
 //! colours and nothing moves, and every text is cut to its room, so no language can push a card out of shape.
 
-use eframe::egui::{
-    self, Align2, Color32, CornerRadius, Pos2, Rect, Role, Sense, Stroke, Ui, Vec2, WidgetInfo,
-};
+use eframe::egui::{self, Align2, CornerRadius, Pos2, Rect, Role, Sense, Stroke, Ui, Vec2};
 use putio_api::RssFeed;
 use putio_core::feeds::{FeedStatus, display_title, host_of, status_of};
 use putio_core::i18n::{Locale, Msg};
 use putio_core::state::Event;
 
-use super::icons::{self, Glyph, MenuIcon};
+use super::icons::{self, MenuIcon};
 use super::menu::{self, Tint};
 use super::table::mix;
 use super::{theme, widgets};
@@ -32,8 +30,6 @@ const PILL_INSET: f32 = 46.0;
 const TEXT_GAP: f32 = 12.0;
 /// Width of the card context menu.
 const MENU_WIDTH: f32 = 252.0;
-/// Height of the "Add feed" button in the tab bar.
-const ADD_HEIGHT: f32 = 26.0;
 
 /// The list has loaded and there is nothing in it.
 pub(crate) fn is_empty(app: &App) -> bool {
@@ -493,46 +489,9 @@ fn failed(ui: &mut Ui, app: &mut App) {
 /// The button at the right of the tab bar. Painted at fixed positions (only the fill changes on hover).
 pub(crate) fn add_button(ui: &mut Ui, app: &mut App) {
     let label = Msg::FeedsAdd.text(app.state.locale);
-    if paint_add_button(ui, &label).clicked() {
+    if widgets::accent_pill(ui, &label).clicked() {
         super::feed_form::open_new(app, ui.ctx());
     }
-}
-
-fn paint_add_button(ui: &mut Ui, label: &str) -> egui::Response {
-    let p = theme::pal();
-    let galley =
-        ui.painter()
-            .layout_no_wrap(label.to_owned(), theme::bold(11.5), Color32::PLACEHOLDER);
-    let size = Vec2::new(10.0 + 12.0 + 6.0 + galley.size().x + 14.0, ADD_HEIGHT);
-    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
-    let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
-    response.widget_info(|| WidgetInfo::labeled(Role::Button, true, label));
-    widgets::focus_ring(ui, &response, rect, CornerRadius::same(13));
-    ui.painter().rect_filled(
-        rect,
-        CornerRadius::same(13),
-        if response.hovered() {
-            p.yellow_pressed
-        } else {
-            theme::YELLOW
-        },
-    );
-    icons::glyph(
-        ui.painter(),
-        Pos2::new(rect.left() + 10.0 + 6.0, rect.center().y),
-        Glyph::Plus,
-        0.8,
-        p.on_yellow,
-    );
-    ui.painter().galley(
-        Pos2::new(
-            rect.left() + 10.0 + 12.0 + 6.0,
-            rect.center().y - galley.size().y / 2.0,
-        ),
-        galley,
-        p.on_yellow,
-    );
-    response
 }
 
 #[cfg(test)]
@@ -708,7 +667,7 @@ mod tests {
         for locale in LOCALES {
             let label = Msg::FeedsAdd.text(locale);
             let (resting, hovered) = text_with_and_without_hover(|ui| {
-                let response = paint_add_button(ui, &label);
+                let response = widgets::accent_pill(ui, &label);
                 (response.rect, response.hovered())
             });
             assert_eq!(resting, hovered, "{locale:?}");
@@ -721,7 +680,7 @@ mod tests {
         for locale in LOCALES {
             let label = Msg::FeedsAdd.text(locale);
             let width = std::cell::Cell::new(0.0);
-            text_boxes(|ui| width.set(paint_add_button(ui, &label).rect.width()));
+            text_boxes(|ui| width.set(widgets::accent_pill(ui, &label).rect.width()));
             assert!(
                 width.get() < 160.0,
                 "{locale:?}: the add button is {} wide",
@@ -745,7 +704,7 @@ mod tests {
         );
         assert!(has("Button", "Feed actions: Weekly releases"), "{names:?}");
         let names = accessible_names(|ui| {
-            paint_add_button(ui, "Add feed");
+            widgets::accent_pill(ui, "Add feed");
         });
         assert!(
             names.iter().any(|(r, n)| r == "Button" && n == "Add feed"),

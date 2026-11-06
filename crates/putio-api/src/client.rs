@@ -24,6 +24,17 @@ const PER_PAGE: &str = "1000";
 /// Upper bound on pages followed for one listing, so a misbehaving cursor cannot loop forever.
 const MAX_PAGES: usize = 50;
 
+/// The answer to a file search: the first results, and how many there are in all.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileSearch {
+    pub files: Vec<File>,
+    /// How many files match (more than `files` holds when there are many).
+    pub total: usize,
+}
+
+/// How many search results are asked for: enough to find a file, few enough to answer quickly.
+const SEARCH_RESULTS: &str = "100";
+
 /// One page of a file listing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileListing {
@@ -444,6 +455,76 @@ impl<T: Transport> Client<T> {
         Ok(FileListing { parent, files })
     }
 
+    /// Search the account's files (and what friends shared) by name. Only the first page is read: a
+    /// search that needs more than that needs a better question.
+    pub fn search_files(&self, query: &str) -> Result<FileSearch, ApiError> {
+        #[derive(serde::Deserialize)]
+        struct Reply {
+            #[serde(default)]
+            files: Vec<File>,
+            #[serde(default)]
+            total: Option<usize>,
+        }
+        let query = query.trim();
+        if query.is_empty() {
+            return Err(ApiError::InvalidInput("search is empty"));
+        }
+        let pairs = [("query", query), ("per_page", SEARCH_RESULTS)];
+        let reply: Reply =
+            self.json(&self.get(format!("/files/search?{}", form::urlencoded(&pairs))))?;
+        let total = reply
+            .total
+            .unwrap_or(reply.files.len())
+            .max(reply.files.len());
+        Ok(FileSearch {
+            files: reply.files,
+            total,
+        })
+    }
+
+    /// Give a file or folder another name.
+    pub fn rename_file(&self, id: i64, name: &str) -> Result<(), ApiError> {
+        if name.trim().is_empty() {
+            return Err(ApiError::InvalidInput("name is empty"));
+        }
+        let id = id.to_string();
+        self.ack(&self.post_form("/files/rename", &[("file_id", &id), ("name", name)]))
+    }
+
+    /// Move files and folders into the folder `parent_id` (`0` is the top level).
+    pub fn move_files(&self, ids: &[i64], parent_id: i64) -> Result<(), ApiError> {
+        if ids.is_empty() {
+            return Err(ApiError::InvalidInput("no file ids"));
+        }
+        let joined = ids.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
+        let parent = parent_id.to_string();
+        self.ack(&self.post_form(
+            "/files/move",
+            &[("file_ids", &joined), ("parent_id", &parent)],
+        ))
+    }
+
+    /// Delete files and folders (a folder with everything in it). put.io has no trash: this cannot be undone.
+    pub fn delete_files(&self, ids: &[i64]) -> Result<(), ApiError> {
+        if ids.is_empty() {
+            return Err(ApiError::InvalidInput("no file ids"));
+        }
+        let joined = ids.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
+        self.ack(&self.post_form("/files/delete", &[("file_ids", &joined)]))
+    }
+
+    /// Make a folder inside `parent_id` (`0` is the top level).
+    pub fn create_folder(&self, name: &str, parent_id: i64) -> Result<(), ApiError> {
+        if name.trim().is_empty() {
+            return Err(ApiError::InvalidInput("name is empty"));
+        }
+        let parent = parent_id.to_string();
+        self.ack(&self.post_form(
+            "/files/create-folder",
+            &[("name", name), ("parent_id", &parent)],
+        ))
+    }
+
     /// One file or folder: its name, mostly (the feed form shows which folder a feed saves into).
     pub fn file(&self, id: i64) -> Result<File, ApiError> {
         #[derive(serde::Deserialize)]
@@ -725,6 +806,114 @@ mod tests {
             unwanted_keywords: String::new(),
             skip_existing: false,
         }
+    }
+
+    #[test]
+    fn a_search_asks_for_the_first_page_and_says_how_many_there_are() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            200,
+            r#"{"status":"OK","total":250,"files":[{"id":1,"name":"a.mkv","file_type":"VIDEO","size":5,"created_at":"2024-05-01T10:00:00"},{"id":2,"name":"Show","file_type":"FOLDER"}]}"#,
+        );
+        let found = client(&fake).search_files("  spring & co ").unwrap();
+        assert_eq!(
+            fake.last_request().unwrap().describe(),
+            "GET /files/search?query=spring%20%26%20co&per_page=100"
+        );
+        assert_eq!(found.files.len(), 2);
+        assert_eq!(found.total, 250);
+        assert_eq!(
+            found.files[0].created_at.as_deref(),
+            Some("2024-05-01T10:00:00")
+        );
+        // A reply without a total counts what it holds; a total below that cannot be right.
+        fake.push_json(200, r#"{"files":[{"id":1},{"id":2}],"total":1}"#);
+        assert_eq!(client(&fake).search_files("x").unwrap().total, 2);
+        // Nothing is sent for an empty question.
+        let before = fake.requests().len();
+        assert_eq!(
+            client(&fake).search_files("   ").unwrap_err(),
+            ApiError::InvalidInput("search is empty")
+        );
+        assert_eq!(fake.requests().len(), before);
+    }
+
+    #[test]
+    fn renaming_moving_deleting_and_making_folders_send_their_fields() {
+        let fake = FakeTransport::new();
+        for _ in 0..4 {
+            fake.push_json(200, r#"{"status":"OK"}"#);
+        }
+        let c = client(&fake);
+        c.rename_file(7, "Season 1 & 2").unwrap();
+        c.move_files(&[3, 9], 42).unwrap();
+        c.delete_files(&[3, 9]).unwrap();
+        c.create_folder("New / folder", 0).unwrap();
+        let sent: Vec<(String, Body)> = fake
+            .requests()
+            .into_iter()
+            .map(|r| (r.describe(), r.body))
+            .collect();
+        assert_eq!(
+            sent,
+            [
+                (
+                    "POST /files/rename".to_owned(),
+                    Body::Form("file_id=7&name=Season%201%20%26%202".into())
+                ),
+                (
+                    "POST /files/move".to_owned(),
+                    Body::Form("file_ids=3%2C9&parent_id=42".into())
+                ),
+                (
+                    "POST /files/delete".to_owned(),
+                    Body::Form("file_ids=3%2C9".into())
+                ),
+                (
+                    "POST /files/create-folder".to_owned(),
+                    Body::Form("name=New%20%2F%20folder&parent_id=0".into())
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn file_changes_without_a_target_or_a_name_are_refused_before_anything_is_sent() {
+        let fake = FakeTransport::new();
+        let c = client(&fake);
+        assert_eq!(
+            c.rename_file(1, " ").unwrap_err(),
+            ApiError::InvalidInput("name is empty")
+        );
+        assert_eq!(
+            c.create_folder("", 0).unwrap_err(),
+            ApiError::InvalidInput("name is empty")
+        );
+        assert_eq!(
+            c.move_files(&[], 0).unwrap_err(),
+            ApiError::InvalidInput("no file ids")
+        );
+        assert_eq!(
+            c.delete_files(&[]).unwrap_err(),
+            ApiError::InvalidInput("no file ids")
+        );
+        assert_eq!(fake.requests().len(), 0);
+    }
+
+    #[test]
+    fn a_refused_file_change_comes_back_with_its_reason() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            400,
+            r#"{"status":"ERROR","error_type":"NAME_ALREADY_EXISTS","error_message":"exists"}"#,
+        );
+        let error = client(&fake).rename_file(1, "a").unwrap_err();
+        assert_eq!(error.error_type(), Some("NAME_ALREADY_EXISTS"));
+        fake.push_json(401, r#"{"error_type":"invalid_scope"}"#);
+        assert_eq!(
+            client(&fake).delete_files(&[1]).unwrap_err(),
+            ApiError::Unauthorized
+        );
     }
 
     #[test]

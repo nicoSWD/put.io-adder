@@ -12,7 +12,7 @@ use putio_core::i18n::Msg;
 use putio_core::settings::Tab;
 use putio_core::state::Event;
 
-use super::{feeds, table, theme, update, widgets};
+use super::{feeds, files, table, theme, update, widgets};
 use crate::app::App;
 
 /// Height of the bar, its hairline included.
@@ -144,7 +144,7 @@ pub(crate) fn pressed(ctx: &egui::Context) -> Option<Tab> {
 }
 
 /// The tabs, in the order they are shown (and numbered for the shortcuts).
-const TABS: [Tab; 2] = [Tab::Transfers, Tab::Feeds];
+const TABS: [Tab; 3] = [Tab::Transfers, Tab::Files, Tab::Feeds];
 
 fn items(app: &App) -> Vec<Item> {
     let locale = app.state.locale;
@@ -153,6 +153,11 @@ fn items(app: &App) -> Vec<Item> {
             tab: Tab::Transfers,
             label: Msg::TransfersTitle.text(locale),
             count: Some(app.state.transfers.len()),
+        },
+        Item {
+            tab: Tab::Files,
+            label: Msg::TabFiles.text(locale),
+            count: None,
         },
         Item {
             tab: Tab::Feeds,
@@ -194,6 +199,7 @@ pub(crate) fn show(ui: &mut Ui, app: &mut App) {
     );
     match app.state.tab {
         Tab::Transfers => table::sort_menu(&mut side, app),
+        Tab::Files => files::new_folder_button(&mut side, app),
         // The empty list has a big button of its own; two of them would be one too many.
         Tab::Feeds if feeds::is_empty(app) => {}
         Tab::Feeds => feeds::add_button(&mut side, app),
@@ -259,6 +265,7 @@ pub(crate) fn show(ui: &mut Ui, app: &mut App) {
     ui.add_space(BAR_GAP);
     match app.state.tab {
         Tab::Transfers => table::show(ui, app),
+        Tab::Files => files::show(ui, app),
         Tab::Feeds => feeds::show(ui, app),
     }
 }
@@ -374,9 +381,10 @@ mod tests {
             .collect();
         assert_eq!(keys[0].logical_key, egui::Key::Num1);
         assert_eq!(keys[1].logical_key, egui::Key::Num2);
+        assert_eq!(keys[2].logical_key, egui::Key::Num3);
         assert!(keys.iter().all(|key| key.modifiers.command));
         // The row of tabs and the table of shortcuts are one list.
-        assert_eq!(TABS, [Tab::Transfers, Tab::Feeds]);
+        assert_eq!(TABS, [Tab::Transfers, Tab::Files, Tab::Feeds]);
         assert!(shortcut(TABS.len() + 50).is_none());
     }
 
@@ -512,19 +520,22 @@ mod layout_tests {
     #[test]
     fn the_tab_labels_are_never_cut_at_the_narrowest_window_in_any_language() {
         for locale in LOCALES {
-            let naturals: Vec<Natural> = [Msg::TransfersTitle, Msg::TabFeeds]
-                .iter()
-                .enumerate()
-                .map(|(index, msg)| {
-                    let label = msg.text(locale);
-                    Natural {
-                        // The open tab is the bold one: measure the widest it can be.
-                        label_width: width_of(&label, &theme::bold(13.0)),
-                        label,
-                        count_width: Some(if index == 0 { 36.0 } else { 22.0 }),
-                    }
-                })
-                .collect();
+            let naturals: Vec<Natural> = [
+                (Msg::TransfersTitle, Some(36.0)),
+                (Msg::TabFiles, None),
+                (Msg::TabFeeds, Some(22.0)),
+            ]
+            .iter()
+            .map(|(msg, count_width)| {
+                let label = msg.text(locale);
+                Natural {
+                    // The open tab is the bold one: measure the widest it can be.
+                    label_width: width_of(&label, &theme::bold(13.0)),
+                    label,
+                    count_width: *count_width,
+                }
+            })
+            .collect();
             let room = NARROWEST - widest_side(locale) - SIDE_GAP;
             let slots = plan(&naturals, room, |_, _| String::from("cut"));
             for (slot, natural) in slots.iter().zip(&naturals) {

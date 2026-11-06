@@ -1,7 +1,7 @@
 //! Sample data for looking at the UI without an account. Debug builds only
 //! (`PUTIO_ADDER_DEMO=1 cargo run -p putio-adder`): this module does not exist in release builds.
 
-use putio_api::{Account, Disk, RssFeed, Transfer, TransferKind, TransferStatus};
+use putio_api::{Account, Disk, File, FileType, RssFeed, Transfer, TransferKind, TransferStatus};
 
 fn transfer(
     id: i64,
@@ -141,6 +141,60 @@ pub(crate) fn feeds() -> Vec<RssFeed> {
             "uncompressed, remux, hdr10plus, dolby vision, atmos, truehd, 7.1",
         ),
         feed(1, "Short", "https://x.example.invalid/f", "hd"),
+    ]
+}
+
+/// What is in the top folder of the demo account: folders and files of every kind, one with a name too long
+/// for its row (the listing is not sorted here: the core does that).
+pub(crate) fn files() -> Vec<File> {
+    let item = |id: i64, name: &str, kind: FileType, size: i64| File {
+        id,
+        name: name.into(),
+        parent_id: Some(0),
+        file_type: kind,
+        content_type: String::new(),
+        size,
+        screenshot: None,
+        created_at: Some(format!("2024-0{}-1{}T12:00:00", 1 + id % 9, id % 9)),
+    };
+    vec![
+        item(11, "Movies", FileType::Folder, 0),
+        item(12, "TV Shows", FileType::Folder, 0),
+        item(13, "Music", FileType::Folder, 0),
+        item(
+            14,
+            "Sintel.2010.1080p.BluRay.x264-GROUP.mkv",
+            FileType::Video,
+            1_100_000_000,
+        ),
+        item(
+            15,
+            "Cosmos.Laundromat.2015.flac",
+            FileType::Audio,
+            95_000_000,
+        ),
+        item(16, "holiday-photo.jpg", FileType::Image, 3_400_000),
+        item(
+            17,
+            "Big.Buck.Bunny.2008.2160p.zip",
+            FileType::Archive,
+            3_300_000_000,
+        ),
+        item(18, "manual.pdf", FileType::Pdf, 1_200_000),
+        item(19, "notes.txt", FileType::Text, 4_000),
+        item(20, "something-unknown.bin", FileType::Unknown, 12_000_000),
+        item(
+            21,
+            "A.file.with.a.very.long.name.that.keeps.going.and.going.so.that.it.has.to.be.cut.to.fit.in.its.row.2160p.UHD.mkv",
+            FileType::Video,
+            9_800_000_000,
+        ),
+        item(
+            22,
+            "Neue Datei mit Umlauten äöü.mkv",
+            FileType::Video,
+            700_000_000,
+        ),
     ]
 }
 

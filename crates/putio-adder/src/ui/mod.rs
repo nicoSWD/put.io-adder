@@ -3,6 +3,8 @@
 pub(crate) mod details;
 pub(crate) mod feed_form;
 pub(crate) mod feeds;
+pub(crate) mod file_dialogs;
+pub(crate) mod files;
 pub(crate) mod handler;
 pub(crate) mod header;
 pub(crate) mod icons;
@@ -41,6 +43,8 @@ pub(crate) enum Overlay {
     Card(i64),
     /// The "⋯" menu of the feed with this id.
     FeedCard(i64),
+    /// The "⋯" menu of the file with this id.
+    FileCard(i64),
 }
 
 /// State that only the UI cares about.
@@ -57,6 +61,12 @@ pub(crate) struct UiState {
     pub(crate) selected: Option<i64>,
     /// The feed last clicked (highlighted).
     pub(crate) selected_feed: Option<i64>,
+    /// The file last clicked (highlighted).
+    pub(crate) selected_file: Option<i64>,
+    /// What the user has typed in the search field (a search starts with Enter).
+    pub(crate) search_text: String,
+    /// The Files tab's naming, moving and delete cards.
+    pub(crate) file_dialog: file_dialogs::FileDialog,
     /// The add / edit feed form and the delete confirmation.
     pub(crate) feed_dialog: feed_form::FeedDialog,
     /// The transfer whose details panel is open.
@@ -76,6 +86,9 @@ impl Default for UiState {
             open_once: None,
             selected: None,
             selected_feed: None,
+            selected_file: None,
+            search_text: String::new(),
+            file_dialog: file_dialogs::FileDialog::default(),
             feed_dialog: feed_form::FeedDialog::default(),
             details: None,
             folders: prefs::FolderPicker::default(),
@@ -122,6 +135,7 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
         });
     prefs::show(&ctx, app);
     feed_form::show(&ctx, app);
+    file_dialogs::show(&ctx, app);
     details::show(&ctx, app);
     handler::show(&ctx, app);
 }

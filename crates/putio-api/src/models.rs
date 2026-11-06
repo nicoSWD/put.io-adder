@@ -277,6 +277,9 @@ pub struct File {
     pub size: i64,
     #[serde(default)]
     pub screenshot: Option<String>,
+    /// ISO 8601 as sent, without a time zone. Untrusted text.
+    #[serde(default, deserialize_with = "lenient")]
+    pub created_at: Option<String>,
 }
 
 /// `GET /oauth2/oob/code`

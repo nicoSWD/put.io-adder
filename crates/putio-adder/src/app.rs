@@ -306,6 +306,7 @@ impl App {
             },
         );
         self.start_demo_feeds(ctx, view);
+        self.start_demo_files(ctx, view);
     }
 
     /// Debug builds only: the Feeds tab in each of its states (`feeds`, `feeds-empty`, `feeds-loading`,
@@ -330,6 +331,86 @@ impl App {
             self.ui.open_once = Some(crate::ui::Overlay::FeedCard(5));
         }
         ui::feed_form::demo(self, ctx, view);
+    }
+
+    /// Debug builds only: the Files tab in each of its states (`files`, `files-empty`, `files-loading`,
+    /// `files-failed`, `files-search`, `files-deep`, `file-card-menu`) and its cards (`file-rename`,
+    /// `file-new-folder`, `file-move`, `file-delete`, `file-delete-folder`).
+    #[cfg(debug_assertions)]
+    fn start_demo_files(&mut self, ctx: &egui::Context, view: &str) {
+        use putio_core::state::{Crumb, FilesView, Search};
+        if !view.starts_with("file") {
+            return;
+        }
+        self.state.transfers_expanded = true;
+        self.dispatch(ctx, Event::SelectTab(putio_core::settings::Tab::Files));
+        let mut items = crate::demo::files();
+        putio_core::files::sort_files(&mut items);
+        let trail = if view == "files-deep" {
+            vec![
+                Crumb {
+                    id: 0,
+                    name: String::new(),
+                },
+                Crumb {
+                    id: 11,
+                    name: "Movies".into(),
+                },
+                Crumb {
+                    id: 31,
+                    name: "2024".into(),
+                },
+                Crumb {
+                    id: 32,
+                    name: "Documentaries and other long things".into(),
+                },
+                Crumb {
+                    id: 33,
+                    name: "Behind the scenes".into(),
+                },
+            ]
+        } else if view == "files-long" {
+            vec![
+                Crumb {
+                    id: 0,
+                    name: String::new(),
+                },
+                Crumb {
+                    id: 11,
+                    name: "A folder with a very long name that goes on and on and on and on and on"
+                        .into(),
+                },
+            ]
+        } else {
+            vec![Crumb {
+                id: 0,
+                name: String::new(),
+            }]
+        };
+        self.state.files = FilesView {
+            trail,
+            items: if matches!(view, "files-empty" | "files-loading" | "files-failed") {
+                Vec::new()
+            } else {
+                items.clone()
+            },
+            loaded: !matches!(view, "files-loading" | "files-failed"),
+            failed: view == "files-failed",
+            search: (view == "files-search").then(|| Search {
+                query: "sintel".into(),
+                items: items.iter().take(4).cloned().collect(),
+                total: 128,
+                loading: false,
+                failed: false,
+            }),
+        };
+        if view == "files-search" {
+            self.ui.search_text = "sintel".into();
+        }
+        if view == "file-card-menu" {
+            self.ui.open_once = Some(crate::ui::Overlay::FileCard(14));
+        }
+        ui::file_dialogs::demo(self, ctx, view);
     }
 
     /// Debug builds only: the update flow in each of its states (`update`, `update-installing`,
@@ -441,6 +522,14 @@ impl App {
                 self.send(Job::SetFeedPaused { op, id, paused });
             }
             Effect::DeleteFeed { op, id } => self.send(Job::DeleteFeed { op, id }),
+            Effect::ListFiles { parent } => self.send(Job::ListFiles { parent }),
+            Effect::SearchFiles { query } => self.send(Job::SearchFiles { query }),
+            Effect::RenameFile { op, id, name } => self.send(Job::RenameFile { op, id, name }),
+            Effect::CreateFolder { op, parent, name } => {
+                self.send(Job::CreateFolder { op, parent, name });
+            }
+            Effect::MoveFile { op, id, to } => self.send(Job::MoveFile { op, id, to }),
+            Effect::DeleteFile { op, id } => self.send(Job::DeleteFile { op, id }),
             Effect::CancelTransfer { op, id } => self.send(Job::Cancel { op, id }),
             Effect::RetryTransfer { op, id } => self.send(Job::Retry { op, id }),
             Effect::CleanTransfers { op, ids } => self.send(Job::Clean { op, ids }),
@@ -521,6 +610,7 @@ impl App {
         if self.state.is_signed_in()
             && !self.ui.prefs_open
             && !self.ui.feed_dialog.is_open()
+            && !self.ui.file_dialog.is_open()
             && let Some(tab) = ui::tabs::pressed(ctx)
         {
             // A shortcut for a list also opens the list if it was folded away.

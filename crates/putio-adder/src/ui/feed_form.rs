@@ -170,7 +170,14 @@ fn form(ctx: &egui::Context, app: &mut App) {
         .show(ctx, |ui| {
             ui.set_width(CONTENT_WIDTH);
             if app.ui.folders.is_open() {
-                let close = prefs::folder_page(ui, app, &workers, locale, &mut chosen);
+                let close = prefs::folder_page(
+                    ui,
+                    app,
+                    &workers,
+                    locale,
+                    &prefs::FolderPage::choose(),
+                    &mut chosen,
+                );
                 Outcome {
                     close,
                     ..Outcome::default()
@@ -346,7 +353,7 @@ fn fields(
             ui,
             &mut editing.form.url,
             URL_HINT,
-            url_label,
+            Some(url_label),
             MAX_URL_CHARS,
         )
     });
@@ -368,7 +375,7 @@ fn fields(
             ui,
             &mut editing.form.title,
             &placeholder,
-            name_label,
+            Some(name_label),
             MAX_TITLE_CHARS,
         )
     });
@@ -389,7 +396,7 @@ fn fields(
             ui,
             &mut editing.form.keyword,
             "1080p, 2160p",
-            include_label,
+            Some(include_label),
             MAX_KEYWORDS_CHARS,
         )
     });
@@ -403,7 +410,7 @@ fn fields(
             ui,
             &mut editing.form.unwanted_keywords,
             "CAM, HDTS",
-            exclude_label,
+            Some(exclude_label),
             MAX_KEYWORDS_CHARS,
         )
     });

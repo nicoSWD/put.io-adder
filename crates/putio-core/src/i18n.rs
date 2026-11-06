@@ -159,6 +159,67 @@ pub enum Msg {
     HandlerKeptOther,
     A11yClose,
     A11yBack,
+    // Files
+    TabFiles,
+    FilesRoot,
+    FilesEmptyTitle,
+    FilesEmptyHint,
+    FilesLoading,
+    FilesLoadFailed,
+    FilesRetry,
+    FilesSearchHint,
+    FilesSearchResults {
+        query: String,
+    },
+    FilesSearchNone {
+        query: String,
+    },
+    FilesSearchMore {
+        shown: usize,
+        total: usize,
+    },
+    FilesSearching,
+    FilesSearchFailed,
+    A11yFilesClearSearch,
+    FilesNewFolder,
+    FileMenuRename,
+    FileMenuMove,
+    FileMenuDelete,
+    FileRenameTitle,
+    FileRenameConfirm,
+    FileCreateConfirm,
+    FileMoveTitle,
+    FileMoveHere {
+        name: String,
+    },
+    FileDeleteFileTitle,
+    FileDeleteFolderTitle,
+    FileDeleteFileBody {
+        name: String,
+    },
+    FileDeleteFolderBody {
+        name: String,
+    },
+    FileDeleteConfirm,
+    FileRenamedNotice,
+    FolderCreatedNotice,
+    FileMovedNotice,
+    FileDeletedNotice,
+    FileActionFailed {
+        reason: String,
+    },
+    FileErrNameEmpty,
+    FileErrNameSlash,
+    FileErrNameTooLong,
+    FileErrMoveIntoSelf,
+    FileKindFolder,
+    FileKindVideo,
+    FileKindAudio,
+    FileKindImage,
+    FileKindArchive,
+    FileKindDocument,
+    FileKindOther,
+    A11yFileActions,
     // Feeds
     TabFeeds,
     FeedsEmptyTitle,
@@ -1251,7 +1312,7 @@ impl Msg {
                 "No se pudieron cargar los feeds."
             )
             .into(),
-            Self::FeedsRetry => tr!(
+            Self::FeedsRetry | Self::FilesRetry => tr!(
                 l,
                 "Try again",
                 "Erneut versuchen",
@@ -1314,7 +1375,7 @@ impl Msg {
                 "Copiar dirección del feed"
             )
             .into(),
-            Self::FeedMenuDelete => tr!(
+            Self::FeedMenuDelete | Self::FileMenuDelete => tr!(
                 l,
                 "Delete…",
                 "Löschen …",
@@ -1529,6 +1590,293 @@ impl Msg {
                 format!("Der Feed wurde nicht geändert: {reason}"),
                 format!("No se cambió el feed: {reason}")
             ),
+            Self::TabFiles => tr!(
+                l,
+                "Files",
+                "Dateien",
+                "Archivos"
+            )
+            .into(),
+            Self::FilesRoot => tr!(
+                l,
+                "Your Files",
+                "Deine Dateien",
+                "Tus archivos"
+            )
+            .into(),
+            Self::FilesEmptyTitle => tr!(
+                l,
+                "This folder is empty",
+                "Dieser Ordner ist leer",
+                "Esta carpeta está vacía"
+            )
+            .into(),
+            Self::FilesEmptyHint => tr!(
+                l,
+                "Finished transfers end up here.",
+                "Fertige Übertragungen landen hier.",
+                "Las transferencias terminadas acaban aquí."
+            )
+            .into(),
+            Self::FilesLoading => tr!(
+                l,
+                "Loading files…",
+                "Dateien werden geladen …",
+                "Cargando archivos…"
+            )
+            .into(),
+            Self::FilesLoadFailed => tr!(
+                l,
+                "Couldn't load your files.",
+                "Die Dateien konnten nicht geladen werden.",
+                "No se pudieron cargar los archivos."
+            )
+            .into(),
+            Self::FilesSearchHint => tr!(
+                l,
+                "Search files",
+                "Dateien suchen",
+                "Buscar archivos"
+            )
+            .into(),
+            Self::FilesSearching => tr!(
+                l,
+                "Searching…",
+                "Suche läuft …",
+                "Buscando…"
+            )
+            .into(),
+            Self::FilesSearchFailed => tr!(
+                l,
+                "The search did not work.",
+                "Die Suche hat nicht funktioniert.",
+                "La búsqueda no funcionó."
+            )
+            .into(),
+            Self::A11yFilesClearSearch => tr!(
+                l,
+                "Clear search",
+                "Suche löschen",
+                "Borrar búsqueda"
+            )
+            .into(),
+            Self::FilesNewFolder => tr!(
+                l,
+                "New folder",
+                "Neuer Ordner",
+                "Nueva carpeta"
+            )
+            .into(),
+            Self::FileMenuRename => tr!(
+                l,
+                "Rename…",
+                "Umbenennen …",
+                "Renombrar…"
+            )
+            .into(),
+            Self::FileMenuMove => tr!(
+                l,
+                "Move…",
+                "Verschieben …",
+                "Mover…"
+            )
+            .into(),
+            Self::FileRenameTitle | Self::FileRenameConfirm => tr!(
+                l,
+                "Rename",
+                "Umbenennen",
+                "Renombrar"
+            )
+            .into(),
+            Self::FileCreateConfirm => tr!(
+                l,
+                "Create",
+                "Erstellen",
+                "Crear"
+            )
+            .into(),
+            Self::FileMoveTitle => tr!(
+                l,
+                "Move to",
+                "Verschieben nach",
+                "Mover a"
+            )
+            .into(),
+            Self::FileDeleteFileTitle => tr!(
+                l,
+                "Delete this file?",
+                "Diese Datei löschen?",
+                "¿Eliminar este archivo?"
+            )
+            .into(),
+            Self::FileDeleteFolderTitle => tr!(
+                l,
+                "Delete this folder?",
+                "Diesen Ordner löschen?",
+                "¿Eliminar esta carpeta?"
+            )
+            .into(),
+            Self::FileDeleteConfirm => tr!(
+                l,
+                "Delete",
+                "Löschen",
+                "Eliminar"
+            )
+            .into(),
+            Self::FileRenamedNotice => tr!(
+                l,
+                "Renamed",
+                "Umbenannt",
+                "Renombrado"
+            )
+            .into(),
+            Self::FolderCreatedNotice => tr!(
+                l,
+                "Folder created",
+                "Ordner erstellt",
+                "Carpeta creada"
+            )
+            .into(),
+            Self::FileMovedNotice => tr!(
+                l,
+                "Moved",
+                "Verschoben",
+                "Movido"
+            )
+            .into(),
+            Self::FileDeletedNotice => tr!(
+                l,
+                "Deleted",
+                "Gelöscht",
+                "Eliminado"
+            )
+            .into(),
+            Self::FileErrNameEmpty => tr!(
+                l,
+                "Enter a name.",
+                "Gib einen Namen ein.",
+                "Escribe un nombre."
+            )
+            .into(),
+            Self::FileErrNameSlash => tr!(
+                l,
+                "A name cannot contain a slash.",
+                "Ein Name darf keinen Schrägstrich enthalten.",
+                "Un nombre no puede contener una barra."
+            )
+            .into(),
+            Self::FileErrMoveIntoSelf => tr!(
+                l,
+                "A folder cannot be moved into itself.",
+                "Ein Ordner lässt sich nicht in sich selbst verschieben.",
+                "Una carpeta no se puede mover dentro de sí misma."
+            )
+            .into(),
+            Self::FileErrNameTooLong => tr!(
+                l,
+                "That name is too long.",
+                "Dieser Name ist zu lang.",
+                "Ese nombre es demasiado largo."
+            )
+            .into(),
+            Self::FileKindFolder => tr!(
+                l,
+                "Folder",
+                "Ordner",
+                "Carpeta"
+            )
+            .into(),
+            Self::FileKindVideo => tr!(
+                l,
+                "Video",
+                "Video",
+                "Vídeo"
+            )
+            .into(),
+            Self::FileKindAudio => tr!(
+                l,
+                "Audio",
+                "Audio",
+                "Audio"
+            )
+            .into(),
+            Self::FileKindImage => tr!(
+                l,
+                "Image",
+                "Bild",
+                "Imagen"
+            )
+            .into(),
+            Self::FileKindArchive => tr!(
+                l,
+                "Archive",
+                "Archiv",
+                "Archivo comprimido"
+            )
+            .into(),
+            Self::FileKindDocument => tr!(
+                l,
+                "Document",
+                "Dokument",
+                "Documento"
+            )
+            .into(),
+            Self::FileKindOther => tr!(
+                l,
+                "File",
+                "Datei",
+                "Archivo"
+            )
+            .into(),
+            Self::A11yFileActions => tr!(
+                l,
+                "File actions",
+                "Datei-Aktionen",
+                "Acciones del archivo"
+            )
+            .into(),
+            Self::FilesSearchResults { query } => tr!(
+                l,
+                format!("Results for “{query}”"),
+                format!("Ergebnisse für „{query}“"),
+                format!("Resultados de «{query}»")
+            ),
+            Self::FilesSearchNone { query } => tr!(
+                l,
+                format!("Nothing found for “{query}”"),
+                format!("Nichts gefunden für „{query}“"),
+                format!("No se encontró nada para «{query}»")
+            ),
+            Self::FilesSearchMore { shown, total } => tr!(
+                l,
+                format!("Showing {shown} of {total}. Search for more to narrow it down."),
+                format!("{shown} von {total} werden angezeigt. Suche genauer, um einzugrenzen."),
+                format!("Se muestran {shown} de {total}. Busca algo más concreto para acotar.")
+            ),
+            Self::FileMoveHere { name } => tr!(
+                l,
+                format!("Move to “{name}”"),
+                format!("Nach „{name}“ verschieben"),
+                format!("Mover a «{name}»")
+            ),
+            Self::FileDeleteFileBody { name } => tr!(
+                l,
+                format!("“{name}” will be deleted from put.io. This cannot be undone."),
+                format!("„{name}“ wird von put.io gelöscht. Das lässt sich nicht rückgängig machen."),
+                format!("«{name}» se eliminará de put.io. No se puede deshacer.")
+            ),
+            Self::FileDeleteFolderBody { name } => tr!(
+                l,
+                format!("“{name}” and everything in it will be deleted from put.io. This cannot be undone."),
+                format!("„{name}“ und alles darin wird von put.io gelöscht. Das lässt sich nicht rückgängig machen."),
+                format!("«{name}» y todo lo que contiene se eliminará de put.io. No se puede deshacer.")
+            ),
+            Self::FileActionFailed { reason } => tr!(
+                l,
+                format!("That did not work: {reason}"),
+                format!("Das hat nicht funktioniert: {reason}"),
+                format!("No funcionó: {reason}")
+            ),
             Self::A11yTransferActions => {
                 tr!(l, "Actions", "Aktionen", "Acciones").into()
             }
@@ -1668,6 +2016,123 @@ mod tests {
             Msg::A11yFeedActions,
             Msg::A11yTabs,
         ]
+    }
+
+    /// Every message of the Files tab, with a stand-in for each argument.
+    fn file_messages() -> Vec<Msg> {
+        vec![
+            Msg::TabFiles,
+            Msg::FilesRoot,
+            Msg::FilesEmptyTitle,
+            Msg::FilesEmptyHint,
+            Msg::FilesLoading,
+            Msg::FilesLoadFailed,
+            Msg::FilesRetry,
+            Msg::FilesSearchHint,
+            Msg::FilesSearching,
+            Msg::FilesSearchFailed,
+            Msg::A11yFilesClearSearch,
+            Msg::FilesNewFolder,
+            Msg::FileMenuRename,
+            Msg::FileMenuMove,
+            Msg::FileMenuDelete,
+            Msg::FileRenameTitle,
+            Msg::FileRenameConfirm,
+            Msg::FileCreateConfirm,
+            Msg::FileMoveTitle,
+            Msg::FileDeleteFileTitle,
+            Msg::FileDeleteFolderTitle,
+            Msg::FileDeleteConfirm,
+            Msg::FileRenamedNotice,
+            Msg::FolderCreatedNotice,
+            Msg::FileMovedNotice,
+            Msg::FileDeletedNotice,
+            Msg::FileErrNameEmpty,
+            Msg::FileErrNameSlash,
+            Msg::FileErrNameTooLong,
+            Msg::FileErrMoveIntoSelf,
+            Msg::FileKindFolder,
+            Msg::FileKindVideo,
+            Msg::FileKindAudio,
+            Msg::FileKindImage,
+            Msg::FileKindArchive,
+            Msg::FileKindDocument,
+            Msg::FileKindOther,
+            Msg::A11yFileActions,
+            Msg::FilesSearchResults {
+                query: "Spring".into(),
+            },
+            Msg::FilesSearchNone {
+                query: "Spring".into(),
+            },
+            Msg::FilesSearchMore {
+                shown: 100,
+                total: 250,
+            },
+            Msg::FileMoveHere {
+                name: "Spring".into(),
+            },
+            Msg::FileDeleteFileBody {
+                name: "Spring".into(),
+            },
+            Msg::FileDeleteFolderBody {
+                name: "Spring".into(),
+            },
+            Msg::FileActionFailed {
+                reason: "Spring".into(),
+            },
+        ]
+    }
+
+    #[test]
+    fn every_files_message_is_written_in_every_language() {
+        for locale in [Locale::En, Locale::De, Locale::Es] {
+            for msg in file_messages() {
+                let text = msg.text(locale);
+                assert!(!text.trim().is_empty(), "{msg:?} / {locale:?}");
+                assert!(!text.contains(['{', '}']), "{msg:?} / {locale:?}: {text}");
+                assert_eq!(text, text.trim(), "{msg:?} / {locale:?}");
+            }
+        }
+        // The arguments arrive in the sentence, whatever the language.
+        for locale in [Locale::En, Locale::De, Locale::Es] {
+            for msg in file_messages() {
+                if let Msg::FilesSearchResults { .. }
+                | Msg::FilesSearchNone { .. }
+                | Msg::FileMoveHere { .. }
+                | Msg::FileDeleteFileBody { .. }
+                | Msg::FileDeleteFolderBody { .. }
+                | Msg::FileActionFailed { .. } = &msg
+                {
+                    assert!(msg.text(locale).contains("Spring"), "{msg:?} / {locale:?}");
+                }
+            }
+            let more = Msg::FilesSearchMore {
+                shown: 100,
+                total: 250,
+            }
+            .text(locale);
+            assert!(
+                more.contains("100") && more.contains("250"),
+                "{locale:?}: {more}"
+            );
+        }
+        // A translation that is just the English text would be a forgotten one.
+        for msg in file_messages() {
+            if matches!(
+                msg,
+                Msg::TabFiles
+                    | Msg::FileKindVideo
+                    | Msg::FileKindAudio
+                    | Msg::FileRenameTitle
+                    | Msg::FileRenameConfirm
+            ) {
+                continue; // the same word in some languages
+            }
+            let en = msg.text(Locale::En);
+            let (de, es) = (msg.text(Locale::De), msg.text(Locale::Es));
+            assert!(en != de || en != es, "{msg:?} is not translated at all");
+        }
     }
 
     #[test]
