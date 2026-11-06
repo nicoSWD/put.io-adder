@@ -9,6 +9,7 @@
 
 pub mod download;
 pub mod feeds;
+pub mod files;
 pub mod format;
 pub mod handler;
 pub mod i18n;

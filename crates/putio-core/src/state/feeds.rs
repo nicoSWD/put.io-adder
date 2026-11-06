@@ -48,14 +48,9 @@ fn wanted(state: &State) -> bool {
     state.is_signed_in() && state.transfers_expanded && state.tab == Tab::Feeds
 }
 
-pub(super) fn select_tab(state: &mut State, now: Millis, tab: Tab, fx: &mut Vec<Effect>) {
-    if state.tab == tab {
-        return;
-    }
-    state.tab = tab;
-    state.settings.tab = tab;
-    fx.push(Effect::SaveSettings(state.settings.clone()));
-    if tab == Tab::Feeds && state.feed_refresh.is_older_than(now, STALE_AFTER) {
+/// The Feeds tab was just opened: look again if what is shown is old.
+pub(super) fn tab_opened(state: &mut State, now: Millis) {
+    if state.feed_refresh.is_older_than(now, STALE_AFTER) {
         state.feed_refresh.soon(now);
     }
 }

@@ -431,6 +431,14 @@ impl App {
                 self.send(Job::SetFeedPaused { op, id, paused });
             }
             Effect::DeleteFeed { op, id } => self.send(Job::DeleteFeed { op, id }),
+            Effect::ListFiles { parent } => self.send(Job::ListFiles { parent }),
+            Effect::SearchFiles { query } => self.send(Job::SearchFiles { query }),
+            Effect::RenameFile { op, id, name } => self.send(Job::RenameFile { op, id, name }),
+            Effect::CreateFolder { op, parent, name } => {
+                self.send(Job::CreateFolder { op, parent, name });
+            }
+            Effect::MoveFile { op, id, to } => self.send(Job::MoveFile { op, id, to }),
+            Effect::DeleteFile { op, id } => self.send(Job::DeleteFile { op, id }),
             Effect::CancelTransfer { op, id } => self.send(Job::Cancel { op, id }),
             Effect::RetryTransfer { op, id } => self.send(Job::Retry { op, id }),
             Effect::CleanTransfers { op, ids } => self.send(Job::Clean { op, ids }),

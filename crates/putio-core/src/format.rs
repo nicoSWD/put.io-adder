@@ -235,6 +235,13 @@ fn add_message(rows: &mut Vec<DetailRow>, label: Msg, text: Option<&str>) {
     }
 }
 
+/// The day of an ISO 8601 timestamp as `2024-05-01`, or `None` when the text is not one (it comes from the
+/// server).
+#[must_use]
+pub fn date(raw: &str) -> Option<String> {
+    timestamp(raw).and_then(|shown| shown.get(..10).map(str::to_owned))
+}
+
 /// `2024-05-01T12:34:56` (optionally with fraction and zone) as `2024-05-01 12:34 UTC`.
 /// Anything that is not a plain ISO 8601 timestamp yields `None`: the text comes from the server.
 fn timestamp(raw: &str) -> Option<String> {

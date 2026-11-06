@@ -100,6 +100,7 @@ impl FolderPicker {
             content_type: String::new(),
             size: 0,
             screenshot: None,
+            created_at: None,
         };
         Self {
             open: true,

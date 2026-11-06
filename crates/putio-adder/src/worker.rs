@@ -109,6 +109,31 @@ pub(crate) enum Job {
         op: OpId,
         id: i64,
     },
+    ListFiles {
+        parent: i64,
+    },
+    SearchFiles {
+        query: String,
+    },
+    RenameFile {
+        op: OpId,
+        id: i64,
+        name: String,
+    },
+    CreateFolder {
+        op: OpId,
+        parent: i64,
+        name: String,
+    },
+    MoveFile {
+        op: OpId,
+        id: i64,
+        to: i64,
+    },
+    DeleteFile {
+        op: OpId,
+        id: i64,
+    },
 }
 
 impl Job {
@@ -411,6 +436,31 @@ fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
             op,
             id,
             result: client.delete_rss_feed(id),
+        }),
+        Job::ListFiles { parent } => WorkerMsg::Core(Event::FilesListed {
+            parent,
+            result: client.list_files(parent, None),
+        }),
+        Job::SearchFiles { query } => {
+            let result = client.search_files(&query);
+            WorkerMsg::Core(Event::FilesSearched { query, result })
+        }
+        Job::RenameFile { op, id, name } => WorkerMsg::Core(Event::FileChangeFinished {
+            op,
+            result: client.rename_file(id, &name),
+        }),
+        Job::CreateFolder { op, parent, name } => WorkerMsg::Core(Event::FileChangeFinished {
+            op,
+            result: client.create_folder(&name, parent),
+        }),
+        Job::MoveFile { op, id, to } => WorkerMsg::Core(Event::FileChangeFinished {
+            op,
+            result: client.move_files(&[id], to),
+        }),
+        Job::DeleteFile { op, id } => WorkerMsg::Core(Event::FileDeleteFinished {
+            op,
+            id,
+            result: client.delete_files(&[id]),
         }),
         Job::FolderName { id } => WorkerMsg::FolderName {
             id,
@@ -953,6 +1003,132 @@ mod tests {
             Job::FolderName { id: 1 },
         ] {
             assert!(job.is_session_bound(), "{job:?}");
+        }
+    }
+
+    #[test]
+    fn the_files_of_a_folder_are_listed_with_their_types_and_searched_by_name() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            200,
+            r#"{"parent":{"id":4,"name":"TV"},"files":[{"id":9,"name":"a.mkv","file_type":"VIDEO","size":5}]}"#,
+        );
+        match execute(&client(&fake), Job::ListFiles { parent: 4 }) {
+            WorkerMsg::Core(Event::FilesListed {
+                parent: 4,
+                result: Ok(listing),
+            }) => {
+                assert_eq!(listing.files.len(), 1);
+            }
+            other => panic!("{other:?}"),
+        }
+        // Everything is listed, not only folders (the folder chooser asks for those).
+        assert_eq!(
+            fake.last_request().unwrap().describe(),
+            "GET /files/list?parent_id=4&per_page=1000"
+        );
+        fake.push_json(200, r#"{"files":[],"total":0}"#);
+        match execute(
+            &client(&fake),
+            Job::SearchFiles {
+                query: "spring".into(),
+            },
+        ) {
+            WorkerMsg::Core(Event::FilesSearched {
+                query,
+                result: Ok(found),
+            }) => {
+                assert_eq!((query.as_str(), found.total), ("spring", 0));
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn renaming_making_a_folder_moving_and_deleting_report_their_own_operation() {
+        let fake = FakeTransport::new();
+        for _ in 0..4 {
+            fake.push_json(200, r#"{"status":"OK"}"#);
+        }
+        let c = client(&fake);
+        for job in [
+            Job::RenameFile {
+                op: OpId(1),
+                id: 7,
+                name: "new".into(),
+            },
+            Job::CreateFolder {
+                op: OpId(2),
+                parent: 3,
+                name: "Season".into(),
+            },
+            Job::MoveFile {
+                op: OpId(3),
+                id: 7,
+                to: 9,
+            },
+        ] {
+            let expected = match &job {
+                Job::RenameFile { op, .. }
+                | Job::CreateFolder { op, .. }
+                | Job::MoveFile { op, .. } => *op,
+                _ => unreachable!(),
+            };
+            match execute(&c, job) {
+                WorkerMsg::Core(Event::FileChangeFinished { op, result: Ok(()) }) => {
+                    assert_eq!(op, expected);
+                }
+                other => panic!("{other:?}"),
+            }
+        }
+        assert!(matches!(
+            execute(&c, Job::DeleteFile { op: OpId(4), id: 7 }),
+            WorkerMsg::Core(Event::FileDeleteFinished {
+                op: OpId(4),
+                id: 7,
+                result: Ok(())
+            })
+        ));
+        let sent: Vec<String> = fake
+            .requests()
+            .iter()
+            .map(putio_api::Request::describe)
+            .collect();
+        assert_eq!(
+            sent,
+            [
+                "POST /files/rename",
+                "POST /files/create-folder",
+                "POST /files/move",
+                "POST /files/delete"
+            ]
+        );
+    }
+
+    #[test]
+    fn file_jobs_belong_to_the_session_that_sent_them_and_are_not_heavy() {
+        for job in [
+            Job::ListFiles { parent: 0 },
+            Job::SearchFiles { query: "x".into() },
+            Job::RenameFile {
+                op: OpId(1),
+                id: 1,
+                name: "x".into(),
+            },
+            Job::CreateFolder {
+                op: OpId(1),
+                parent: 0,
+                name: "x".into(),
+            },
+            Job::MoveFile {
+                op: OpId(1),
+                id: 1,
+                to: 0,
+            },
+            Job::DeleteFile { op: OpId(1), id: 1 },
+        ] {
+            assert!(job.is_session_bound(), "{job:?}");
+            assert!(!job.is_heavy(), "{job:?}");
         }
     }
 }

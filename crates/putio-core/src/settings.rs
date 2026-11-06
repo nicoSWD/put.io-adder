@@ -26,6 +26,7 @@ pub enum ThemeChoice {
 #[serde(rename_all = "snake_case")]
 pub enum Tab {
     Feeds,
+    Files,
     /// Also what a preferences file from a newer version with another tab is read as.
     #[default]
     #[serde(other)]
@@ -281,6 +282,15 @@ mod tests {
         let json = feeds.to_json();
         assert!(json.contains(r#""tab": "feeds""#), "{json}");
         assert_eq!(Settings::from_json_or_default(Some(&json)), feeds);
+        // The Files tab is remembered too.
+        let files = Settings {
+            tab: Tab::Files,
+            ..Settings::default()
+        };
+        assert_eq!(
+            Settings::from_json_or_default(Some(&files.to_json())),
+            files
+        );
         // A tab a newer version added, and a file from before tabs existed.
         let newer = Settings::from_json_or_default(Some(
             r#"{"tab": "shares", "close_after_magnet": true}"#,

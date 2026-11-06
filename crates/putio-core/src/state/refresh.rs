@@ -32,11 +32,6 @@ impl Refresh {
         self.next_at = None;
     }
 
-    /// Whether a request is on its way.
-    pub(super) fn in_flight(&self) -> bool {
-        self.in_flight
-    }
-
     /// Ask again at the next opportunity.
     pub(super) fn soon(&mut self, now: Millis) {
         self.next_at = Some(now);
@@ -68,6 +63,14 @@ impl Refresh {
     /// changes.
     pub(super) fn answered(&mut self) {
         self.in_flight = false;
+    }
+
+    /// What the list shows has changed (another folder): whatever is on its way is of no interest, ask
+    /// again now.
+    pub(super) fn restart(&mut self, now: Millis) {
+        self.in_flight = false;
+        self.failures = 0;
+        self.next_at = Some(now);
     }
 
     /// The user asked to try again: forget the failures and go now.
@@ -108,9 +111,8 @@ mod tests {
         let mut refresh = Refresh::default();
         assert!(refresh.due(0));
         refresh.started();
-        assert!(refresh.in_flight() && !refresh.due(1_000_000));
+        assert!(!refresh.due(1_000_000), "one request at a time");
         refresh.succeeded(10, 60_000);
-        assert!(!refresh.in_flight());
         assert!(!refresh.due(59_999) && refresh.due(60_010));
     }
 
@@ -164,7 +166,7 @@ mod tests {
         // An answer nobody wanted ends the request and nothing else.
         refresh.started();
         refresh.answered();
-        assert!(!refresh.in_flight());
+        assert!(refresh.due(100), "the request is over");
         assert!(!refresh.is_older_than(14_000, 15_000));
     }
 }
