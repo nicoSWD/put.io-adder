@@ -868,6 +868,9 @@ impl State {
                 seconds: retry_after.as_secs(),
             }),
             ApiError::Api(failure) if failure.status >= 500 => self.text(&Msg::ServerError),
+            // Payment required: put.io's way of saying the account has no room (or no plan) left, whatever
+            // the body says (an upload's answer often has none).
+            ApiError::Api(failure) if failure.status == 402 => self.text(&Msg::PaymentRequired),
             ApiError::Api(failure) => failure
                 .message
                 .chars()
@@ -1240,7 +1243,7 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
         Event::FileDeleteFinished { op, id, result } => {
             files::delete_finished(state, now, (op, id), result, &mut fx);
         }
-        Event::FilesDropped(items) => uploads::dropped(state, items, &mut fx),
+        Event::FilesDropped(items) => uploads::dropped(state, now, items, &mut fx),
         Event::UploadProgress { op, sent } => uploads::progress(state, op, sent),
         Event::UploadFinished { op, result } => uploads::finished(state, now, op, result),
         Event::UploadCancelRequested(op) => uploads::cancel_requested(state, op, &mut fx),

@@ -212,6 +212,12 @@ pub enum Msg {
         folder: String,
     },
     UploadWaiting,
+    /// put.io answered 402 (payment required): the account is full or its plan has run out.
+    PaymentRequired,
+    UploadNoSpace {
+        needed: String,
+        free: String,
+    },
     UploadButton,
     UploadPickTitle,
     A11yUploadDismiss {
@@ -1878,6 +1884,19 @@ impl Msg {
                 format!("Suelta para subir a {folder}")
             ),
             Self::UploadWaiting => tr!(l, "Waiting", "Wartet", "En espera").into(),
+            Self::PaymentRequired => tr!(
+                l,
+                "Refused by put.io (402): account full or plan expired.",
+                "Von put.io abgelehnt (402): Konto voll oder Tarif abgelaufen.",
+                "put.io lo rechazó (402): cuenta llena o plan caducado."
+            )
+            .into(),
+            Self::UploadNoSpace { needed, free } => tr!(
+                l,
+                format!("Not enough space on put.io: {needed} needed, {free} free."),
+                format!("Nicht genug Platz auf put.io: {needed} nötig, {free} frei."),
+                format!("Sin espacio en put.io: hacen falta {needed}, hay {free}.")
+            ),
             Self::UploadButton => tr!(l, "Upload", "Hochladen", "Subir").into(),
             Self::UploadPickTitle => tr!(
                 l,
@@ -2362,6 +2381,11 @@ mod tests {
                 folder: "Spring".into(),
             },
             Msg::UploadWaiting,
+            Msg::PaymentRequired,
+            Msg::UploadNoSpace {
+                needed: "Spring".into(),
+                free: "Summer".into(),
+            },
             Msg::UploadButton,
             Msg::UploadPickTitle,
             Msg::A11yUploadDismiss {
@@ -2393,6 +2417,7 @@ mod tests {
                 Msg::UploadDone { .. }
                 | Msg::UploadCancelled { .. }
                 | Msg::UploadFileFailed { .. }
+                | Msg::UploadNoSpace { .. }
                 | Msg::UploadDropHere { .. }
                 | Msg::A11yUploadDismiss { .. }
                 | Msg::A11yUploadCancel { .. } => {

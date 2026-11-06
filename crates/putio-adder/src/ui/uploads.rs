@@ -452,6 +452,32 @@ mod tests {
     }
 
     #[test]
+    fn the_reasons_a_user_most_needs_are_shown_whole_in_a_failed_row_in_every_language() {
+        for locale in [Locale::En, Locale::De, Locale::Es] {
+            for reason in [
+                Msg::PaymentRequired.text(locale),
+                Msg::UploadNoSpace {
+                    needed: "1023.9 GB".into(),
+                    free: "1023.9 GB".into(),
+                }
+                .text(locale),
+            ] {
+                let list = [failed(1, "a.mkv", &reason)];
+                let boxes = text_boxes(|ui| {
+                    ui.allocate_ui(Vec2::new(512.0, 300.0), |ui| {
+                        strip(ui, &list, locale);
+                    });
+                });
+                assert!(
+                    boxes.iter().any(|b| b.text == reason),
+                    "{locale:?}: {reason:?} is cut in {:?}",
+                    boxes.iter().map(|b| &b.text).collect::<Vec<_>>()
+                );
+            }
+        }
+    }
+
+    #[test]
     fn a_long_reason_and_name_stay_inside_a_failed_row_in_every_language() {
         let long = "An.Extremely.Long.File.Name.".repeat(8);
         let why = "A reason that goes on and on and on, far past what a row can hold. ".repeat(4);

@@ -76,11 +76,19 @@ fn clean_name(name: &str) -> String {
     name.chars().filter(|c| !c.is_control()).collect()
 }
 
-pub(super) fn dropped(state: &mut State, items: Vec<Dropped>, fx: &mut Vec<Effect>) {
+pub(super) fn dropped(state: &mut State, now: Millis, items: Vec<Dropped>, fx: &mut Vec<Effect>) {
     if !state.is_signed_in() {
         return;
     }
     let parent = state.files.folder_id();
+    // What put.io says is left, when it says: a file that cannot fit is not sent just to be refused after
+    // gigabytes (and the files of one drop share the room, in the order they were dropped).
+    let mut free = state
+        .account
+        .as_ref()
+        .and_then(|account| account.disk)
+        .filter(|disk| disk.size > 0)
+        .map(|disk| u64::try_from(disk.avail).unwrap_or(0));
     let mut skipped = 0;
     let mut started = 0;
     for item in items.into_iter().take(MAX_PER_DROP.saturating_mul(4)) {
@@ -94,6 +102,32 @@ pub(super) fn dropped(state: &mut State, items: Vec<Dropped>, fx: &mut Vec<Effec
             continue;
         }
         started += 1;
+        if let Some(room) = free
+            && item.size > room
+        {
+            // Shown as a row that failed before it began.
+            let reason = Msg::UploadNoSpace {
+                needed: crate::format::bytes(i64::try_from(item.size).unwrap_or(i64::MAX)),
+                free: crate::format::bytes(i64::try_from(room).unwrap_or(i64::MAX)),
+            }
+            .text(state.locale);
+            let op = state.op(Op::UploadFile);
+            state.finish(op, &[Op::UploadFile]);
+            state.uploads.push(Upload {
+                op,
+                name: name.clone(),
+                size: item.size,
+                sent: 0,
+                failed: Some(reason.clone()),
+            });
+            state.say(
+                Msg::UploadFileFailed { name, reason },
+                now,
+                ERROR_NOTICE_TIME,
+            );
+            continue;
+        }
+        free = free.map(|room| room.saturating_sub(item.size));
         let op = state.op(Op::UploadFile);
         state.uploads.push(Upload {
             op,
@@ -456,6 +490,86 @@ mod tests {
             },
         );
         assert_eq!(state.status_text(5), "Could not upload c: the file changed");
+    }
+
+    fn with_disk(state: &mut State, avail: i64) {
+        update(
+            state,
+            0,
+            Event::Polled {
+                account: Ok(putio_api::Account {
+                    disk: Some(putio_api::Disk {
+                        size: 1_000_000_000,
+                        used: 1_000_000_000 - avail,
+                        avail,
+                    }),
+                    ..putio_api::Account::default()
+                }),
+                transfers: Ok(Vec::<Transfer>::new()),
+            },
+        );
+    }
+
+    #[test]
+    fn a_file_that_does_not_fit_is_not_sent_and_the_files_of_a_drop_share_the_room() {
+        let mut state = signed_in();
+        with_disk(&mut state, 100_000_000);
+        let fx = update(
+            &mut state,
+            1,
+            Event::FilesDropped(vec![
+                file("fits", 60_000_000),
+                file("too-much-with-the-first", 60_000_000),
+                file("small", 30_000_000),
+            ]),
+        );
+        let sent: Vec<String> = uploads(&fx).into_iter().map(|(_, n, _)| n).collect();
+        assert_eq!(sent, ["fits", "small"]);
+        let refused = state
+            .uploads
+            .iter()
+            .find(|u| u.name == "too-much-with-the-first")
+            .expect("the refused file has a row");
+        assert_eq!(
+            refused.failed.as_deref(),
+            Some("Not enough space on put.io: 57.2 MB needed, 38.1 MB free.")
+        );
+        // It is not work in flight, and it is not sent later either.
+        assert_eq!(state.uploads.len(), 3);
+        assert!(state.is_busy());
+        let live = state.uploads.iter().filter(|u| u.failed.is_none()).count();
+        assert_eq!(live, 2);
+        // Without a quota from put.io nothing is assumed.
+        let mut other = signed_in();
+        let fx = update(
+            &mut other,
+            1,
+            Event::FilesDropped(vec![file("huge", u64::MAX / 2)]),
+        );
+        assert_eq!(uploads(&fx).len(), 1);
+    }
+
+    #[test]
+    fn put_io_saying_payment_required_is_explained_whatever_its_body() {
+        let mut state = signed_in();
+        let fx = update(&mut state, 1, Event::FilesDropped(vec![file("a", 10)]));
+        let op = uploads(&fx).remove(0).0;
+        update(
+            &mut state,
+            2,
+            Event::UploadFinished {
+                op,
+                result: Err(UploadFailure::Api(ApiError::Api(ApiFailure {
+                    status: 402,
+                    error_type: None,
+                    message: "HTTP 402".into(),
+                }))),
+            },
+        );
+        assert_eq!(
+            state.uploads[0].failed.as_deref(),
+            Some("Refused by put.io (402): account full or plan expired.")
+        );
     }
 
     #[test]
