@@ -37,6 +37,7 @@ use putio_platform::update;
 const MAX_PLAYLIST: usize = 50;
 const INTERACTIVE_THREADS: usize = 3;
 const HEAVY_THREADS: usize = 2;
+const THUMBNAIL_THREADS: usize = 2;
 
 /// What the app identifies itself as in the put.io "linked apps" list.
 const CLIENT_NAME: &str = "put.io adder";
@@ -141,6 +142,11 @@ pub(crate) enum Job {
         share_id: i64,
     },
     ListShared,
+    /// The small picture of a file, for its row (UI-local, not part of the core state machine). Has a lane of
+    /// its own: a folder of videos asks for dozens at once and must not hold anything else up.
+    FetchThumbnail {
+        url: String,
+    },
     /// One transfer, for the open details panel.
     FetchTransfer {
         id: i64,
@@ -199,6 +205,10 @@ impl Job {
         )
     }
 
+    fn is_thumbnail(&self) -> bool {
+        matches!(self, Self::FetchThumbnail { .. })
+    }
+
     fn is_upload(&self) -> bool {
         matches!(self, Self::UploadFile { .. })
     }
@@ -222,6 +232,12 @@ pub(crate) enum WorkerMsg {
     FolderName {
         id: i64,
         name: Option<String>,
+    },
+    /// The answer to `Job::FetchThumbnail`: the picture, small and decoded, or `Err` when it could not be had
+    /// (not shown again, and the row keeps its icon).
+    Thumbnail {
+        url: String,
+        result: Result<Thumbnail, ()>,
     },
     /// An update is downloaded and unpacked. The unpacked update itself (paths) stays with the app,
     /// not in the core state machine, which is told only whether it worked.
@@ -259,6 +275,7 @@ pub(crate) struct Workers {
     interactive: Sender<Queued>,
     heavy: Sender<Queued>,
     uploads: Sender<Queued>,
+    thumbnails: Sender<Queued>,
     session: Arc<Mutex<Session>>,
 }
 
@@ -286,6 +303,7 @@ impl Workers {
             heavy: lane("heavy", HEAVY_THREADS)?,
             // One at a time, in the order they were dropped.
             uploads: lane("uploads", 1)?,
+            thumbnails: lane("thumbnails", THUMBNAIL_THREADS)?,
             session: Arc::new(Mutex::new(Session::default())),
         })
     }
@@ -296,10 +314,12 @@ impl Workers {
         let (interactive, _) = mpsc::channel();
         let (heavy, _) = mpsc::channel();
         let (uploads, _) = mpsc::channel();
+        let (thumbnails, _) = mpsc::channel();
         Self {
             interactive,
             heavy,
             uploads,
+            thumbnails,
             session: Arc::new(Mutex::new(Session::default())),
         }
     }
@@ -326,7 +346,9 @@ impl Workers {
             Ok(session) => (session.number, session.token.clone()),
             Err(_) => return,
         };
-        let lane = if job.is_upload() {
+        let lane = if job.is_thumbnail() {
+            &self.thumbnails
+        } else if job.is_upload() {
             &self.uploads
         } else if job.is_heavy() {
             &self.heavy
@@ -457,6 +479,44 @@ fn upload_file<T: Transport>(
         Err(ApiError::File(why)) => Err(UploadFailure::Local(why)),
         Err(error) => Err(UploadFailure::Api(error)),
     }
+}
+
+/// A small decoded picture: its size and its pixels (RGBA, 8 bits).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Thumbnail {
+    pub(crate) size: [usize; 2],
+    pub(crate) rgba: Vec<u8>,
+}
+
+/// How big a picture may be before it is not decoded at all (a few thousand pixels a side is a photo; more is
+/// a way to make this app allocate gigabytes).
+const MAX_PICTURE_SIDE: u32 = 4096;
+/// What the picture is shrunk to: it is shown in a box of 32 points, so this is sharp on any screen.
+const THUMBNAIL_SIDE: u32 = 96;
+
+/// Decode a JPEG or PNG and shrink it to fit in a small box, or `None` when it cannot be done within limits.
+fn decode_thumbnail(bytes: &[u8]) -> Option<Thumbnail> {
+    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()?;
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(MAX_PICTURE_SIDE);
+    limits.max_image_height = Some(MAX_PICTURE_SIDE);
+    limits.max_alloc = Some(64 * 1024 * 1024);
+    reader.limits(limits);
+    let picture = reader
+        .decode()
+        .ok()?
+        .thumbnail(THUMBNAIL_SIDE, THUMBNAIL_SIDE);
+    let rgba = picture.to_rgba8();
+    let size = [
+        usize::try_from(rgba.width()).ok()?,
+        usize::try_from(rgba.height()).ok()?,
+    ];
+    Some(Thumbnail {
+        size,
+        rgba: rgba.into_raw(),
+    })
 }
 
 /// Download and unpack the update, telling the UI how far along it is.
@@ -621,6 +681,14 @@ fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
             let result = client.change_friend(&change);
             WorkerMsg::Core(Event::FriendChangeFinished { op, change, result })
         }
+        Job::FetchThumbnail { url } => WorkerMsg::Thumbnail {
+            result: client
+                .thumbnail(&url)
+                .ok()
+                .and_then(|bytes| decode_thumbnail(&bytes))
+                .ok_or(()),
+            url,
+        },
         Job::FetchSharedWith { file_id } => WorkerMsg::Core(Event::SharedWithFetched {
             file_id,
             result: client.shared_with(file_id),
@@ -1067,10 +1135,12 @@ mod tests {
         let (interactive, queue) = mpsc::channel();
         let (heavy, _) = mpsc::channel();
         let (uploads, _) = mpsc::channel();
+        let (thumbnails, _) = mpsc::channel();
         let workers = Workers {
             interactive,
             heavy,
             uploads,
+            thumbnails,
             session: Arc::new(Mutex::new(Session::default())),
         };
         (workers, queue)
@@ -1481,6 +1551,66 @@ mod tests {
             }
             .is_upload()
         );
+    }
+
+    #[test]
+    fn a_jpeg_and_a_png_are_decoded_and_shrunk_to_fit_a_small_box_and_nothing_else_is() {
+        let jpeg = decode_thumbnail(include_bytes!("../tests/fixtures/thumbnail.jpg")).unwrap();
+        // 160 x 90 fits in 96 x 96 as 96 x 54: shrunk, not stretched.
+        assert_eq!(jpeg.size, [96, 54]);
+        assert_eq!(jpeg.rgba.len(), 96 * 54 * 4);
+        // A PNG made on the spot, bigger than the box on its longer side.
+        let mut png = Vec::new();
+        image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+            40,
+            200,
+            image::Rgba([1, 2, 3, 255]),
+        ))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+        let small = decode_thumbnail(&png).unwrap();
+        assert_eq!(small.size, [19, 96]);
+        // Something that is not a picture, a truncated one, and one that is too big to be worth decoding.
+        assert_eq!(decode_thumbnail(b"<html>not a picture</html>"), None);
+        assert_eq!(decode_thumbnail(&png[..30]), None);
+        let mut huge = Vec::new();
+        image::DynamicImage::ImageLuma8(image::GrayImage::new(MAX_PICTURE_SIDE + 1, 1))
+            .write_to(
+                &mut std::io::Cursor::new(&mut huge),
+                image::ImageFormat::Png,
+            )
+            .unwrap();
+        assert_eq!(decode_thumbnail(&huge), None);
+    }
+
+    #[test]
+    fn a_picture_job_answers_with_the_picture_or_with_nothing_and_has_its_own_lane() {
+        let fake = FakeTransport::new();
+        fake.queue_bytes(
+            200,
+            include_bytes!("../tests/fixtures/thumbnail.jpg").to_vec(),
+        );
+        fake.queue_bytes(404, b"{}".to_vec());
+        let url = "https://put.io/thumbnails/abc.jpg".to_owned();
+        match execute(&client(&fake), Job::FetchThumbnail { url: url.clone() }) {
+            WorkerMsg::Thumbnail {
+                url: answered,
+                result: Ok(picture),
+            } => {
+                assert_eq!((answered, picture.size), (url.clone(), [96, 54]));
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(matches!(
+            execute(&client(&fake), Job::FetchThumbnail { url }),
+            WorkerMsg::Thumbnail {
+                result: Err(()),
+                ..
+            }
+        ));
+        let job = Job::FetchThumbnail { url: "x".into() };
+        assert!(job.is_thumbnail() && !job.is_upload() && !job.is_heavy());
+        assert!(job.is_session_bound());
     }
 
     #[test]

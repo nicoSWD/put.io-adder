@@ -24,7 +24,7 @@ mod contract_tests;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
 
-pub use client::Client;
+pub use client::{Client, thumbnail_path};
 pub use error::{ApiError, ApiFailure};
 #[cfg(feature = "http")]
 pub use http::UreqTransport;

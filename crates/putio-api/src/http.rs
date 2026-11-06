@@ -21,6 +21,7 @@ struct Bases {
     api: String,
     upload: String,
     upload_tus: String,
+    thumbnails: String,
     github: String,
 }
 
@@ -30,6 +31,7 @@ impl Bases {
             api: "https://api.put.io/v2".into(),
             upload: "https://upload.put.io/v2".into(),
             upload_tus: "https://upload.put.io".into(),
+            thumbnails: "https://put.io".into(),
             github: "https://api.github.com".into(),
         }
     }
@@ -39,6 +41,7 @@ impl Bases {
             Host::Api => &self.api,
             Host::Upload => &self.upload,
             Host::UploadTus => &self.upload_tus,
+            Host::Thumbnails => &self.thumbnails,
             Host::GitHub => &self.github,
         };
         format!("{base}{path}")
@@ -92,6 +95,7 @@ impl UreqTransport {
                 api: base.clone(),
                 upload: base.clone(),
                 upload_tus: base.clone(),
+                thumbnails: base.clone(),
                 github: base,
             },
         }

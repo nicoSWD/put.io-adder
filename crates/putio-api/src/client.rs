@@ -35,6 +35,23 @@ pub struct FileSearch {
 /// How many search results are asked for: enough to find a file, few enough to answer quickly.
 const SEARCH_RESULTS: &str = "100";
 
+/// The path of a picture of a file on put.io, from the address the API gave: only `https://put.io/thumbnails/…`
+/// and `https://put.io/screenshots/…`, a plain path (letters, digits and `%._~+=-`, no query), and not
+/// anything else. The address is server text, and what is fetched from it must never be steerable to
+/// another host.
+#[must_use]
+pub fn thumbnail_path(address: &str) -> Option<String> {
+    let path = address.trim().strip_prefix("https://put.io")?;
+    let ok_prefix = path.starts_with("/thumbnails/") || path.starts_with("/screenshots/");
+    let ok_chars = path.chars().all(|c| {
+        c.is_ascii_alphanumeric() || matches!(c, '/' | '%' | '.' | '_' | '~' | '+' | '=' | '-')
+    });
+    (ok_prefix && ok_chars && path.len() <= 512 && !path.contains("..")).then(|| path.to_owned())
+}
+
+/// The biggest picture that is taken.
+const MAX_THUMBNAIL_BYTES: usize = 2 * 1024 * 1024;
+
 /// Files this long or longer are sent by the resumable upload: one request for a file of many gigabytes
 /// is one connection that has to survive for hours.
 pub const RESUMABLE_FROM: u64 = 1 << 30;
@@ -524,6 +541,31 @@ impl<T: Transport> Client<T> {
                 "upload reply has neither `transfer` nor `file`".into(),
             )),
         }
+    }
+
+    /// The picture at `address` (see [`thumbnail_path`]), as a JPEG or PNG. It is public, so it is asked for
+    /// without the account's token.
+    pub fn thumbnail(&self, address: &str) -> Result<Vec<u8>, ApiError> {
+        let path =
+            thumbnail_path(address).ok_or(ApiError::InvalidInput("not a picture on put.io"))?;
+        let request = self.request(
+            Method::Get,
+            Host::Thumbnails,
+            path,
+            Body::None,
+            "image/jpeg, image/png",
+            false,
+        );
+        let response = self.send(&request)?;
+        let body = response.body;
+        let known =
+            body.starts_with(&[0xff, 0xd8, 0xff]) || body.starts_with(&[0x89, b'P', b'N', b'G']);
+        if body.len() > MAX_THUMBNAIL_BYTES || !known {
+            return Err(ApiError::Decode(
+                "that is not a small JPEG or PNG picture".into(),
+            ));
+        }
+        Ok(body)
     }
 
     /// Upload any file into a folder (`0` is the top level), reading it from disk while it is sent. A file
@@ -1531,6 +1573,73 @@ mod tests {
         ));
         assert!(matches!(
             c.upload_file(an_upload(3, " \u{7}")),
+            Err(ApiError::InvalidInput(_))
+        ));
+        assert_eq!(fake.requests().len(), 0);
+    }
+
+    #[test]
+    fn only_the_pictures_of_files_on_put_io_are_ever_fetched() {
+        let token = "aF5rkZVtYV9pV1iWimSOZWJjWWFaXGZdaZBmY2OJY4uJlV5pj5FiXg%3D%3D";
+        for kind in ["thumbnails", "screenshots"] {
+            assert_eq!(
+                thumbnail_path(&format!("https://put.io/{kind}/{token}.jpg")).as_deref(),
+                Some(format!("/{kind}/{token}.jpg").as_str())
+            );
+        }
+        for bad in [
+            "http://put.io/thumbnails/a.jpg",
+            "https://evil.example/thumbnails/a.jpg",
+            "https://put.io.evil.example/thumbnails/a.jpg",
+            "https://put.io@evil.example/thumbnails/a.jpg",
+            "https://api.put.io/thumbnails/a.jpg",
+            "https://put.io/images/file_types/text.png",
+            "https://put.io/thumbnails/../account/info",
+            "https://put.io/thumbnails/a.jpg?x=1",
+            "https://put.io/thumbnails/a b.jpg",
+            "https://put.io/thumbnails/a\n.jpg",
+            "//put.io/thumbnails/a.jpg",
+            "/thumbnails/a.jpg",
+            "",
+        ] {
+            assert_eq!(thumbnail_path(bad), None, "{bad:?} was accepted");
+        }
+        let long = format!("https://put.io/thumbnails/{}", "a".repeat(600));
+        assert_eq!(thumbnail_path(&long), None);
+    }
+
+    #[test]
+    fn a_picture_is_fetched_without_the_token_and_only_a_small_jpeg_or_png_is_taken() {
+        let jpeg: Vec<u8> = vec![0xff, 0xd8, 0xff, 0xe0, 1, 2, 3];
+        let png: Vec<u8> = vec![0x89, b'P', b'N', b'G', 1, 2];
+        for (body, ok) in [
+            (jpeg.clone(), true),
+            (png.clone(), true),
+            (b"<html>not a picture</html>".to_vec(), false),
+            (
+                vec![0xff, 0xd8, 0xff]
+                    .into_iter()
+                    .chain(vec![0u8; 3 * 1024 * 1024])
+                    .collect(),
+                false,
+            ),
+        ] {
+            let fake = FakeTransport::new();
+            fake.queue_bytes(200, body.clone());
+            let result = client(&fake).thumbnail("https://put.io/thumbnails/abc.jpg");
+            assert_eq!(result.is_ok(), ok, "{} bytes", body.len());
+            let request = fake.last_request().unwrap();
+            assert_eq!(request.host, Host::Thumbnails);
+            assert_eq!(request.path, "/thumbnails/abc.jpg");
+            assert!(
+                request.bearer.is_none(),
+                "the picture is public: no token goes with it"
+            );
+        }
+        // An address that is not on put.io never reaches the network.
+        let fake = FakeTransport::new();
+        assert!(matches!(
+            client(&fake).thumbnail("https://evil.example/thumbnails/a.jpg"),
             Err(ApiError::InvalidInput(_))
         ));
         assert_eq!(fake.requests().len(), 0);

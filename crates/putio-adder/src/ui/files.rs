@@ -268,6 +268,29 @@ fn unpack_look(status: ExtractStatus) -> Option<(Msg, widgets::PillLook)> {
     }
 }
 
+/// The icon of a file's type at the left of its row, or, when it has a picture, the picture in its place: in
+/// a square a little bigger than the icon's circle so that it can be seen. The text does not move.
+fn paint_badge(
+    painter: &egui::Painter,
+    row: Rect,
+    kind: Kind,
+    picture: Option<&egui::TextureHandle>,
+) {
+    let center = Pos2::new(row.left() + 28.0, row.center().y);
+    match picture {
+        Some(picture) => super::thumbs::paint(
+            painter,
+            Rect::from_center_size(center, Vec2::splat(THUMBNAIL_BOX)),
+            picture,
+            7,
+        ),
+        None => icons::file_badge(painter, center, kind),
+    }
+}
+
+/// The side of the square a file's picture is shown in.
+const THUMBNAIL_BOX: f32 = 34.0;
+
 /// Where the state pill of a row ends, counted from the right edge of the row.
 const PILL_INSET: f32 = 46.0;
 /// Between a row's text and its pill.
@@ -278,6 +301,7 @@ fn draw_card(
     file: &File,
     (selected, shared): (bool, bool),
     unpacking: Option<ExtractStatus>,
+    picture: Option<&egui::TextureHandle>,
     locale: Locale,
 ) -> Card {
     let p = theme::pal();
@@ -341,11 +365,7 @@ fn draw_card(
             theme::YELLOW,
         );
     }
-    icons::file_badge(
-        &painter,
-        Pos2::new(rect.left() + 28.0, rect.center().y),
-        kind,
-    );
+    paint_badge(&painter, rect, kind, picture);
 
     let text_left = rect.left() + 52.0;
     // The pill first: how wide it is decides how much room the text has.
@@ -398,7 +418,31 @@ fn card(ui: &mut Ui, app: &mut App, file: &File) -> Option<Act> {
         .iter()
         .find(|item| item.file_id == file.id)
         .map(|item| item.status);
-    let Card { body, more } = draw_card(ui, file, (selected, shared), unpacking, locale);
+    // The picture of a file, asked for only when its row is on screen.
+    let address = putio_core::files::thumbnail_url(file);
+    if let Some(address) = &address
+        && ui.is_rect_visible(Rect::from_min_size(
+            ui.cursor().min,
+            Vec2::new(10.0, ROW_HEIGHT),
+        ))
+        && app.ui.thumbs.wanted(address)
+    {
+        app.send(crate::worker::Job::FetchThumbnail {
+            url: address.clone(),
+        });
+    }
+    let picture = address
+        .as_deref()
+        .and_then(|address| app.ui.thumbs.texture(address))
+        .cloned();
+    let Card { body, more } = draw_card(
+        ui,
+        file,
+        (selected, shared),
+        unpacking,
+        picture.as_ref(),
+        locale,
+    );
     let folder = is_folder(file);
     if body.clicked() || more.clicked() {
         app.ui.selected_file = Some(file.id);
@@ -908,6 +952,7 @@ mod tests {
             content_type: String::new(),
             size: 1_500_000_000,
             screenshot: None,
+            icon: None,
             created_at: Some("2024-05-01T12:34:56".into()),
         }
     }
@@ -986,7 +1031,11 @@ mod tests {
         let rect = std::cell::Cell::new(Rect::NOTHING);
         let boxes = text_boxes(|ui| {
             ui.set_width(NARROWEST);
-            rect.set(draw_card(ui, f, (false, false), None, locale).body.rect);
+            rect.set(
+                draw_card(ui, f, (false, false), None, None, locale)
+                    .body
+                    .rect,
+            );
         });
         (rect.get(), boxes)
     }
@@ -1018,7 +1067,7 @@ mod tests {
             for kind in [FileType::Folder, FileType::Video] {
                 let f = file(kind, "Some.Movie.2024.mkv");
                 let (resting, hovered) = text_with_and_without_hover(|ui| {
-                    let card = draw_card(ui, &f, (false, false), None, locale);
+                    let card = draw_card(ui, &f, (false, false), None, None, locale);
                     (card.body.rect, card.body.hovered())
                 });
                 assert_eq!(resting, hovered, "{locale:?} {kind:?}");
@@ -1033,6 +1082,7 @@ mod tests {
                 ui,
                 &file(FileType::Video, "a.mkv"),
                 (false, false),
+                None,
                 None,
                 Locale::En,
             );
@@ -1177,7 +1227,7 @@ mod tests {
                 let boxes = text_boxes(|ui| {
                     ui.set_width(NARROWEST);
                     rect.set(
-                        draw_card(ui, &f, (false, false), Some(status), locale)
+                        draw_card(ui, &f, (false, false), Some(status), None, locale)
                             .body
                             .rect,
                     );
@@ -1224,6 +1274,7 @@ mod tests {
                 &file(FileType::Archive, "a.zip"),
                 (false, false),
                 Some(ExtractStatus::Extracting),
+                None,
                 Locale::En,
             );
         });

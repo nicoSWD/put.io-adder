@@ -367,6 +367,10 @@ pub struct File {
     pub size: i64,
     #[serde(default)]
     pub screenshot: Option<String>,
+    /// The file's small picture (a generic one for a type, or a thumbnail of a video). Untrusted text: use
+    /// [`thumbnail_path`](crate::thumbnail_path) before fetching anything from it.
+    #[serde(default, deserialize_with = "lenient")]
+    pub icon: Option<String>,
     /// ISO 8601 as sent, without a time zone. Untrusted text.
     #[serde(default, deserialize_with = "lenient")]
     pub created_at: Option<String>,

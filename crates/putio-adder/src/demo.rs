@@ -146,6 +146,34 @@ pub(crate) fn feeds() -> Vec<RssFeed> {
 
 /// What is in the top folder of the demo account: folders and files of every kind, one with a name too long
 /// for its row (the listing is not sorted here: the core does that).
+/// Where the demo's thumbnail of file `id` would be.
+pub(crate) fn thumbnail_address(id: i64) -> String {
+    format!("https://put.io/thumbnails/demo-{id}.jpg")
+}
+
+/// A picture for the demo's thumbnail of file `id`: a gradient in a colour of its own, 96 x 54.
+pub(crate) fn thumbnail_picture(id: i64) -> crate::worker::Thumbnail {
+    let (width, height) = (96usize, 54usize);
+    let seed = u8::try_from(id.rem_euclid(7)).unwrap_or(0);
+    let mut rgba = Vec::with_capacity(width * height * 4);
+    for y in 0..height {
+        for x in 0..width {
+            let across = u8::try_from(x * 255 / width).unwrap_or(255);
+            let down = u8::try_from(y * 255 / height).unwrap_or(255);
+            rgba.extend_from_slice(&[
+                across.saturating_add(seed * 20),
+                down,
+                255 - across / 2,
+                255,
+            ]);
+        }
+    }
+    crate::worker::Thumbnail {
+        size: [width, height],
+        rgba,
+    }
+}
+
 pub(crate) fn files() -> Vec<File> {
     let item = |id: i64, name: &str, kind: FileType, size: i64| File {
         id,
@@ -155,6 +183,8 @@ pub(crate) fn files() -> Vec<File> {
         content_type: String::new(),
         size,
         screenshot: None,
+        // A video has a thumbnail (its picture is made in `thumbnail_picture`: nothing is fetched).
+        icon: (kind == FileType::Video).then(|| thumbnail_address(id)),
         created_at: Some(format!("2024-0{}-1{}T12:00:00", 1 + id % 9, id % 9)),
     };
     vec![

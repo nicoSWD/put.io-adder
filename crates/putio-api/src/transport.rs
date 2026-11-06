@@ -23,6 +23,9 @@ pub enum Host {
     /// `https://upload.put.io`: the resumable (tus) upload endpoint, `/files/`, and the upload addresses it
     /// hands out.
     UploadTus,
+    /// `https://put.io`: the pictures of files (`/thumbnails/…`, `/screenshots/…`). Asked for without the
+    /// account's token: they are public.
+    Thumbnails,
     /// `https://api.github.com` (update check)
     GitHub,
 }
