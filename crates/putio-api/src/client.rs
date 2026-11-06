@@ -226,18 +226,8 @@ impl<T: Transport> Client<T> {
     /// Change one of the account's settings. The reply is only checked for an error: what the account looks
     /// like afterwards comes with the next `/account/info`.
     pub fn save_account_setting(&self, change: AccountSettingChange) -> Result<(), ApiError> {
-        let request = self.request(
-            Method::Post,
-            Host::Api,
-            "/account/settings".into(),
-            Body::Raw {
-                content_type: "application/json".into(),
-                bytes: change.to_json().into_bytes(),
-            },
-            JSON,
-            true,
-        );
-        self.ack(&request)
+        let (name, value) = change.to_field();
+        self.ack(&self.post_form("/account/settings", &[(name, &value)]))
     }
 
     pub fn transfers(&self) -> Result<Vec<Transfer>, ApiError> {
@@ -730,7 +720,7 @@ mod tests {
     }
 
     #[test]
-    fn one_account_setting_is_sent_as_a_json_object_with_one_key() {
+    fn one_account_setting_is_sent_as_one_form_field() {
         let fake = FakeTransport::new();
         fake.push_json(200, r#"{"status":"OK"}"#);
         fake.push_json(200, r#"{"status":"OK"}"#);
@@ -743,21 +733,12 @@ mod tests {
             .unwrap();
         let request = fake.last_request().unwrap();
         assert_eq!(request.describe(), "POST /account/settings");
-        assert_eq!(
-            request.body,
-            Body::Raw {
-                content_type: "application/json".into(),
-                bytes: br#"{"trash_enabled":false}"#.to_vec(),
-            }
-        );
+        assert_eq!(request.body, Body::Form("trash_enabled=false".into()));
         c.save_account_setting(AccountSettingChange::DefaultDownloadFolder(42))
             .unwrap();
         assert_eq!(
             fake.last_request().unwrap().body,
-            Body::Raw {
-                content_type: "application/json".into(),
-                bytes: br#"{"default_download_folder":42}"#.to_vec(),
-            }
+            Body::Form("default_download_folder=42".into())
         );
         // What put.io refuses comes back as its error.
         let Err(ApiError::Api(failure)) =

@@ -256,14 +256,13 @@ pub enum AccountSettingChange {
 }
 
 impl AccountSettingChange {
-    /// The change as the JSON object put.io's settings call takes: one key, nothing else.
+    /// The change as the one form field put.io's settings call takes: its name and value.
     #[must_use]
-    pub fn to_json(self) -> String {
+    pub fn to_field(self) -> (&'static str, String) {
         match self {
-            Self::DefaultDownloadFolder(id) => serde_json::json!({ "default_download_folder": id }),
-            Self::TrashEnabled(on) => serde_json::json!({ "trash_enabled": on }),
+            Self::DefaultDownloadFolder(id) => ("default_download_folder", id.to_string()),
+            Self::TrashEnabled(on) => ("trash_enabled", on.to_string()),
         }
-        .to_string()
     }
 }
 
