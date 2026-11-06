@@ -143,6 +143,13 @@ fn the_fields_we_read_exist_in_the_spec_schemas() {
             "Transfer.{field} is not in the spec"
         );
     }
+    let extraction = props("Extraction");
+    for field in ["id", "name", "status", "message", "files"] {
+        assert!(
+            extraction.contains(field),
+            "Extraction.{field} is not in the spec"
+        );
+    }
     let account = props("AccountInfo");
     for field in ["user_id", "username", "mail", "monthly_bandwidth_usage"] {
         assert!(
@@ -238,6 +245,8 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     ok(r#"{"status":"OK"}"#); // delete_files
     ok(r#"{"status":"OK","file":{"id":2}}"#); // create_folder
     ok(&format!(r#"{{"transfer":{transfer}}}"#)); // transfer
+    ok(r#"{"extractions":[]}"#); // extract_files
+    ok(r#"{"extractions":[]}"#); // extractions
     ok(r#"{"feeds":[]}"#); // rss_feeds
     ok(r#"{"status":"OK"}"#); // create_rss_feed
     ok(r#"{"status":"OK"}"#); // update_rss_feed
@@ -282,6 +291,8 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     client.delete_files(&[1, 2]).unwrap();
     client.create_folder("folder", 0).unwrap();
     client.transfer(1).unwrap();
+    client.extract_files(&[1, 2], Some("secret")).unwrap();
+    client.extractions().unwrap();
     client.rss_feeds().unwrap();
     client.create_rss_feed(&feed).unwrap();
     client.update_rss_feed(5, &feed).unwrap();
@@ -290,7 +301,7 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     client.delete_rss_feed(5).unwrap();
 
     let requests: Vec<Request> = fake.requests();
-    assert_eq!(requests.len(), 27);
+    assert_eq!(requests.len(), 29);
     for request in &requests {
         let path = template(&request.path);
         let method = match request.method {

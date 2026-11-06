@@ -74,6 +74,8 @@ pub struct Settings {
     pub close_after_magnet: bool,
     /// Quit 5 s after a `.torrent` was uploaded.
     pub close_after_torrent: bool,
+    /// Move a `.torrent` file to the Trash once put.io has taken it.
+    pub trash_torrent_after_upload: bool,
     pub check_for_updates: bool,
     /// Offer to become the default app for magnet links and `.torrent` files (until the user says
     /// "don't ask again").
@@ -95,6 +97,7 @@ impl Default for Settings {
             version: CURRENT_VERSION,
             close_after_magnet: false,
             close_after_torrent: false,
+            trash_torrent_after_upload: false,
             check_for_updates: true,
             ask_default_handler: true,
             default_folder: None,
@@ -300,6 +303,24 @@ mod tests {
         assert_eq!(
             Settings::from_json_or_default(Some(r#"{"close_after_magnet": true}"#)).tab,
             Tab::Transfers
+        );
+    }
+
+    #[test]
+    fn a_torrent_stays_where_it_is_unless_the_user_says_otherwise() {
+        assert!(!Settings::default().trash_torrent_after_upload);
+        // A preferences file from before the setting existed.
+        let old = Settings::from_json_or_default(Some(r#"{"close_after_torrent": true}"#));
+        assert!(!old.trash_torrent_after_upload);
+        let on = Settings {
+            trash_torrent_after_upload: true,
+            ..Settings::default()
+        };
+        assert_eq!(Settings::from_json_or_default(Some(&on.to_json())), on);
+        // The wrong type is not taken for "yes".
+        assert_eq!(
+            Settings::from_json_or_default(Some(r#"{"trash_torrent_after_upload": "yes"}"#)),
+            Settings::default()
         );
     }
 
