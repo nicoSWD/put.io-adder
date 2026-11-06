@@ -421,6 +421,7 @@ impl App {
             self.ui.open_once = Some(crate::ui::Overlay::FileCard(14));
         }
         ui::file_dialogs::demo(self, ctx, view);
+        ui::share_card::demo(self, ctx, view);
     }
 
     /// Debug builds only: the update flow in each of its states (`update`, `update-installing`,
@@ -487,6 +488,27 @@ impl App {
         self.workers.clone()
     }
 
+    /// The effects of the sharing card and of the marks in the Files list: each is one job.
+    fn send_sharing(&self, effect: Effect) {
+        let job = match effect {
+            Effect::FetchSharedWith { file_id } => Job::FetchSharedWith { file_id },
+            Effect::FetchFriends { file_id } => Job::FetchFriends { file_id },
+            Effect::ShareFile { op, file_id, with } => Job::ShareFile { op, file_id, with },
+            Effect::UnshareFile {
+                op,
+                file_id,
+                share_id,
+            } => Job::UnshareFile {
+                op,
+                file_id,
+                share_id,
+            },
+            Effect::ListShared => Job::ListShared,
+            _ => return,
+        };
+        self.send(job);
+    }
+
     fn run(&mut self, ctx: &egui::Context, effect: Effect) {
         match effect {
             // Demo mode never touches the network.
@@ -525,6 +547,11 @@ impl App {
             }
             Effect::DeleteFeed { op, id } => self.send(Job::DeleteFeed { op, id }),
             Effect::ListFiles { parent } => self.send(Job::ListFiles { parent }),
+            Effect::FetchSharedWith { .. }
+            | Effect::FetchFriends { .. }
+            | Effect::ShareFile { .. }
+            | Effect::UnshareFile { .. }
+            | Effect::ListShared => self.send_sharing(effect),
             Effect::FetchTransfer { id } => self.send(Job::FetchTransfer { id }),
             Effect::SearchFiles { query } => self.send(Job::SearchFiles { query }),
             Effect::RenameFile { op, id, name } => self.send(Job::RenameFile { op, id, name }),

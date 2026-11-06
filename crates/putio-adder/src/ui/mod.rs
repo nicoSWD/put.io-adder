@@ -11,6 +11,7 @@ pub(crate) mod icons;
 pub(crate) mod login;
 pub(crate) mod menu;
 pub(crate) mod prefs;
+pub(crate) mod share_card;
 pub(crate) mod summary;
 pub(crate) mod table;
 pub(crate) mod tabs;
@@ -67,6 +68,8 @@ pub(crate) struct UiState {
     pub(crate) file_dialog: file_dialogs::FileDialog,
     /// The add / edit feed form and the delete confirmation.
     pub(crate) feed_dialog: feed_form::FeedDialog,
+    /// Who is ticked in the sharing card.
+    pub(crate) share_pick: share_card::Pick,
     pub(crate) folders: prefs::FolderPicker,
     /// Names of the folders asked about so far (`None`: put.io could not say).
     pub(crate) folder_names: std::collections::HashMap<i64, Option<String>>,
@@ -85,6 +88,7 @@ impl Default for UiState {
             search_text: String::new(),
             file_dialog: file_dialogs::FileDialog::default(),
             feed_dialog: feed_form::FeedDialog::default(),
+            share_pick: share_card::Pick::default(),
             folders: prefs::FolderPicker::default(),
             folder_names: std::collections::HashMap::new(),
         }
@@ -130,6 +134,7 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
     prefs::show(&ctx, app);
     feed_form::show(&ctx, app);
     file_dialogs::show(&ctx, app);
+    share_card::show(&ctx, app);
     details::show(&ctx, app);
     handler::show(&ctx, app);
 }

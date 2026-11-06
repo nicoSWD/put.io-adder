@@ -20,7 +20,8 @@ use std::thread;
 
 use putio_api::client::FileListing;
 use putio_api::{
-    ApiError, Client, FileType, RssFeedSettings, Token, Transport, UploadOutcome, UreqTransport,
+    ApiError, Client, FileType, RssFeedSettings, ShareWith, Token, Transport, UploadOutcome,
+    UreqTransport,
 };
 use putio_core::state::{Event, OpId, Prepared, StreamFailure};
 use putio_core::update::UpdateAsset;
@@ -112,6 +113,23 @@ pub(crate) enum Job {
     ListFiles {
         parent: i64,
     },
+    FetchSharedWith {
+        file_id: i64,
+    },
+    FetchFriends {
+        file_id: i64,
+    },
+    ShareFile {
+        op: OpId,
+        file_id: i64,
+        with: ShareWith,
+    },
+    UnshareFile {
+        op: OpId,
+        file_id: i64,
+        share_id: i64,
+    },
+    ListShared,
     /// One transfer, for the open details panel.
     FetchTransfer {
         id: i64,
@@ -446,6 +464,29 @@ fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
             parent,
             result: client.list_files(parent, None),
         }),
+        Job::FetchSharedWith { file_id } => WorkerMsg::Core(Event::SharedWithFetched {
+            file_id,
+            result: client.shared_with(file_id),
+        }),
+        Job::FetchFriends { file_id } => WorkerMsg::Core(Event::FriendsFetched {
+            file_id,
+            result: client.friends(),
+        }),
+        Job::ShareFile { op, file_id, with } => WorkerMsg::Core(Event::ShareFinished {
+            op,
+            file_id,
+            result: client.share_file(file_id, &with),
+        }),
+        Job::UnshareFile {
+            op,
+            file_id,
+            share_id,
+        } => WorkerMsg::Core(Event::UnshareFinished {
+            op,
+            file_id,
+            result: client.unshare_file(file_id, &[share_id]),
+        }),
+        Job::ListShared => WorkerMsg::Core(Event::SharedListed(client.shared_files())),
         Job::FetchTransfer { id } => WorkerMsg::Core(Event::TransferDetailsFetched {
             id,
             result: client.transfer(id),
@@ -1011,9 +1052,68 @@ mod tests {
             },
             Job::FolderName { id: 1 },
             Job::FetchTransfer { id: 1 },
+            Job::ListShared,
+            Job::FetchFriends { file_id: 1 },
         ] {
             assert!(job.is_session_bound(), "{job:?}");
         }
+    }
+
+    #[test]
+    fn sharing_jobs_answer_with_the_events_the_core_waits_for() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            200,
+            r#"{"shared-with":[{"user_name":"jane","share_id":3}]}"#,
+        );
+        fake.push_json(200, r#"{"friends":[{"id":1,"name":"jane"}]}"#);
+        fake.push_json(200, r#"{"status":"OK"}"#);
+        fake.push_json(200, r#"{"status":"OK"}"#);
+        fake.push_json(200, r#"{"shared":[{"id":5,"name":"a"}]}"#);
+        let c = client(&fake);
+        assert!(matches!(
+            execute(&c, Job::FetchSharedWith { file_id: 5 }),
+            WorkerMsg::Core(Event::SharedWithFetched { file_id: 5, result: Ok(list) }) if list.len() == 1
+        ));
+        assert!(matches!(
+            execute(&c, Job::FetchFriends { file_id: 5 }),
+            WorkerMsg::Core(Event::FriendsFetched { file_id: 5, result: Ok(list) }) if list.len() == 1
+        ));
+        let job = Job::ShareFile {
+            op: OpId(2),
+            file_id: 5,
+            with: ShareWith::Everyone,
+        };
+        assert!(matches!(
+            execute(&c, job),
+            WorkerMsg::Core(Event::ShareFinished {
+                op: OpId(2),
+                file_id: 5,
+                result: Ok(())
+            })
+        ));
+        assert_eq!(fake.last_request().unwrap().describe(), "POST /files/share");
+        let job = Job::UnshareFile {
+            op: OpId(3),
+            file_id: 5,
+            share_id: 30,
+        };
+        assert!(matches!(
+            execute(&c, job),
+            WorkerMsg::Core(Event::UnshareFinished {
+                op: OpId(3),
+                file_id: 5,
+                result: Ok(())
+            })
+        ));
+        assert_eq!(
+            fake.last_request().unwrap().describe(),
+            "POST /files/5/unshare"
+        );
+        assert!(matches!(
+            execute(&c, Job::ListShared),
+            WorkerMsg::Core(Event::SharedListed(Ok(list))) if list.len() == 1
+        ));
     }
 
     #[test]

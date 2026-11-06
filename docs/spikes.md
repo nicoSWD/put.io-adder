@@ -37,6 +37,7 @@ Phase 0 spike 1 is open. Everything the client assumes about behaviour the spec 
 4. ~~Does put.io accept `Authorization: Bearer <token>`?~~ **Yes**: account info and the transfer list were fetched with it (observed 2026-11-05).
 5. The error body for adding a duplicate transfer (`error_type`).
 6. `GET /files/{id}/url` on a folder.
+7b. **Sharing** (`GET /files/shared`, `GET /files/{id}/shared-with`, `GET /friends/list`, `POST /files/share`, `POST /files/{id}/unshare`) is built on the spec and put.io's TypeScript SDK and has not been run against a live account. Unknown: whether this app's token may call them at all (an account-settings write was refused with 401, see below under the settings note if present), what `shared-with` lists after sharing with `everyone` (the card then shows whatever put.io returns), and whether `shares=` takes several ids comma-separated (the card only ever sends one).
 7. Does `POST /transfers/cancel` return an empty body or `{"status":"OK"}`? (The spec shows no content; the client accepts both.)
 
 Replace `crates/putio-api/tests/fixtures/*.json` with scrubbed recordings afterwards.

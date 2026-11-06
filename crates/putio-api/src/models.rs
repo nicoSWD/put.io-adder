@@ -233,6 +233,54 @@ pub struct Account {
     pub disk: Option<Disk>,
 }
 
+/// A friend: someone files can be shared with. Text fields are untrusted server text.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+pub struct Friend {
+    pub id: i64,
+    #[serde(default, deserialize_with = "lenient_default")]
+    pub name: String,
+}
+
+/// One person a file is shared with. `share_id` is what ends the share.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+pub struct Share {
+    pub share_id: i64,
+    #[serde(default, deserialize_with = "lenient_default")]
+    pub user_name: String,
+}
+
+/// One entry of the list of files the account shares.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+pub struct SharedFile {
+    pub id: i64,
+    #[serde(default, deserialize_with = "lenient_default")]
+    pub name: String,
+}
+
+/// Who a file is shared with when it is shared.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ShareWith {
+    /// Every friend, now and later.
+    Everyone,
+    /// These friends, by name.
+    Friends(Vec<String>),
+}
+
+impl ShareWith {
+    /// The value of the `friends` form field, or `None` when there is nobody to share with (or a name
+    /// that could not be told apart from a list).
+    #[must_use]
+    pub fn as_field(&self) -> Option<String> {
+        match self {
+            Self::Everyone => Some("everyone".into()),
+            Self::Friends(names) => {
+                let clean = |name: &String| !name.trim().is_empty() && !name.contains(',');
+                (!names.is_empty() && names.iter().all(clean)).then(|| names.join(","))
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum FileType {

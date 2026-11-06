@@ -115,6 +115,7 @@ enum Act {
     Download,
     Stream,
     CopyLink,
+    Share,
     Rename,
     Move,
     Delete,
@@ -146,7 +147,10 @@ fn entries(file: &File) -> Vec<Vec<Entry>> {
     }
     vec![
         open,
-        vec![entry(MenuIcon::Copy, Msg::MenuCopyLink, Act::CopyLink)],
+        vec![
+            entry(MenuIcon::Copy, Msg::MenuCopyLink, Act::CopyLink),
+            entry(MenuIcon::Link, Msg::FileMenuShare, Act::Share),
+        ],
         vec![
             entry(MenuIcon::Edit, Msg::FileMenuRename, Act::Rename),
             entry(MenuIcon::Folder, Msg::FileMenuMove, Act::Move),
@@ -188,6 +192,7 @@ fn apply(app: &mut App, ctx: &egui::Context, file: &File, act: Act) {
         Act::Download => app.dispatch(ctx, Event::FileDownloadRequested(id)),
         Act::Stream => app.dispatch(ctx, Event::FileStreamRequested(id)),
         Act::CopyLink => app.dispatch(ctx, Event::FileCopyLinkRequested(id)),
+        Act::Share => super::share_card::open(app, ctx, id, display_name(file)),
         Act::Rename => super::file_dialogs::open_rename(app, ctx, file),
         Act::Move => super::file_dialogs::open_move(app, ctx, file),
         Act::Delete => super::file_dialogs::ask_to_delete(app, file),
@@ -213,25 +218,24 @@ fn kind_msg(kind: Kind) -> Msg {
     }
 }
 
-/// The second line of a row: the size of a file, and the day it was added.
-fn detail(file: &File) -> String {
+/// The second line of a row: the size of a file, the day it was added, and whether it is shared.
+fn detail(file: &File, shared: bool, locale: Locale) -> String {
     let date = file
         .created_at
         .as_deref()
         .and_then(format::date)
         .unwrap_or_default();
-    if is_folder(file) {
-        return date;
-    }
-    let size = format::bytes(file.size);
-    if date.is_empty() {
-        size
-    } else {
-        format!("{size} · {date}")
-    }
+    let size = (!is_folder(file)).then(|| format::bytes(file.size));
+    let badge = shared.then(|| Msg::FileSharedBadge.text(locale));
+    [size, Some(date), badge]
+        .into_iter()
+        .flatten()
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" · ")
 }
 
-fn draw_card(ui: &mut Ui, file: &File, selected: bool, locale: Locale) -> Card {
+fn draw_card(ui: &mut Ui, file: &File, (selected, shared): (bool, bool), locale: Locale) -> Card {
     let p = theme::pal();
     let (rect, body) = ui.allocate_exact_size(
         Vec2::new(ui.available_width() - SCROLLBAR_ROOM, ROW_HEIGHT),
@@ -248,7 +252,7 @@ fn draw_card(ui: &mut Ui, file: &File, selected: bool, locale: Locale) -> Card {
 
     let kind = kind(file);
     let name = display_name(file);
-    let detail = detail(file);
+    let detail = detail(file, shared, locale);
     let description = if detail.is_empty() {
         format!("{name}, {}", kind_msg(kind).text(locale))
     } else {
@@ -334,7 +338,8 @@ fn draw_card(ui: &mut Ui, file: &File, selected: bool, locale: Locale) -> Card {
 fn card(ui: &mut Ui, app: &mut App, file: &File) -> Option<Act> {
     let locale = app.state.locale;
     let selected = app.ui.selected_file == Some(file.id);
-    let Card { body, more } = draw_card(ui, file, selected, locale);
+    let shared = app.state.is_shared(file.id);
+    let Card { body, more } = draw_card(ui, file, (selected, shared), locale);
     let folder = is_folder(file);
     if body.clicked() || more.clicked() {
         app.ui.selected_file = Some(file.id);
@@ -842,6 +847,7 @@ mod tests {
             Act::Download,
             Act::Stream,
             Act::CopyLink,
+            Act::Share,
             Act::Rename,
             Act::Move,
         ] {
@@ -872,21 +878,38 @@ mod tests {
 
     #[test]
     fn the_second_line_says_the_size_and_the_day() {
-        assert_eq!(detail(&file(FileType::Video, "a")), "1.4 GB · 2024-05-01");
-        assert_eq!(detail(&file(FileType::Folder, "a")), "2024-05-01");
+        assert_eq!(
+            detail(&file(FileType::Video, "a"), false, Locale::En),
+            "1.4 GB · 2024-05-01"
+        );
+        assert_eq!(
+            detail(&file(FileType::Folder, "a"), false, Locale::En),
+            "2024-05-01"
+        );
         let mut odd = file(FileType::Video, "a");
         odd.created_at = Some("not a date".into());
-        assert_eq!(detail(&odd), "1.4 GB");
+        assert_eq!(detail(&odd, false, Locale::En), "1.4 GB");
         odd.created_at = None;
         odd.file_type = FileType::Folder;
-        assert_eq!(detail(&odd), "");
+        assert_eq!(detail(&odd, false, Locale::En), "");
+        // The shared mark is said after the rest, in the language of the app, and alone when there is nothing else.
+        let video = file(FileType::Video, "a");
+        assert_eq!(
+            detail(&video, true, Locale::En),
+            "1.4 GB · 2024-05-01 · Shared"
+        );
+        assert_eq!(
+            detail(&video, true, Locale::De),
+            "1.4 GB · 2024-05-01 · Geteilt"
+        );
+        assert_eq!(detail(&odd, true, Locale::Es), "Compartido");
     }
 
     fn card_text(f: &File, locale: Locale) -> (Rect, Vec<crate::ui::test_support::TextBox>) {
         let rect = std::cell::Cell::new(Rect::NOTHING);
         let boxes = text_boxes(|ui| {
             ui.set_width(NARROWEST);
-            rect.set(draw_card(ui, f, false, locale).body.rect);
+            rect.set(draw_card(ui, f, (false, false), locale).body.rect);
         });
         (rect.get(), boxes)
     }
@@ -918,7 +941,7 @@ mod tests {
             for kind in [FileType::Folder, FileType::Video] {
                 let f = file(kind, "Some.Movie.2024.mkv");
                 let (resting, hovered) = text_with_and_without_hover(|ui| {
-                    let card = draw_card(ui, &f, false, locale);
+                    let card = draw_card(ui, &f, (false, false), locale);
                     (card.body.rect, card.body.hovered())
                 });
                 assert_eq!(resting, hovered, "{locale:?} {kind:?}");
@@ -929,7 +952,12 @@ mod tests {
     #[test]
     fn a_row_and_its_actions_are_named_for_a_screen_reader() {
         let names = accessible_names(|ui| {
-            draw_card(ui, &file(FileType::Video, "a.mkv"), false, Locale::En);
+            draw_card(
+                ui,
+                &file(FileType::Video, "a.mkv"),
+                (false, false),
+                Locale::En,
+            );
         });
         let has = |role: &str, name: &str| names.iter().any(|(r, n)| r == role && n == name);
         assert!(

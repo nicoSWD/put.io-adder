@@ -11,8 +11,8 @@ use std::path::PathBuf;
 
 use putio_api::client::{FileListing, FileSearch};
 use putio_api::{
-    Account, ApiError, DeviceCode, Release, RssFeed, RssFeedSettings, Token, Transfer, ZipState,
-    ZipStatus,
+    Account, ApiError, DeviceCode, Friend, Release, RssFeed, RssFeedSettings, Share, ShareWith,
+    SharedFile, Token, Transfer, ZipState, ZipStatus,
 };
 
 use crate::update::UpdateAsset;
@@ -29,10 +29,12 @@ mod detail;
 mod feeds;
 mod files;
 mod refresh;
+mod shares;
 
 pub use detail::TransferDetail;
 pub use feeds::{FeedList, FeedSave};
 pub use files::{Crumb, FileAction, FilesView, Search};
+pub use shares::{Fetch, Problem, ShareAction, SharedFiles, SharingView};
 
 /// Monotonic milliseconds supplied by the shell.
 pub type Millis = u64;
@@ -117,6 +119,8 @@ enum Op {
     FileCreate,
     FileMove,
     FileDelete,
+    Share,
+    Unshare,
 }
 
 /// Where an in-place update has got to.
@@ -383,6 +387,36 @@ pub enum Event {
         id: i64,
         result: Result<(), ApiError>,
     },
+    /// The sharing card of a file was opened (named `name`) / closed.
+    ShareOpened {
+        file_id: i64,
+        name: String,
+    },
+    ShareClosed,
+    /// The answers to `Effect::FetchSharedWith` and `Effect::FetchFriends`.
+    SharedWithFetched {
+        file_id: i64,
+        result: Result<Vec<Share>, ApiError>,
+    },
+    FriendsFetched {
+        file_id: i64,
+        result: Result<Vec<Friend>, ApiError>,
+    },
+    /// Share the open card's file with these friends / end one of its shares.
+    ShareRequested(ShareWith),
+    ShareFinished {
+        op: OpId,
+        file_id: i64,
+        result: Result<(), ApiError>,
+    },
+    UnshareRequested(i64),
+    UnshareFinished {
+        op: OpId,
+        file_id: i64,
+        result: Result<(), ApiError>,
+    },
+    /// The answer to `Effect::ListShared`.
+    SharedListed(Result<Vec<SharedFile>, ApiError>),
     /// The details panel of a transfer was opened / closed.
     TransferDetailsOpened(i64),
     TransferDetailsClosed,
@@ -496,6 +530,24 @@ pub enum Effect {
         op: OpId,
         id: i64,
     },
+    FetchSharedWith {
+        file_id: i64,
+    },
+    FetchFriends {
+        file_id: i64,
+    },
+    ShareFile {
+        op: OpId,
+        file_id: i64,
+        with: ShareWith,
+    },
+    UnshareFile {
+        op: OpId,
+        file_id: i64,
+        share_id: i64,
+    },
+    /// Ask for the files the account shares (answered with `Event::SharedListed`).
+    ListShared,
     /// Fetch one transfer (answered with `Event::TransferDetailsFetched`).
     FetchTransfer {
         id: i64,
@@ -564,6 +616,10 @@ pub struct State {
     pub files: FilesView,
     /// The transfer whose details panel is open.
     pub detail: Option<TransferDetail>,
+    /// The open sharing card.
+    pub sharing: Option<SharingView>,
+    /// The files the account shares.
+    pub shared: SharedFiles,
     pub update: UpdateStatus,
     pub install: Install,
     pub install_target: InstallTarget,
@@ -592,6 +648,7 @@ pub struct State {
     file_action: FileAction,
     file_refresh: refresh::Refresh,
     detail_refresh: refresh::Refresh,
+    shared_refresh: refresh::Refresh,
     /// The transfer whose fetch is on its way.
     detail_requested: Option<i64>,
     /// The folder whose listing is on its way.
@@ -618,6 +675,8 @@ impl State {
             feeds: FeedList::default(),
             files: FilesView::default(),
             detail: None,
+            sharing: None,
+            shared: SharedFiles::default(),
             settings,
             locale,
             auth: Auth::Starting,
@@ -647,6 +706,7 @@ impl State {
             file_action: FileAction::Idle,
             file_refresh: refresh::Refresh::default(),
             detail_refresh: refresh::Refresh::default(),
+            shared_refresh: refresh::Refresh::default(),
             detail_requested: None,
             files_requested: None,
             failures: 0,
@@ -1116,6 +1176,27 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
         Event::FileDeleteFinished { op, id, result } => {
             files::delete_finished(state, now, (op, id), result, &mut fx);
         }
+        Event::ShareOpened { file_id, name } => shares::opened(state, file_id, &name, &mut fx),
+        Event::ShareClosed => shares::closed(state),
+        Event::SharedWithFetched { file_id, result } => {
+            shares::shares_fetched(state, file_id, result);
+        }
+        Event::FriendsFetched { file_id, result } => {
+            shares::friends_fetched(state, file_id, result);
+        }
+        Event::ShareRequested(with) => shares::share_requested(state, with, &mut fx),
+        Event::ShareFinished {
+            op,
+            file_id,
+            result,
+        } => shares::share_finished(state, (op, file_id), result, &mut fx),
+        Event::UnshareRequested(share_id) => shares::unshare_requested(state, share_id, &mut fx),
+        Event::UnshareFinished {
+            op,
+            file_id,
+            result,
+        } => shares::unshare_finished(state, (op, file_id), result, &mut fx),
+        Event::SharedListed(result) => shares::listed(state, now, result),
         Event::TransferDetailsOpened(id) => detail::opened(state, now, id),
         Event::TransferDetailsClosed => detail::closed(state),
         Event::TransferDetailsFetched { id, result } => {
@@ -1295,6 +1376,7 @@ fn sign_out(state: &mut State, fx: &mut Vec<Effect>) {
     feeds::reset(state);
     files::reset(state);
     detail::reset(state);
+    shares::reset(state);
     // What was running for this account has no one to report to. (An update is not tied to the account.)
     state.ops.retain(|_, kind| *kind == Op::Update);
     state.busy = u32::try_from(state.ops.len()).unwrap_or(u32::MAX);
@@ -1718,6 +1800,7 @@ fn maybe_poll(state: &mut State, now: Millis, fx: &mut Vec<Effect>) {
     feeds::maybe_load(state, now, fx);
     files::maybe_load(state, now, fx);
     detail::maybe_load(state, now, fx);
+    shares::maybe_load(state, now, fx);
     if state.is_signed_in()
         && !state.poll_in_flight
         && state.next_poll_at.is_some_and(|at| now >= at)
