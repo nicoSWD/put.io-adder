@@ -44,6 +44,9 @@ pub(crate) enum Mode {
     Login,
     /// Preferences: a fixed height.
     Prefs,
+    /// The "..." menu is open over the collapsed window, which is too short to hold it. The flag says
+    /// whether the menu has the new-version row.
+    Menu { update_row: bool },
     /// The transfers list: the user's height, which they can change.
     List,
 }
@@ -54,6 +57,7 @@ impl Mode {
             Self::Collapsed => COLLAPSED_HEIGHT,
             Self::Login => LOGIN_HEIGHT,
             Self::Prefs => PREFS_HEIGHT,
+            Self::Menu { update_row } => crate::ui::menu::window_height(update_row),
             Self::List => list_height,
         }
     }
@@ -433,8 +437,38 @@ mod tests {
     }
 
     #[test]
+    fn the_collapsed_window_grows_to_hold_the_menu_and_shrinks_back() {
+        let start = Instant::now();
+        let mut w = window(Mode::Collapsed);
+        for update_row in [false, true] {
+            let menu = Mode::Menu { update_row };
+            let held = crate::ui::menu::window_height(update_row);
+            assert!(
+                held > COLLAPSED_HEIGHT,
+                "the menu does not fit the collapsed window"
+            );
+            w.step(menu, Some(vec2(WIDTH, COLLAPSED_HEIGHT)), start);
+            let open = w.step(menu, None, at(start, 400));
+            assert_eq!(inner_sizes(&open).last().map(|s| s.y), Some(held));
+            w.step(Mode::Collapsed, Some(vec2(WIDTH, held)), at(start, 1_000));
+            let closed = w.step(Mode::Collapsed, None, at(start, 1_400));
+            assert_eq!(
+                inner_sizes(&closed).last().map(|s| s.y),
+                Some(COLLAPSED_HEIGHT)
+            );
+        }
+        // The menu needs less room than the shortest the list can be, so opening it there changes nothing.
+        assert!(crate::ui::menu::window_height(true) <= MIN_LIST_HEIGHT);
+    }
+
+    #[test]
     fn only_the_list_can_be_resized_in_height() {
-        for mode in [Mode::Collapsed, Mode::Login, Mode::Prefs] {
+        for mode in [
+            Mode::Collapsed,
+            Mode::Login,
+            Mode::Prefs,
+            Mode::Menu { update_row: true },
+        ] {
             let (min, max) = mode.limits(700.0);
             assert_eq!(min.y, max.y, "{mode:?} has one height");
             assert!(max.x > min.x, "{mode:?} can still be made wider");
