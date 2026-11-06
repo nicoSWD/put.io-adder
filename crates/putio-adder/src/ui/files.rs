@@ -44,6 +44,14 @@ pub(crate) fn show(ui: &mut Ui, app: &mut App) {
     let ctx = ui.ctx().clone();
     toolbar(ui, app, &ctx);
     ui.add_space(4.0);
+    let uploads = app.state.uploads.clone();
+    match super::uploads::strip(ui, &uploads, app.state.locale) {
+        Some(super::uploads::Act::Cancel(op)) => {
+            app.dispatch(&ctx, Event::UploadCancelRequested(op));
+        }
+        Some(super::uploads::Act::Dismiss(op)) => app.dispatch(&ctx, Event::UploadDismissed(op)),
+        None => {}
+    }
     let rows = rows_to_show(app);
     let Some(rows) = rows else {
         state_message(ui, app);
@@ -502,7 +510,7 @@ fn count_f32(count: usize) -> f32 {
     f32::from(u16::try_from(count).unwrap_or(u16::MAX))
 }
 
-fn crumb_name(trail: &[Crumb], index: usize, locale: Locale) -> String {
+pub(crate) fn crumb_name(trail: &[Crumb], index: usize, locale: Locale) -> String {
     match trail.get(index) {
         Some(crumb) if index > 0 && !crumb.name.trim().is_empty() => crumb.name.clone(),
         Some(_) if index > 0 => "…".to_owned(),
@@ -855,9 +863,27 @@ fn state_message(ui: &mut Ui, app: &mut App) {
 // ---- the button of the tab bar ----------------------------------------------------------------
 
 /// "New folder", at the right of the tab bar.
-pub(crate) fn new_folder_button(ui: &mut Ui, app: &mut App) {
-    let label = Msg::FilesNewFolder.text(app.state.locale);
-    if widgets::accent_pill(ui, &label).clicked() {
+/// The buttons at the right of the tab bar while the Files tab is open: *Upload* (the accent one, since
+/// putting files on put.io is what people come to the tab for) and, to its left, *New folder*.
+pub(crate) fn toolbar_buttons(ui: &mut Ui, app: &mut App) {
+    let locale = app.state.locale;
+    // Right to left: the one at the edge comes first.
+    let upload = widgets::pill(
+        ui,
+        &Msg::UploadButton.text(locale),
+        super::icons::Glyph::ArrowUp,
+        true,
+    );
+    if upload.clicked() {
+        super::uploads::choose_files(&ui.ctx().clone(), app);
+    }
+    let folder = widgets::pill(
+        ui,
+        &Msg::FilesNewFolder.text(locale),
+        super::icons::Glyph::Plus,
+        false,
+    );
+    if folder.clicked() {
         super::file_dialogs::open_new_folder(app, ui.ctx());
     }
 }

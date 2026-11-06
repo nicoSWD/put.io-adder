@@ -30,7 +30,55 @@ pub enum Body {
         content_type: String,
         bytes: Vec<u8>,
     },
+    /// A body with a file in the middle, read from disk while it is sent (so a big file is never held in
+    /// memory).
+    File(FileBody),
 }
+
+/// Called with how many bytes of the file have been sent.
+pub type ProgressFn = std::sync::Arc<dyn Fn(u64) + Send + Sync>;
+
+/// A body made of `head`, then the first `len` bytes of the file at `path`, then `tail`: a multipart upload
+/// with one file part.
+#[derive(Clone)]
+pub struct FileBody {
+    pub content_type: String,
+    pub head: Vec<u8>,
+    pub path: std::path::PathBuf,
+    /// How long the file was when the request was made. A file that is not that long when it is read
+    /// (it changed meanwhile) is an error, not a short upload.
+    pub len: u64,
+    pub tail: Vec<u8>,
+    /// Told how far the sending has got, now and then.
+    pub progress: Option<ProgressFn>,
+    /// Set to stop sending: the request then fails.
+    pub cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+}
+
+impl std::fmt::Debug for FileBody {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FileBody")
+            .field("content_type", &self.content_type)
+            .field("head", &self.head.len())
+            .field("path", &self.path)
+            .field("len", &self.len)
+            .field("tail", &self.tail.len())
+            .finish_non_exhaustive()
+    }
+}
+
+/// What is sent decides equality; the callbacks do not.
+impl PartialEq for FileBody {
+    fn eq(&self, other: &Self) -> bool {
+        self.content_type == other.content_type
+            && self.head == other.head
+            && self.path == other.path
+            && self.len == other.len
+            && self.tail == other.tail
+    }
+}
+
+impl Eq for FileBody {}
 
 #[derive(Debug, Clone)]
 pub struct Request {
@@ -69,6 +117,10 @@ pub enum TransportError {
     Network(String),
     #[error("response exceeds the size limit")]
     TooLarge,
+    /// The file being uploaded could not be read, or changed while it was read: nothing to do with the
+    /// network.
+    #[error("{0}")]
+    File(String),
 }
 
 pub trait Transport: Send + Sync {

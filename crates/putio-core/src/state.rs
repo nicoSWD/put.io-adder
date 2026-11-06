@@ -33,6 +33,7 @@ mod files;
 mod friends;
 mod refresh;
 mod shares;
+mod uploads;
 
 pub use detail::TransferDetail;
 pub use extract::{PasswordAsk, Unpacking};
@@ -40,6 +41,7 @@ pub use feeds::{FeedList, FeedSave};
 pub use files::{Crumb, FileAction, FilesView, Search};
 pub use friends::{FriendAction, FriendsView};
 pub use shares::{Fetch, Problem, ShareAction, SharedFiles, SharingView};
+pub use uploads::{Dropped, DroppedKind, MAX_PER_DROP, Upload, UploadFailure};
 
 /// Monotonic milliseconds supplied by the shell.
 pub type Millis = u64;
@@ -128,6 +130,7 @@ enum Op {
     Unshare,
     Extract,
     Friend,
+    UploadFile,
 }
 
 /// Where an in-place update has got to.
@@ -395,6 +398,21 @@ pub enum Event {
         id: i64,
         result: Result<(), ApiError>,
     },
+    /// Files were dropped on the window: upload them into the folder the Files tab shows.
+    FilesDropped(Vec<Dropped>),
+    /// How many bytes of an upload have gone.
+    UploadProgress {
+        op: OpId,
+        sent: u64,
+    },
+    UploadFinished {
+        op: OpId,
+        result: Result<(), UploadFailure>,
+    },
+    /// Stop an upload (or take it out of the queue).
+    UploadCancelRequested(OpId),
+    /// The row of an upload that failed was put away.
+    UploadDismissed(OpId),
     /// The friends card was opened / closed.
     FriendsCardOpened,
     FriendsCardClosed,
@@ -568,6 +586,19 @@ pub enum Effect {
         op: OpId,
         id: i64,
     },
+    /// Upload the file at `path` (`size` bytes long) as `name` into folder `parent`. Answered with
+    /// `UploadProgress` now and then and then `UploadFinished`.
+    UploadFile {
+        op: OpId,
+        path: std::path::PathBuf,
+        name: String,
+        size: u64,
+        parent: i64,
+    },
+    /// Stop that upload.
+    CancelUpload {
+        op: OpId,
+    },
     FetchFriendList,
     FetchFriendRequests,
     ChangeFriend {
@@ -668,6 +699,8 @@ pub struct State {
     pub files: FilesView,
     /// The transfer whose details panel is open.
     pub detail: Option<TransferDetail>,
+    /// Files being uploaded or waiting for their turn, in the order they were dropped.
+    pub uploads: Vec<Upload>,
     /// The open friends card.
     pub friends_card: Option<FriendsView>,
     /// The open sharing card.
@@ -733,6 +766,7 @@ impl State {
             feeds: FeedList::default(),
             files: FilesView::default(),
             detail: None,
+            uploads: Vec::new(),
             friends_card: None,
             sharing: None,
             shared: SharedFiles::default(),
@@ -877,6 +911,9 @@ impl State {
                 seconds: retry_after.as_secs(),
             }),
             ApiError::Api(failure) if failure.status >= 500 => self.text(&Msg::ServerError),
+            // Payment required: put.io's way of saying the account has no room (or no plan) left, whatever
+            // the body says (an upload's answer often has none).
+            ApiError::Api(failure) if failure.status == 402 => self.text(&Msg::PaymentRequired),
             ApiError::Api(failure) => failure
                 .message
                 .chars()
@@ -884,6 +921,11 @@ impl State {
                 .take(MAX_REASON_CHARS)
                 .collect(),
             ApiError::InvalidInput(why) => (*why).to_owned(),
+            ApiError::File(why) => why
+                .chars()
+                .filter(|c| !c.is_control())
+                .take(MAX_REASON_CHARS)
+                .collect(),
             ApiError::Unauthorized | ApiError::Decode(_) | ApiError::TooLarge => {
                 self.text(&Msg::ServerError)
             }
@@ -1244,6 +1286,11 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
         Event::FileDeleteFinished { op, id, result } => {
             files::delete_finished(state, now, (op, id), result, &mut fx);
         }
+        Event::FilesDropped(items) => uploads::dropped(state, now, items, &mut fx),
+        Event::UploadProgress { op, sent } => uploads::progress(state, op, sent),
+        Event::UploadFinished { op, result } => uploads::finished(state, now, op, result),
+        Event::UploadCancelRequested(op) => uploads::cancel_requested(state, op, &mut fx),
+        Event::UploadDismissed(op) => uploads::dismissed(state, op),
         Event::FriendsCardOpened => friends::opened(state, &mut fx),
         Event::FriendsCardClosed => friends::closed(state),
         Event::FriendListFetched(result) => friends::list_fetched(state, result),
@@ -1468,6 +1515,7 @@ fn sign_out(state: &mut State, fx: &mut Vec<Effect>) {
     shares::reset(state);
     extract::reset(state);
     friends::reset(state);
+    uploads::reset(state, fx);
     // What was running for this account has no one to report to. (An update is not tied to the account.)
     state.ops.retain(|_, kind| *kind == Op::Update);
     state.busy = u32::try_from(state.ops.len()).unwrap_or(u32::MAX);

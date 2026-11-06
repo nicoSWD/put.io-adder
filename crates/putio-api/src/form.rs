@@ -125,9 +125,99 @@ pub fn multipart(parts: &[Part<'_>]) -> Multipart {
     }
 }
 
+/// The two ends of a multipart body whose last part is a file that is not in memory: what comes before the
+/// file's bytes and what comes after them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Streamed {
+    pub content_type: String,
+    pub head: Vec<u8>,
+    pub tail: Vec<u8>,
+}
+
+/// A boundary nobody can guess or collide with by accident: random per process and per call. (A file's
+/// bytes are not searched for it, so it has to be long enough that a match is not a thing that happens.)
+fn random_boundary() -> String {
+    use std::hash::{BuildHasher, Hasher};
+    let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
+    hasher.write_u64(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| u64::try_from(d.as_nanos()).unwrap_or(u64::MAX)),
+    );
+    let one = hasher.finish();
+    let two = std::collections::hash_map::RandomState::new()
+        .build_hasher()
+        .finish();
+    format!("----putio-adder-{one:016x}{two:016x}")
+}
+
+/// `fields` as text parts, then a file part named `name` for `filename`: the head and tail to put around
+/// the file's bytes.
+#[must_use]
+pub fn streamed(
+    fields: &[(&str, &str)],
+    name: &str,
+    filename: &str,
+    content_type: &str,
+) -> Streamed {
+    let boundary = random_boundary();
+    let mut head = Vec::new();
+    for (field, value) in fields {
+        head.extend_from_slice(
+            format!(
+                "--{boundary}\r\nContent-Disposition: form-data; name=\"{}\"\r\n\r\n{value}\r\n",
+                header_safe(field)
+            )
+            .as_bytes(),
+        );
+    }
+    head.extend_from_slice(
+        format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"{}\"; filename=\"{}\"\r\nContent-Type: {}\r\n\r\n",
+            header_safe(name),
+            header_safe(filename),
+            header_safe(content_type),
+        )
+        .as_bytes(),
+    );
+    Streamed {
+        content_type: format!("multipart/form-data; boundary={boundary}"),
+        head,
+        tail: format!("\r\n--{boundary}--\r\n").into_bytes(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_streamed_body_has_the_same_shape_as_a_built_one() {
+        let s = streamed(
+            &[("parent_id", "7")],
+            "file",
+            "a \"b\".bin",
+            "application/octet-stream",
+        );
+        let boundary = s
+            .content_type
+            .strip_prefix("multipart/form-data; boundary=")
+            .unwrap();
+        let whole = [s.head.as_slice(), b"DATA", s.tail.as_slice()].concat();
+        let text = String::from_utf8(whole).unwrap();
+        assert_eq!(
+            text,
+            format!(
+                "--{boundary}\r\nContent-Disposition: form-data; name=\"parent_id\"\r\n\r\n7\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a _b_.bin\"\r\nContent-Type: application/octet-stream\r\n\r\nDATA\r\n--{boundary}--\r\n"
+            )
+        );
+        // A name cannot break out of its quotes, and two bodies do not share a boundary.
+        assert!(boundary.len() >= 40);
+        assert_ne!(
+            streamed(&[], "f", "x", "t").content_type,
+            streamed(&[], "f", "x", "t").content_type
+        );
+    }
 
     #[test]
     fn percent_encoding_keeps_only_unreserved() {

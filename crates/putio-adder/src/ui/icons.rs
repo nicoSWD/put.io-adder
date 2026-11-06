@@ -33,6 +33,7 @@ pub(crate) enum Glyph {
     Check,
     Cross,
     ArrowDown,
+    ArrowUp,
     /// The feed symbol: a dot and two arcs.
     Rss,
     Plus,
@@ -54,6 +55,11 @@ pub(crate) fn glyph(painter: &Painter, center: Pos2, glyph: Glyph, scale: f32, c
             painter.line_segment([at(0.0, -4.5), at(0.0, 3.5)], stroke);
             painter.line_segment([at(-3.8, 0.0), at(0.0, 4.0)], stroke);
             painter.line_segment([at(3.8, 0.0), at(0.0, 4.0)], stroke);
+        }
+        Glyph::ArrowUp => {
+            painter.line_segment([at(0.0, 4.5), at(0.0, -3.5)], stroke);
+            painter.line_segment([at(-3.8, 0.0), at(0.0, -4.0)], stroke);
+            painter.line_segment([at(3.8, 0.0), at(0.0, -4.0)], stroke);
         }
         Glyph::Rss => {
             let corner = at(-3.6, 3.6);

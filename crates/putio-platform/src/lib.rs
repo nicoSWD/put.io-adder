@@ -21,6 +21,7 @@
 
 pub mod app_icon;
 pub mod badge;
+pub mod file_dialog;
 pub mod handler;
 pub mod ipc;
 pub mod notify;

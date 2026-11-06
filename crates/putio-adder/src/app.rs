@@ -1,5 +1,7 @@
 //! The eframe application: glue between the pure core state machine, the worker thread and the OS.
 
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
@@ -106,6 +108,8 @@ pub(crate) struct App {
     secret_problems: Receiver<SecretProblem>,
     /// The saved token, on its way from the keychain thread; `None` once it has arrived.
     pending_token: Option<Receiver<Option<Token>>>,
+    /// The flags that stop the uploads in flight, by operation.
+    upload_cancels: HashMap<putio_core::state::OpId, Arc<AtomicBool>>,
     settings_file: Option<SettingsFile>,
     notifier: Arc<dyn Notifier>,
     opener: SystemOpener,
@@ -188,6 +192,7 @@ impl App {
             keychain,
             secret_problems,
             pending_token: demo.is_none().then_some(pending_token),
+            upload_cancels: HashMap::new(),
             settings_file,
             notifier,
             opener: SystemOpener,
@@ -301,6 +306,7 @@ impl App {
         self.start_demo_feeds(ctx, view);
         self.start_demo_files(ctx, view);
         ui::friends_card::demo(self, ctx, view);
+        ui::uploads::demo(self, ctx, view);
         let open = match view {
             "details" => Some(6),
             "details-failed" => Some(7),
@@ -497,6 +503,9 @@ impl App {
     /// Feed one event to the core and carry out what it asks for.
     pub(crate) fn dispatch(&mut self, ctx: &egui::Context, event: Event) {
         let now = self.now();
+        if let Event::UploadFinished { op, .. } = &event {
+            self.upload_cancels.remove(op);
+        }
         let effects = update(&mut self.state, now, event);
         for effect in effects {
             self.run(ctx, effect);
@@ -516,7 +525,37 @@ impl App {
         self.workers.clone()
     }
 
-    /// The effects of the sharing card and of the marks in the Files list: each is one job.
+    /// Start an upload (with the flag that can stop it) or stop one.
+    fn run_upload(&mut self, effect: Effect) {
+        match effect {
+            Effect::UploadFile {
+                op,
+                path,
+                name,
+                parent,
+                ..
+            } => {
+                let cancel = Arc::new(AtomicBool::new(false));
+                self.upload_cancels.insert(op, Arc::clone(&cancel));
+                self.send(Job::UploadFile {
+                    op,
+                    path,
+                    name,
+                    parent,
+                    cancel,
+                });
+            }
+            Effect::CancelUpload { op } => {
+                if let Some(flag) = self.upload_cancels.get(&op) {
+                    flag.store(true, Ordering::Relaxed);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// The effects of the sharing and friends cards, the marks in the Files list and the details panel: each
+    /// is one job.
     fn send_sharing(&self, effect: Effect) {
         let job = match effect {
             Effect::FetchFriendList => Job::FetchFriendList,
@@ -535,6 +574,7 @@ impl App {
                 share_id,
             },
             Effect::ListShared => Job::ListShared,
+            Effect::FetchTransfer { id } => Job::FetchTransfer { id },
             _ => return,
         };
         self.send(job);
@@ -586,6 +626,7 @@ impl App {
             }
             Effect::DeleteFeed { op, id } => self.send(Job::DeleteFeed { op, id }),
             Effect::ListFiles { parent } => self.send(Job::ListFiles { parent }),
+            Effect::UploadFile { .. } | Effect::CancelUpload { .. } => self.run_upload(effect),
             Effect::FetchFriendList
             | Effect::FetchFriendRequests
             | Effect::ChangeFriend { .. }
@@ -593,8 +634,8 @@ impl App {
             | Effect::FetchFriends { .. }
             | Effect::ShareFile { .. }
             | Effect::UnshareFile { .. }
-            | Effect::ListShared => self.send_sharing(effect),
-            Effect::FetchTransfer { id } => self.send(Job::FetchTransfer { id }),
+            | Effect::ListShared
+            | Effect::FetchTransfer { .. } => self.send_sharing(effect),
             Effect::SearchFiles { query } => self.send(Job::SearchFiles { query }),
             Effect::RenameFile { op, id, name } => self.send(Job::RenameFile { op, id, name }),
             Effect::CreateFolder { op, parent, name } => {

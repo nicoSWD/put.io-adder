@@ -34,4 +34,4 @@ pub use models::{
     Transfer, TransferKind, TransferStatus, UploadOutcome, ZipState, ZipStatus,
 };
 pub use token::Token;
-pub use transport::{Body, Host, Method, Request, Response, Transport, TransportError};
+pub use transport::{Body, FileBody, Host, Method, Request, Response, Transport, TransportError};

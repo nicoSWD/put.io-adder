@@ -15,17 +15,18 @@
 
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use putio_api::client::FileListing;
+use putio_api::client::{FileListing, FileUpload};
 use putio_api::{
     ApiError, Client, FileType, FriendChange, RssFeedSettings, ShareWith, Token, Transport,
     UploadOutcome, UreqTransport,
 };
 use putio_core::secret::Secret;
-use putio_core::state::{Event, OpId, Prepared, StreamFailure};
+use putio_core::state::{Event, OpId, Prepared, StreamFailure, UploadFailure};
 use putio_core::update::UpdateAsset;
 use putio_platform::handler;
 use putio_platform::player::{PlayError, PlayerLauncher, VlcLauncher};
@@ -166,6 +167,16 @@ pub(crate) enum Job {
         op: OpId,
         id: i64,
     },
+    /// Upload a file from disk into a folder. Has its own lane: a big file must not hold up the
+    /// torrents, the stream to VLC or the update behind it.
+    UploadFile {
+        op: OpId,
+        path: PathBuf,
+        name: String,
+        parent: i64,
+        /// Set to stop it.
+        cancel: Arc<AtomicBool>,
+    },
     ExtractFile {
         op: OpId,
         id: i64,
@@ -186,6 +197,10 @@ impl Job {
                 | Self::RegisterDefaultHandler
                 | Self::LatestRelease
         )
+    }
+
+    fn is_upload(&self) -> bool {
+        matches!(self, Self::UploadFile { .. })
     }
 
     fn is_heavy(&self) -> bool {
@@ -243,6 +258,7 @@ struct Session {
 pub(crate) struct Workers {
     interactive: Sender<Queued>,
     heavy: Sender<Queued>,
+    uploads: Sender<Queued>,
     session: Arc<Mutex<Session>>,
 }
 
@@ -268,6 +284,8 @@ impl Workers {
         Ok(Self {
             interactive: lane("interactive", INTERACTIVE_THREADS)?,
             heavy: lane("heavy", HEAVY_THREADS)?,
+            // One at a time, in the order they were dropped.
+            uploads: lane("uploads", 1)?,
             session: Arc::new(Mutex::new(Session::default())),
         })
     }
@@ -277,9 +295,11 @@ impl Workers {
     pub(crate) fn detached() -> Self {
         let (interactive, _) = mpsc::channel();
         let (heavy, _) = mpsc::channel();
+        let (uploads, _) = mpsc::channel();
         Self {
             interactive,
             heavy,
+            uploads,
             session: Arc::new(Mutex::new(Session::default())),
         }
     }
@@ -306,7 +326,9 @@ impl Workers {
             Ok(session) => (session.number, session.token.clone()),
             Err(_) => return,
         };
-        let lane = if job.is_heavy() {
+        let lane = if job.is_upload() {
+            &self.uploads
+        } else if job.is_heavy() {
             &self.heavy
         } else {
             &self.interactive
@@ -354,6 +376,30 @@ fn run(
                 op,
                 result: prepare_update(op, &asset, out, ctx),
             }
+        } else if let Job::UploadFile {
+            op,
+            path,
+            name,
+            parent,
+            cancel,
+        } = job
+        {
+            let client = match token {
+                Some(token) => Client::with_token(Arc::clone(transport), token),
+                None => Client::new(Arc::clone(transport)),
+            };
+            let (out, ctx) = (out.clone(), ctx.clone());
+            let report: Arc<dyn Fn(u64) + Send + Sync> = Arc::new(move |sent| {
+                let _ = out.send(Delivery {
+                    session,
+                    msg: WorkerMsg::Core(Event::UploadProgress { op, sent }),
+                });
+                ctx.request_repaint();
+            });
+            WorkerMsg::Core(Event::UploadFinished {
+                op,
+                result: upload_file(&client, &path, name, parent, &cancel, report),
+            })
         } else {
             let client = match token {
                 Some(token) => Client::with_token(Arc::clone(transport), token),
@@ -365,6 +411,51 @@ fn run(
             return; // the UI is gone
         }
         ctx.request_repaint();
+    }
+}
+
+/// Upload one file, telling `report` how many bytes have gone (at most a thousand times: a progress bar
+/// cannot show finer than that, and a big file would otherwise send the UI a message every few
+/// kilobytes).
+fn upload_file<T: Transport>(
+    client: &Client<T>,
+    path: &std::path::Path,
+    name: String,
+    parent: i64,
+    cancel: &Arc<AtomicBool>,
+    report: Arc<dyn Fn(u64) + Send + Sync>,
+) -> Result<(), UploadFailure> {
+    if cancel.load(Ordering::Relaxed) {
+        return Err(UploadFailure::Cancelled);
+    }
+    let local =
+        |why: &dyn std::fmt::Display| UploadFailure::Local(format!("cannot read the file: {why}"));
+    let meta = std::fs::metadata(path).map_err(|error| local(&error))?;
+    if !meta.is_file() {
+        return Err(UploadFailure::Local("not a regular file".into()));
+    }
+    let len = meta.len();
+    // Say how far it has got only when the bar would move.
+    let last = AtomicU64::new(0);
+    let progress: putio_api::transport::ProgressFn = Arc::new(move |sent| {
+        let step = sent.saturating_mul(1000) / len.max(1);
+        if last.swap(step, Ordering::Relaxed) != step {
+            report(sent);
+        }
+    });
+    let result = client.upload_file(FileUpload {
+        path: path.to_path_buf(),
+        name,
+        len,
+        parent_id: parent,
+        progress: Some(progress),
+        cancel: Some(Arc::clone(cancel)),
+    });
+    match result {
+        Ok(_) => Ok(()),
+        Err(_) if cancel.load(Ordering::Relaxed) => Err(UploadFailure::Cancelled),
+        Err(ApiError::File(why)) => Err(UploadFailure::Local(why)),
+        Err(error) => Err(UploadFailure::Api(error)),
     }
 }
 
@@ -484,6 +575,12 @@ fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
             result: stream(client, &VlcLauncher, file_id),
         }),
         // Handled in `run`, which has the channel progress is reported on.
+        Job::UploadFile { op, .. } => WorkerMsg::Core(Event::UploadFinished {
+            op,
+            result: Err(UploadFailure::Local(
+                "internal error: the upload ran without a progress channel".to_owned(),
+            )),
+        }),
         Job::PrepareUpdate { op, .. } => WorkerMsg::UpdatePrepared {
             op,
             result: Err("internal error: the update job ran without a progress channel".to_owned()),
@@ -969,9 +1066,11 @@ mod tests {
     fn workers_without_threads() -> (Workers, Receiver<Queued>) {
         let (interactive, queue) = mpsc::channel();
         let (heavy, _) = mpsc::channel();
+        let (uploads, _) = mpsc::channel();
         let workers = Workers {
             interactive,
             heavy,
+            uploads,
             session: Arc::new(Mutex::new(Session::default())),
         };
         (workers, queue)
@@ -1251,6 +1350,137 @@ mod tests {
         ] {
             assert!(job.is_session_bound(), "{job:?}");
         }
+    }
+
+    /// A file in the temp folder that is removed when dropped.
+    struct TempFile(std::path::PathBuf);
+
+    impl TempFile {
+        fn new(name: &str, bytes: &[u8]) -> Self {
+            let path =
+                std::env::temp_dir().join(format!("putio-adder-{}-{name}", std::process::id()));
+            std::fs::write(&path, bytes).unwrap();
+            Self(path)
+        }
+    }
+
+    impl Drop for TempFile {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    fn quiet() -> Arc<dyn Fn(u64) + Send + Sync> {
+        Arc::new(|_| {})
+    }
+
+    #[test]
+    fn a_file_is_uploaded_with_the_length_it_has_now_and_the_answer_says_how_it_went() {
+        let file = TempFile::new("up.bin", b"hello world");
+        let fake = FakeTransport::new();
+        fake.push_json(200, r#"{"status":"OK","file":{"id":9,"name":"up.bin"}}"#);
+        fake.push_json(500, r#"{"status":"ERROR","error_message":"broken"}"#);
+        let cancel = Arc::new(AtomicBool::new(false));
+        let c = client(&fake);
+        assert_eq!(
+            upload_file(&c, &file.0, "up.bin".into(), 4, &cancel, quiet()),
+            Ok(())
+        );
+        let request = fake.last_request().unwrap();
+        let putio_api::Body::File(body) = request.body else {
+            panic!("a file body")
+        };
+        assert_eq!((body.len, body.path.clone()), (11, file.0.clone()));
+        assert!(
+            String::from_utf8(body.head)
+                .unwrap()
+                .contains("name=\"parent_id\"\r\n\r\n4\r\n")
+        );
+        // What put.io refuses comes back as its own error.
+        let error = upload_file(&c, &file.0, "up.bin".into(), 4, &cancel, quiet()).unwrap_err();
+        assert!(matches!(error, UploadFailure::Api(ApiError::Api(f)) if f.status == 500));
+    }
+
+    #[test]
+    fn a_missing_file_a_folder_and_a_cancel_before_the_start_send_nothing() {
+        let fake = FakeTransport::new();
+        let c = client(&fake);
+        let cancel = Arc::new(AtomicBool::new(false));
+        let gone = std::env::temp_dir().join("putio-adder-no-such-file");
+        assert!(matches!(
+            upload_file(&c, &gone, "x".into(), 0, &cancel, quiet()),
+            Err(UploadFailure::Local(why)) if why.contains("cannot read")
+        ));
+        assert!(matches!(
+            upload_file(&c, &std::env::temp_dir(), "x".into(), 0, &cancel, quiet()),
+            Err(UploadFailure::Local(why)) if why.contains("regular")
+        ));
+        let file = TempFile::new("cancelled.bin", b"x");
+        cancel.store(true, Ordering::Relaxed);
+        assert_eq!(
+            upload_file(&c, &file.0, "x".into(), 0, &cancel, quiet()),
+            Err(UploadFailure::Cancelled)
+        );
+        assert_eq!(fake.requests().len(), 0);
+    }
+
+    /// A transport that is told to cancel while the request is on its way, and fails because of it.
+    struct CancelsInFlight(Arc<AtomicBool>);
+
+    impl Transport for CancelsInFlight {
+        fn execute(
+            &self,
+            _: &putio_api::Request,
+        ) -> Result<putio_api::Response, putio_api::TransportError> {
+            self.0.store(true, Ordering::Relaxed);
+            Err(putio_api::TransportError::Network("cancelled".into()))
+        }
+    }
+
+    #[test]
+    fn an_upload_that_fails_because_it_was_cancelled_is_a_cancel_and_not_a_failure() {
+        let file = TempFile::new("late.bin", b"abc");
+        let cancel = Arc::new(AtomicBool::new(false));
+        let c = Client::with_token(
+            CancelsInFlight(Arc::clone(&cancel)),
+            putio_api::Token::new("tok-123").unwrap(),
+        );
+        assert_eq!(
+            upload_file(&c, &file.0, "x".into(), 0, &cancel, quiet()),
+            Err(UploadFailure::Cancelled)
+        );
+        // Without the flag the same failure is the network's.
+        let other = Arc::new(AtomicBool::new(false));
+        let c = Client::with_token(
+            CancelsInFlight(Arc::new(AtomicBool::new(false))),
+            putio_api::Token::new("tok-123").unwrap(),
+        );
+        assert!(matches!(
+            upload_file(&c, &file.0, "x".into(), 0, &other, quiet()),
+            Err(UploadFailure::Api(ApiError::Network(_)))
+        ));
+    }
+
+    #[test]
+    fn uploads_have_their_own_lane_so_a_big_file_holds_nothing_else_up() {
+        let upload = Job::UploadFile {
+            op: OpId(1),
+            path: "x".into(),
+            name: "x".into(),
+            parent: 0,
+            cancel: Arc::new(AtomicBool::new(false)),
+        };
+        assert!(upload.is_upload() && !upload.is_heavy());
+        assert!(upload.is_session_bound());
+        assert!(
+            !Job::UploadTorrent {
+                op: OpId(1),
+                path: "x".into(),
+                parent: None,
+                trash_after: false,
+            }
+            .is_upload()
+        );
     }
 
     #[test]

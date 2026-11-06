@@ -254,6 +254,7 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     ok(r#"{"friends":[{"id":1,"name":"jane"}]}"#); // friends
     ok(r#"{"status":"OK"}"#); // share_file
     ok(r#"{"status":"OK"}"#); // unshare_file
+    ok(r#"{"status":"OK","file":{"id":9,"name":"a.bin"}}"#); // upload_file
     ok(r#"{"friends":[{"id":1,"name":"jane"}]}"#); // friend_requests
     for _ in 0..4 {
         ok(r#"{"status":"OK"}"#); // request, approve, deny, unfriend
@@ -311,6 +312,16 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
         .share_file(1, &crate::models::ShareWith::Friends(vec!["jane".into()]))
         .unwrap();
     client.unshare_file(1, &[3]).unwrap();
+    client
+        .upload_file(crate::client::FileUpload {
+            path: "/tmp/a.bin".into(),
+            name: "a.bin".into(),
+            len: 3,
+            parent_id: 1,
+            progress: None,
+            cancel: None,
+        })
+        .unwrap();
     client.friend_requests().unwrap();
     for change in [
         crate::models::FriendChange::Request("someuser".into()),
@@ -328,7 +339,7 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     client.delete_rss_feed(5).unwrap();
 
     let requests: Vec<Request> = fake.requests();
-    assert_eq!(requests.len(), 39);
+    assert_eq!(requests.len(), 40);
     for request in &requests {
         let path = template(&request.path);
         let method = match request.method {
