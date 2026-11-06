@@ -420,6 +420,41 @@ pub(crate) fn accent_pill(ui: &mut egui::Ui, label: &str) -> Response {
     response
 }
 
+/// How a [`status_pill`] looks: its fill, its text colour and, when it has one, its edge.
+pub(crate) type PillLook = (Color32, Color32, Option<Color32>);
+
+/// A small rounded pill, vertically centred in `card`, whose right end is `inset` from the card's right
+/// edge: the state of a row ("Paused", "Extracting"). Returns where the pill starts, so the row's text can
+/// stop before it.
+pub(crate) fn status_pill(
+    painter: &egui::Painter,
+    card: Rect,
+    inset: f32,
+    text: &str,
+    (fill, ink, edge): PillLook,
+) -> f32 {
+    let galley = painter.layout_no_wrap(text.to_owned(), theme::bold(10.5), ink);
+    let size = Vec2::new(galley.size().x + 20.0, 20.0);
+    let rect = Rect::from_min_size(
+        Pos2::new(
+            card.right() - inset - size.x,
+            card.center().y - size.y / 2.0,
+        ),
+        size,
+    );
+    painter.rect_filled(rect, CornerRadius::same(10), fill);
+    if let Some(edge) = edge {
+        painter.rect_stroke(
+            rect,
+            CornerRadius::same(10),
+            Stroke::new(1.0, edge),
+            egui::StrokeKind::Inside,
+        );
+    }
+    painter.galley(rect.center() - galley.size() / 2.0, galley, ink);
+    rect.left()
+}
+
 /// Height of a [`text_field`].
 pub(crate) const FIELD_HEIGHT: f32 = 34.0;
 
@@ -446,6 +481,28 @@ pub(crate) fn text_field_with_room(
     max_chars: usize,
     trailing: f32,
 ) -> Response {
+    field(ui, value, hint, labelled_by, max_chars, trailing, false)
+}
+
+/// A [`text_field`] that shows dots instead of what is typed (a password).
+pub(crate) fn password_field(
+    ui: &mut egui::Ui,
+    value: &mut String,
+    labelled_by: Option<egui::Id>,
+    max_chars: usize,
+) -> Response {
+    field(ui, value, "", labelled_by, max_chars, 0.0, true)
+}
+
+fn field(
+    ui: &mut egui::Ui,
+    value: &mut String,
+    hint: &str,
+    labelled_by: Option<egui::Id>,
+    max_chars: usize,
+    trailing: f32,
+    password: bool,
+) -> Response {
     let p = theme::pal();
     let (rect, _) = ui.allocate_exact_size(
         Vec2::new(ui.available_width(), FIELD_HEIGHT),
@@ -463,6 +520,7 @@ pub(crate) fn text_field_with_room(
     );
     let mut response = child.add(
         egui::TextEdit::singleline(value)
+            .password(password)
             .frame(egui::Frame::NONE)
             .margin(egui::Margin::ZERO)
             .font(theme::text(12.5))

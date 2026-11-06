@@ -5,7 +5,7 @@
 //! (paused, or put.io could not read it). Everything is painted at fixed positions, so hovering changes
 //! colours and nothing moves, and every text is cut to its room, so no language can push a card out of shape.
 
-use eframe::egui::{self, Align2, CornerRadius, Pos2, Rect, Sense, Stroke, Ui, Vec2, WidgetType};
+use eframe::egui::{self, Align2, CornerRadius, Pos2, Rect, Sense, Ui, Vec2, WidgetType};
 use putio_api::RssFeed;
 use putio_core::feeds::{FeedStatus, display_title, host_of, status_of};
 use putio_core::i18n::{Locale, Msg};
@@ -319,29 +319,18 @@ fn state_pill(
     locale: Locale,
 ) -> Option<f32> {
     let p = theme::pal();
-    let (msg, fill, ink, edge) = match status {
+    let (msg, look) = match status {
         FeedStatus::Active => return None,
-        FeedStatus::Paused => (Msg::FeedPaused, p.neutral_soft, p.muted, None),
-        FeedStatus::Problem => (Msg::FeedProblem, p.error_soft, p.error, Some(p.error)),
+        FeedStatus::Paused => (Msg::FeedPaused, (p.neutral_soft, p.muted, None)),
+        FeedStatus::Problem => (Msg::FeedProblem, (p.error_soft, p.error, Some(p.error))),
     };
-    let galley = painter.layout_no_wrap(msg.text(locale), theme::bold(10.5), ink);
-    let size = Vec2::new(galley.size().x + 20.0, 20.0);
-    let right = card.right() - PILL_INSET;
-    let rect = Rect::from_min_size(
-        Pos2::new(right - size.x, card.center().y - size.y / 2.0),
-        size,
-    );
-    painter.rect_filled(rect, CornerRadius::same(10), fill);
-    if let Some(edge) = edge {
-        painter.rect_stroke(
-            rect,
-            CornerRadius::same(10),
-            Stroke::new(1.0, edge),
-            egui::StrokeKind::Inside,
-        );
-    }
-    painter.galley(rect.center() - galley.size() / 2.0, galley, ink);
-    Some(rect.left())
+    Some(widgets::status_pill(
+        painter,
+        card,
+        PILL_INSET,
+        &msg.text(locale),
+        look,
+    ))
 }
 
 fn card(ui: &mut Ui, app: &mut App, feed: &RssFeed) -> Option<Act> {

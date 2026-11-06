@@ -22,6 +22,7 @@ use putio_api::client::FileListing;
 use putio_api::{
     ApiError, Client, FileType, RssFeedSettings, Token, Transport, UploadOutcome, UreqTransport,
 };
+use putio_core::secret::Secret;
 use putio_core::state::{Event, OpId, Prepared, StreamFailure};
 use putio_core::update::UpdateAsset;
 use putio_platform::handler;
@@ -134,6 +135,12 @@ pub(crate) enum Job {
         op: OpId,
         id: i64,
     },
+    ExtractFile {
+        op: OpId,
+        id: i64,
+        password: Option<Secret>,
+    },
+    ListExtractions,
 }
 
 impl Job {
@@ -458,6 +465,12 @@ fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
             op,
             result: client.move_files(&[id], to),
         }),
+        Job::ExtractFile { op, id, password } => WorkerMsg::Core(Event::FileExtractStarted {
+            op,
+            id,
+            result: client.extract_files(&[id], password.as_ref().map(Secret::expose)),
+        }),
+        Job::ListExtractions => WorkerMsg::Core(Event::ExtractionsListed(client.extractions())),
         Job::DeleteFile { op, id } => WorkerMsg::Core(Event::FileDeleteFinished {
             op,
             id,
@@ -1130,6 +1143,56 @@ mod tests {
         ] {
             assert!(job.is_session_bound(), "{job:?}");
             assert!(!job.is_heavy(), "{job:?}");
+        }
+    }
+
+    #[test]
+    fn an_extraction_is_started_with_the_password_in_the_request_and_not_in_the_debug_output() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            200,
+            r#"{"extractions":[{"id":3,"name":"a.zip","status":"IN_QUEUE","files":[9]}]}"#,
+        );
+        let job = Job::ExtractFile {
+            op: OpId(2),
+            id: 9,
+            password: Some(Secret::new("hunter2")),
+        };
+        assert!(!format!("{job:?}").contains("hunter2"), "{job:?}");
+        match execute(&client(&fake), job) {
+            WorkerMsg::Core(Event::FileExtractStarted {
+                op: OpId(2),
+                id: 9,
+                result: Ok(list),
+            }) => {
+                assert_eq!(list.len(), 1);
+            }
+            other => panic!("{other:?}"),
+        }
+        let request = fake.last_request().unwrap();
+        assert_eq!(request.describe(), "POST /files/extract");
+        assert_eq!(
+            request.body,
+            putio_api::Body::Form("file_ids=9&password=hunter2".into())
+        );
+        fake.push_json(200, r#"{"extractions":[]}"#);
+        assert!(matches!(
+            execute(&client(&fake), Job::ListExtractions),
+            WorkerMsg::Core(Event::ExtractionsListed(Ok(_)))
+        ));
+        assert_eq!(
+            fake.last_request().unwrap().describe(),
+            "GET /files/extract"
+        );
+        for job in [
+            Job::ListExtractions,
+            Job::ExtractFile {
+                op: OpId(1),
+                id: 1,
+                password: None,
+            },
+        ] {
+            assert!(job.is_session_bound() && !job.is_heavy(), "{job:?}");
         }
     }
 }

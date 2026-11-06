@@ -885,6 +885,7 @@ mod tests {
 
     #[test]
     fn the_running_extractions_are_read_with_every_status_and_odd_values() {
+        use crate::models::ExtractStatus::{Error, Extracted, Extracting, Password, Unknown};
         let fake = FakeTransport::new();
         fake.push_json(
             200,
@@ -901,7 +902,6 @@ mod tests {
             fake.last_request().unwrap().describe(),
             "GET /files/extract"
         );
-        use crate::models::ExtractStatus::{Error, Extracted, Extracting, Password, Unknown};
         assert_eq!(
             list.iter().map(|e| e.status).collect::<Vec<_>>(),
             [Extracting, Password, Error, Extracted, Unknown]

@@ -212,6 +212,7 @@ fn update_from(state: &mut State, list: &[Extraction]) {
 /// password, is no longer being followed (or is asked about).
 fn settle(state: &mut State, now: Millis, list: &[Extraction], fx: &mut Vec<Effect>) {
     let mut finished = false;
+    let mut said = false;
     let items = std::mem::take(&mut state.unpacking);
     for item in items {
         let listed = list.iter().find(|extraction| {
@@ -222,6 +223,7 @@ fn settle(state: &mut State, now: Millis, list: &[Extraction], fx: &mut Vec<Effe
                 // Done (or no longer in put.io's list of running ones, which is the same thing).
                 state.say(Msg::Extracted { name: item.name }, now, NOTICE_TIME);
                 finished = true;
+                said = true;
             }
             (ExtractStatus::Error, extraction) => {
                 let reason = extraction
@@ -243,6 +245,7 @@ fn settle(state: &mut State, now: Millis, list: &[Extraction], fx: &mut Vec<Effe
                     now,
                     ERROR_NOTICE_TIME,
                 );
+                said = true;
             }
             (ExtractStatus::Password, _) => {
                 if state.extract_ask.is_none() {
@@ -259,12 +262,20 @@ fn settle(state: &mut State, now: Millis, list: &[Extraction], fx: &mut Vec<Effe
     if finished {
         files::refresh_everything(state, now, fx);
     }
+    // "Extracting…" is not true any more when nothing is being worked on (what is left waits for a
+    // password, or there is nothing left) and nothing else was said.
+    if !said && !state.unpacking.iter().any(Unpacking::is_active) {
+        state.notice = None;
+    }
 }
 
 /// The user gave up on a password: the archive is not followed any more.
 pub(super) fn password_dismissed(state: &mut State) {
     if let Some(ask) = state.extract_ask.take() {
         state.unpacking.retain(|item| item.file_id != ask.file_id);
+        if !state.unpacking.iter().any(Unpacking::is_active) {
+            state.notice = None;
+        }
     }
 }
 
@@ -579,6 +590,52 @@ mod tests {
         assert!(
             matches!(&fx[..], [Effect::ExtractFile { password: None, .. }]),
             "{fx:?}"
+        );
+    }
+
+    #[test]
+    fn the_status_does_not_go_on_saying_extracting_when_only_a_password_is_awaited() {
+        let mut state = signed_in();
+        let fx = started_extraction(&mut state);
+        assert_eq!(
+            *state.status(11),
+            Msg::Extracting {
+                name: "a.zip".into()
+            }
+        );
+        update(
+            &mut state,
+            20,
+            Event::FileExtractStarted {
+                op: op_of(&fx),
+                id: 7,
+                result: Ok(vec![extraction(1, ExtractStatus::Password, &[7])]),
+            },
+        );
+        assert_ne!(
+            *state.status(30),
+            Msg::Extracting {
+                name: "a.zip".into()
+            }
+        );
+        // The same when the user gives the password up.
+        let mut other = signed_in();
+        let fx = started_extraction(&mut other);
+        update(
+            &mut other,
+            20,
+            Event::FileExtractStarted {
+                op: op_of(&fx),
+                id: 7,
+                result: Ok(vec![extraction(1, ExtractStatus::Password, &[7])]),
+            },
+        );
+        update(&mut other, 30, Event::FileExtractPasswordDismissed);
+        assert_ne!(
+            *other.status(31),
+            Msg::Extracting {
+                name: "a.zip".into()
+            }
         );
     }
 

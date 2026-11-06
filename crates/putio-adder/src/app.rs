@@ -408,6 +408,31 @@ impl App {
         if view == "file-card-menu" {
             self.ui.open_once = Some(crate::ui::Overlay::FileCard(14));
         }
+        if matches!(view, "file-extract" | "file-password") {
+            // The archive of the demo files (id 17), being unpacked or waiting for a password.
+            self.dispatch(
+                ctx,
+                Event::FileExtractRequested {
+                    id: 17,
+                    password: None,
+                },
+            );
+            let status = if view == "file-extract" {
+                putio_api::ExtractStatus::Extracting
+            } else {
+                putio_api::ExtractStatus::Password
+            };
+            self.dispatch(
+                ctx,
+                Event::ExtractionsListed(Ok(vec![putio_api::Extraction {
+                    id: 1,
+                    name: "Big.Buck.Bunny.2008.2160p.zip".into(),
+                    status,
+                    message: None,
+                    files: vec![17],
+                }])),
+            );
+        }
         ui::file_dialogs::demo(self, ctx, view);
     }
 
@@ -520,6 +545,10 @@ impl App {
             }
             Effect::MoveFile { op, id, to } => self.send(Job::MoveFile { op, id, to }),
             Effect::DeleteFile { op, id } => self.send(Job::DeleteFile { op, id }),
+            Effect::ExtractFile { op, id, password } => {
+                self.send(Job::ExtractFile { op, id, password });
+            }
+            Effect::ListExtractions => self.send(Job::ListExtractions),
             Effect::CancelTransfer { op, id } => self.send(Job::Cancel { op, id }),
             Effect::RetryTransfer { op, id } => self.send(Job::Retry { op, id }),
             Effect::CleanTransfers { op, ids } => self.send(Job::Clean { op, ids }),
@@ -601,6 +630,7 @@ impl App {
             && !self.ui.prefs_open
             && !self.ui.feed_dialog.is_open()
             && !self.ui.file_dialog.is_open()
+            && self.state.extract_ask().is_none()
             && let Some(tab) = ui::tabs::pressed(ctx)
         {
             // A shortcut for a list also opens the list if it was folded away.
