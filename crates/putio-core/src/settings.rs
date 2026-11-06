@@ -44,7 +44,8 @@ impl WindowSize {
     /// The layout is designed for this width: the window cannot be made narrower.
     pub const MIN_WIDTH: u32 = 560;
     pub const MAX_WIDTH: u32 = 1400;
-    pub const MIN_HEIGHT: u32 = 360;
+    /// Tall enough for the whole "..." menu (see `MIN_LIST_HEIGHT` in the window code, which a test ties to it).
+    pub const MIN_HEIGHT: u32 = 410;
     pub const MAX_HEIGHT: u32 = 3000;
 
     /// The same size, brought into the range the window supports. A preferences file is untrusted

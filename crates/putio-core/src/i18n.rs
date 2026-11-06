@@ -409,6 +409,7 @@ pub enum Msg {
     MenuPreferences,
     MenuCheckUpdates,
     MenuProjectPage,
+    MenuBuyCoffee,
     MenuSignOut,
     MenuQuit,
     TooltipToggleTransfers,
@@ -1025,6 +1026,13 @@ impl Msg {
                 "Project page on GitHub",
                 "Projektseite auf GitHub",
                 "Página del proyecto en GitHub"
+            )
+            .into(),
+            Self::MenuBuyCoffee => tr!(
+                l,
+                "Buy me a coffee",
+                "Spendier mir einen Kaffee",
+                "Invítame a un café"
             )
             .into(),
             Self::MenuQuit => tr!(l, "Quit", "Beenden", "Salir").into(),

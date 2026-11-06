@@ -32,7 +32,9 @@ const TOLERANCE: f32 = 1.5;
 
 const MIN_WIDTH: f32 = WIDTH;
 const MAX_WIDTH: f32 = 1400.0;
-const MIN_LIST_HEIGHT: f32 = 360.0;
+/// The shortest the list can be: tall enough for the whole "..." menu (with the new-version row, signed
+/// in), which is drawn inside the window (a test keeps the two together).
+const MIN_LIST_HEIGHT: f32 = 410.0;
 const MAX_HEIGHT: f32 = 3000.0;
 
 /// What the window is showing, which decides how tall it is.
@@ -44,9 +46,9 @@ pub(crate) enum Mode {
     Login,
     /// Preferences: a fixed height.
     Prefs,
-    /// The "..." menu is open over the collapsed window, which is too short to hold it. The flag says
-    /// whether the menu has the new-version row.
-    Menu { update_row: bool },
+    /// The "..." menu is open over the collapsed window, which is too short to hold it. The flags say
+    /// whether the menu has the new-version row, and whether the user is signed in (Friends, Sign out).
+    Menu { update_row: bool, signed_in: bool },
     /// The transfers list: the user's height, which they can change.
     List,
 }
@@ -57,7 +59,10 @@ impl Mode {
             Self::Collapsed => COLLAPSED_HEIGHT,
             Self::Login => LOGIN_HEIGHT,
             Self::Prefs => PREFS_HEIGHT,
-            Self::Menu { update_row } => crate::ui::menu::window_height(update_row),
+            Self::Menu {
+                update_row,
+                signed_in,
+            } => crate::ui::menu::window_height(update_row, signed_in),
             Self::List => list_height,
         }
     }
@@ -440,9 +445,12 @@ mod tests {
     fn the_collapsed_window_grows_to_hold_the_menu_and_shrinks_back() {
         let start = Instant::now();
         let mut w = window(Mode::Collapsed);
-        for update_row in [false, true] {
-            let menu = Mode::Menu { update_row };
-            let held = crate::ui::menu::window_height(update_row);
+        for (update_row, signed_in) in [(false, true), (true, true), (false, false)] {
+            let menu = Mode::Menu {
+                update_row,
+                signed_in,
+            };
+            let held = crate::ui::menu::window_height(update_row, signed_in);
             assert!(
                 held > COLLAPSED_HEIGHT,
                 "the menu does not fit the collapsed window"
@@ -458,7 +466,7 @@ mod tests {
             );
         }
         // The menu needs less room than the shortest the list can be, so opening it there changes nothing.
-        assert!(crate::ui::menu::window_height(true) <= MIN_LIST_HEIGHT);
+        assert!(crate::ui::menu::window_height(true, true) <= MIN_LIST_HEIGHT);
     }
 
     #[test]
@@ -467,7 +475,10 @@ mod tests {
             Mode::Collapsed,
             Mode::Login,
             Mode::Prefs,
-            Mode::Menu { update_row: true },
+            Mode::Menu {
+                update_row: true,
+                signed_in: true,
+            },
         ] {
             let (min, max) = mode.limits(700.0);
             assert_eq!(min.y, max.y, "{mode:?} has one height");
