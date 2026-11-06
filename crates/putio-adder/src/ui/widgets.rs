@@ -433,6 +433,19 @@ pub(crate) fn text_field(
     labelled_by: Option<egui::Id>,
     max_chars: usize,
 ) -> Response {
+    text_field_with_room(ui, value, hint, labelled_by, max_chars, 0.0)
+}
+
+/// [`text_field`] that keeps `trailing` pixels at its right end free of text, for a control drawn over
+/// that end (the button that clears a search).
+pub(crate) fn text_field_with_room(
+    ui: &mut egui::Ui,
+    value: &mut String,
+    hint: &str,
+    labelled_by: Option<egui::Id>,
+    max_chars: usize,
+    trailing: f32,
+) -> Response {
     let p = theme::pal();
     let (rect, _) = ui.allocate_exact_size(
         Vec2::new(ui.available_width(), FIELD_HEIGHT),
@@ -441,7 +454,8 @@ pub(crate) fn text_field(
     // The frame goes behind the text, but its colour depends on what the text edit finds out (focus), so a
     // slot is reserved now and filled in afterwards.
     let frame = ui.painter().add(egui::Shape::Noop);
-    let inner = rect.shrink2(Vec2::new(11.0, 0.0));
+    let mut inner = rect.shrink2(Vec2::new(11.0, 0.0));
+    inner.max.x = (inner.max.x - trailing).max(inner.min.x);
     let mut child = ui.new_child(
         egui::UiBuilder::new()
             .max_rect(inner)

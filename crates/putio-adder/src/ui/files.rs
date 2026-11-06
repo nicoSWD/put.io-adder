@@ -456,19 +456,23 @@ fn toolbar(ui: &mut Ui, app: &mut App, ctx: &egui::Context) {
     );
     let searching = app.state.files.search.is_some();
 
-    // The search field at the right, with a button that ends the search while one is showing.
-    let clear_room = if searching { CLEAR_SIZE + 6.0 } else { 0.0 };
+    // The search field at the right, with a button inside its right end that empties it (and ends the
+    // search) once there is something to empty.
     let field_rect = Rect::from_min_size(
         Pos2::new(
-            row.right() - SEARCH_WIDTH - clear_room,
+            row.right() - SEARCH_WIDTH,
             row.center().y - widgets::FIELD_HEIGHT / 2.0,
         ),
         Vec2::new(SEARCH_WIDTH, widgets::FIELD_HEIGHT),
     );
-    search_field(ui, app, ctx, field_rect);
-    if searching {
+    let show_clear = searching || !app.ui.search_text.is_empty();
+    search_field(ui, app, ctx, field_rect, show_clear);
+    if show_clear {
         let clear = Rect::from_center_size(
-            Pos2::new(row.right() - CLEAR_SIZE / 2.0, row.center().y),
+            Pos2::new(
+                field_rect.right() - 8.0 - CLEAR_SIZE / 2.0,
+                field_rect.center().y,
+            ),
             Vec2::splat(CLEAR_SIZE),
         );
         if clear_button(ui, clear, &Msg::A11yFilesClearSearch.text(locale)) {
@@ -522,11 +526,23 @@ fn clear_button(ui: &mut Ui, rect: Rect, label: &str) -> bool {
     response.clicked()
 }
 
-fn search_field(ui: &mut Ui, app: &mut App, ctx: &egui::Context, rect: Rect) {
+fn search_field(ui: &mut Ui, app: &mut App, ctx: &egui::Context, rect: Rect, room_for_clear: bool) {
     let locale = app.state.locale;
     let hint = Msg::FilesSearchHint.text(locale);
     let mut child = ui.new_child(UiBuilder::new().max_rect(rect));
-    let field = widgets::text_field(&mut child, &mut app.ui.search_text, &hint, None, 200);
+    let trailing = if room_for_clear {
+        CLEAR_SIZE + 12.0
+    } else {
+        0.0
+    };
+    let field = widgets::text_field_with_room(
+        &mut child,
+        &mut app.ui.search_text,
+        &hint,
+        None,
+        200,
+        trailing,
+    );
     if field.has_focus() && ctx.input(|input| input.key_pressed(Key::Escape)) {
         // Escape empties the field and ends the search.
         app.ui.search_text.clear();
