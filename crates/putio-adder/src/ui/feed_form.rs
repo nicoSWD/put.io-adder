@@ -124,6 +124,8 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
     if !app.state.is_signed_in() {
         // The account is gone (signed out, session expired): so is anything half done for it.
         app.ui.feed_dialog = FeedDialog::default();
+        app.ui.folder_names.clear();
+        app.ui.selected_feed = None;
         return;
     }
     form(ctx, app);
