@@ -19,7 +19,6 @@ use putio_core::state::Event;
 use super::icons::{self, MenuIcon};
 use super::{prefs, theme, widgets};
 use crate::app::App;
-use crate::worker::Job;
 
 /// Width of the content inside the card (the window is 560 wide).
 const CONTENT_WIDTH: f32 = 456.0;
@@ -52,17 +51,7 @@ struct Place {
 fn place(app: &mut App, transfer: &Transfer, locale: Locale) -> Place {
     let mut place = Place::default();
     if let Some(parent) = transfer.save_parent_id.filter(|id| *id >= 0) {
-        let name = if parent == 0 {
-            Some(Msg::FilesRoot.text(locale))
-        } else {
-            let known = app.ui.folder_names.get(&parent).cloned();
-            if known.is_none() {
-                // Asked once; the answer (or `None` for "could not say") is remembered.
-                app.ui.folder_names.insert(parent, None);
-                app.send(Job::FolderName { id: parent });
-            }
-            known.flatten()
-        };
+        let name = super::folder_name(app, parent, locale);
         place.folder = name.clone().map(|name| (parent, name));
         place.saved_in = name;
     }

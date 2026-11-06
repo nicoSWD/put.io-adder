@@ -1,7 +1,9 @@
 //! Sample data for looking at the UI without an account. Debug builds only
 //! (`PUTIO_ADDER_DEMO=1 cargo run -p putio-adder`): this module does not exist in release builds.
 
-use putio_api::{Account, Disk, File, FileType, RssFeed, Transfer, TransferKind, TransferStatus};
+use putio_api::{
+    Account, AccountSettings, Disk, File, FileType, RssFeed, Transfer, TransferKind, TransferStatus,
+};
 
 fn transfer(
     id: i64,
@@ -208,6 +210,10 @@ pub(crate) fn account() -> Account {
             size: 1_000_000_000_000,
             used: 340_000_000_000,
             avail: 660_000_000_000,
+        }),
+        settings: Some(AccountSettings {
+            default_download_folder: Some(DEMO_SHOWS),
+            trash_enabled: Some(true),
         }),
     }
 }

@@ -37,6 +37,7 @@ Phase 0 spike 1 is open. Everything the client assumes about behaviour the spec 
 4. ~~Does put.io accept `Authorization: Bearer <token>`?~~ **Yes**: account info and the transfer list were fetched with it (observed 2026-11-05).
 5. The error body for adding a duplicate transfer (`error_type`).
 6. `GET /files/{id}/url` on a folder.
+7a. **`POST /account/settings` (account settings).** The vendored spec has the GET only, and no `trash_enabled`; `settings` is also missing from its `AccountInfo`. The app reads `settings` from `/account/info` and writes with a JSON body of one key (`{"trash_enabled": false}`, `{"default_download_folder": 12}`), as put.io's TypeScript SDK does (putdotio/putio-sdk-typescript, `src/domains/account.ts`). Unchecked against the live API: that `/account/info` carries `settings` for every account, that a JSON body is accepted, and what a delete does with the trash on (the Files delete card still says it cannot be undone).
 7. Does `POST /transfers/cancel` return an empty body or `{"status":"OK"}`? (The spec shows no content; the client accepts both.)
 
 Replace `crates/putio-api/tests/fixtures/*.json` with scrubbed recordings afterwards.

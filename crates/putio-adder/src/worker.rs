@@ -20,7 +20,8 @@ use std::thread;
 
 use putio_api::client::FileListing;
 use putio_api::{
-    ApiError, Client, FileType, RssFeedSettings, Token, Transport, UploadOutcome, UreqTransport,
+    AccountSettingChange, ApiError, Client, FileType, RssFeedSettings, Token, Transport,
+    UploadOutcome, UreqTransport,
 };
 use putio_core::state::{Event, OpId, Prepared, StreamFailure};
 use putio_core::update::UpdateAsset;
@@ -111,6 +112,10 @@ pub(crate) enum Job {
     },
     ListFiles {
         parent: i64,
+    },
+    SaveAccountSetting {
+        op: OpId,
+        change: AccountSettingChange,
     },
     /// One transfer, for the open details panel.
     FetchTransfer {
@@ -445,6 +450,11 @@ fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
         Job::ListFiles { parent } => WorkerMsg::Core(Event::FilesListed {
             parent,
             result: client.list_files(parent, None),
+        }),
+        Job::SaveAccountSetting { op, change } => WorkerMsg::Core(Event::AccountSettingSaved {
+            op,
+            change,
+            result: client.save_account_setting(change),
         }),
         Job::FetchTransfer { id } => WorkerMsg::Core(Event::TransferDetailsFetched {
             id,
@@ -1011,9 +1021,38 @@ mod tests {
             },
             Job::FolderName { id: 1 },
             Job::FetchTransfer { id: 1 },
+            Job::SaveAccountSetting {
+                op: OpId(1),
+                change: AccountSettingChange::TrashEnabled(true),
+            },
         ] {
             assert!(job.is_session_bound(), "{job:?}");
         }
+    }
+
+    #[test]
+    fn an_account_setting_is_saved_and_the_answer_names_the_change() {
+        let fake = FakeTransport::new();
+        fake.push_json(200, r#"{"status":"OK"}"#);
+        let change = AccountSettingChange::TrashEnabled(false);
+        match execute(
+            &client(&fake),
+            Job::SaveAccountSetting {
+                op: OpId(4),
+                change,
+            },
+        ) {
+            WorkerMsg::Core(Event::AccountSettingSaved {
+                op: OpId(4),
+                change: answered,
+                result: Ok(()),
+            }) => assert_eq!(answered, change),
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(
+            fake.last_request().unwrap().describe(),
+            "POST /account/settings"
+        );
     }
 
     #[test]

@@ -9,7 +9,7 @@ A small cross-platform app for **macOS, Windows and Linux** (x86-64 and arm64), 
 - **Your files** on their own tab: browse put.io folders, search, make folders, rename, move and delete, copy a link, open a file on put.io, stream it in VLC or download it (a folder as a ZIP)
 - **RSS feeds** on their own tab: add a feed, choose where its items are saved, filter by words, pause, edit or delete it. put.io does the watching and the transfers show up in the list like any other (⌘1 to ⌘3, or Ctrl+1 to Ctrl+3, switch between the tabs)
 - **Updates itself** from GitHub releases when you press *Update now* (see [What the updater checks](#updates))
-- Optional: choose the put.io folder new transfers are saved in
+- Optional: choose the put.io folder new transfers are saved in, and change two settings of your put.io account (keep deleted files in the trash, the account's default folder) from Preferences
 - Light and dark theme, a resizable window, English, German and Spanish
 
 <table>

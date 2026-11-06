@@ -2,7 +2,7 @@
 
 use eframe::egui::{self, Align, CornerRadius, Layout, Pos2, Rect, RichText, Sense, Vec2};
 use putio_api::client::FileListing;
-use putio_api::{ApiError, File};
+use putio_api::{AccountSettingChange, ApiError, File};
 use putio_core::i18n::{Locale, Msg};
 use putio_core::settings::{Folder, ThemeChoice};
 use putio_core::state::{Event, SettingsChange};
@@ -30,6 +30,18 @@ pub(crate) struct FolderPicker {
     folders: Vec<File>,
     loading: bool,
     failed: bool,
+    /// What the choice is for.
+    target: Target,
+}
+
+/// What a folder is being chosen for.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum Target {
+    /// This app's own save folder.
+    #[default]
+    App,
+    /// The account's default folder on put.io.
+    Account,
 }
 
 impl FolderPicker {
@@ -62,9 +74,16 @@ impl FolderPicker {
 
     /// Open the folder page at the top of the account's files.
     pub(crate) fn start(&mut self, workers: &Workers) {
+        self.target = Target::App;
         self.open = true;
         self.trail.clear();
         self.enter(workers, 0, ROOT_NAME.into());
+    }
+
+    /// [`start`](Self::start), to choose the account's default folder.
+    fn start_for_account(&mut self, workers: &Workers) {
+        self.start(workers);
+        self.target = Target::Account;
     }
 
     fn enter(&mut self, workers: &Workers, id: i64, name: String) {
@@ -113,6 +132,7 @@ impl FolderPicker {
             ],
             loading: false,
             failed: false,
+            target: Target::App,
         }
     }
 }
@@ -120,6 +140,7 @@ impl FolderPicker {
 /// Everything the dialog can ask the app to do, collected while drawing and applied afterwards.
 enum Action {
     Settings(SettingsChange),
+    AccountSetting(AccountSettingChange),
     OpenProjectPage,
     CheckForUpdates,
     Update(update::Click),
@@ -143,14 +164,12 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
         .show(ctx, |ui| {
             ui.set_width(CONTENT_WIDTH);
             if app.ui.folders.open {
-                folder_page(
-                    ui,
-                    app,
-                    &workers,
-                    locale,
-                    &FolderPage::choose(),
-                    &mut folder_chosen,
-                )
+                let page = if app.ui.folders.target == Target::Account {
+                    FolderPage::account()
+                } else {
+                    FolderPage::choose()
+                };
+                folder_page(ui, app, &workers, locale, &page, &mut folder_chosen)
             } else {
                 settings_page(ui, app, &workers, locale, &mut actions)
             }
@@ -160,6 +179,9 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
     for action in actions {
         match action {
             Action::Settings(change) => app.dispatch(ctx, Event::SettingsChanged(change)),
+            Action::AccountSetting(change) => {
+                app.dispatch(ctx, Event::AccountSettingRequested(change));
+            }
             Action::OpenProjectPage => app.dispatch(ctx, Event::OpenProjectPage),
             Action::CheckForUpdates => app.dispatch(
                 ctx,
@@ -177,12 +199,16 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
     }
     if let Some(folder) = folder_chosen {
         app.ui.folders.open = false;
-        app.dispatch(
-            ctx,
-            Event::SettingsChanged(SettingsChange::DefaultFolder(Some(folder))),
-        );
+        let event = if app.ui.folders.target == Target::Account {
+            Event::AccountSettingRequested(AccountSettingChange::DefaultDownloadFolder(folder.id))
+        } else {
+            Event::SettingsChanged(SettingsChange::DefaultFolder(Some(folder)))
+        };
+        app.dispatch(ctx, event);
     }
     if close {
+        // A message about a refused change is not kept for the next visit.
+        app.dispatch(ctx, Event::AccountSettingDismissed);
         // Escape or a click outside goes back a page first, and closes from the first page.
         if app.ui.folders.open {
             app.ui.folders.open = false;
@@ -307,65 +333,71 @@ fn settings_page(
         });
 
         widgets::section_title(ui, &Msg::PrefsDownloads.text(locale));
-        widgets::group(ui, |ui| folder_row(ui, app, workers, locale, actions));
+        widgets::group(ui, |ui| {
+            let name = settings.default_folder.as_ref().map(|f| f.name.as_str());
+            let signed_in = app.state.is_signed_in();
+            match folder_chooser(
+                ui,
+                locale,
+                (&Msg::PrefsSaveIn, &Msg::PrefsSaveInHint),
+                name,
+                (signed_in, name.is_some()),
+            ) {
+                Some(FolderClick::Choose) => app.ui.folders.start(workers),
+                Some(FolderClick::Clear) => {
+                    actions.push(Action::Settings(SettingsChange::DefaultFolder(None)));
+                }
+                None => {}
+            }
+        });
 
-        if let Some(account) = &app.state.account {
-            widgets::section_title(ui, &Msg::PrefsAccount.text(locale));
-            widgets::group(ui, |ui| {
-                widgets::row(
-                    ui,
-                    &Msg::PrefsSignedInAs {
-                        name: account.username.clone(),
-                    }
-                    .text(locale),
-                    None,
-                    |ui| {
-                        if theme::secondary_button(ui, Msg::MenuSignOut.text(locale)).clicked() {
-                            actions.push(Action::SignOut);
-                        }
-                    },
-                );
-            });
-        }
+        account_section(ui, app, workers, locale, actions);
 
         about(ui, app, locale, actions);
     });
     close
 }
 
-/// The "Save new transfers in" row: a title, a hint, and below them the current folder with its buttons.
-fn folder_row(
+/// What a click in a folder row asked for.
+enum FolderClick {
+    Choose,
+    Clear,
+}
+
+/// A folder row: a title, a hint, and below them the current folder's name with the buttons that choose
+/// another (when `can` allows) and take the choice away (when `can` allows).
+fn folder_chooser(
     ui: &mut egui::Ui,
-    app: &mut App,
-    workers: &Workers,
     locale: Locale,
-    actions: &mut Vec<Action>,
-) {
+    (title, hint): (&Msg, &Msg),
+    name: Option<&str>,
+    (can_choose, can_clear): (bool, bool),
+) -> Option<FolderClick> {
     let p = theme::pal();
+    let mut click = None;
     ui.add_space(10.0);
-    ui.label(RichText::new(Msg::PrefsSaveIn.text(locale)).font(theme::bold(12.5)));
+    ui.label(RichText::new(title.text(locale)).font(theme::bold(12.5)));
     ui.add(
         egui::Label::new(
-            RichText::new(Msg::PrefsSaveInHint.text(locale))
+            RichText::new(hint.text(locale))
                 .font(theme::text(10.5))
                 .color(p.muted),
         )
         .wrap(),
     );
     ui.add_space(6.0);
-    let current = app.state.settings.default_folder.clone();
     ui.horizontal(|ui| {
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             // Buttons first (they sit at the right edge), then the pill fills what is left.
-            if app.state.is_signed_in()
+            if can_choose
                 && theme::secondary_button(ui, Msg::PrefsChooseFolder.text(locale)).clicked()
             {
-                app.ui.folders.start(workers);
+                click = Some(FolderClick::Choose);
             }
-            if current.is_some()
+            if can_clear
                 && theme::secondary_button(ui, Msg::PrefsClearFolder.text(locale)).clicked()
             {
-                actions.push(Action::Settings(SettingsChange::DefaultFolder(None)));
+                click = Some(FolderClick::Clear);
             }
             let (rect, _) = ui.allocate_exact_size(
                 Vec2::new(ui.available_width().max(120.0), 32.0),
@@ -374,10 +406,7 @@ fn folder_row(
             ui.painter()
                 .rect_filled(rect, CornerRadius::same(9), p.track.gamma_multiply(0.55));
             widgets::folder_icon(ui.painter(), Pos2::new(rect.left() + 20.0, rect.center().y));
-            let name = current.as_ref().map_or_else(
-                || Msg::PrefsDefaultFolderNone.text(locale),
-                |folder| folder.name.clone(),
-            );
+            let name = name.map_or_else(|| Msg::PrefsDefaultFolderNone.text(locale), str::to_owned);
             let clip = Rect::from_min_max(
                 Pos2::new(rect.left() + 38.0, rect.top()),
                 Pos2::new(rect.right() - 8.0, rect.bottom()),
@@ -392,6 +421,82 @@ fn folder_row(
         });
     });
     ui.add_space(12.0);
+    click
+}
+
+/// The Account group: who is signed in, and the settings of the account itself that put.io told us. A
+/// setting put.io did not report is left out rather than shown in a position it may not be in.
+fn account_section(
+    ui: &mut egui::Ui,
+    app: &mut App,
+    workers: &Workers,
+    locale: Locale,
+    actions: &mut Vec<Action>,
+) {
+    let Some(username) = app.state.account.as_ref().map(|a| a.username.clone()) else {
+        return;
+    };
+    let trash = app.state.trash_enabled();
+    let folder = app.state.account_default_folder();
+    // "…" until put.io has said what the folder is called.
+    let folder_name =
+        folder.map(|id| super::folder_name(app, id, locale).unwrap_or_else(|| "…".into()));
+    widgets::section_title(ui, &Msg::PrefsAccount.text(locale));
+    widgets::group(ui, |ui| {
+        widgets::row(
+            ui,
+            &Msg::PrefsSignedInAs { name: username }.text(locale),
+            None,
+            |ui| {
+                if theme::secondary_button(ui, Msg::MenuSignOut.text(locale)).clicked() {
+                    actions.push(Action::SignOut);
+                }
+            },
+        );
+        if let Some(mut on) = trash {
+            widgets::divider(ui);
+            widgets::row(
+                ui,
+                &Msg::PrefsTrash.text(locale),
+                Some(&Msg::PrefsTrashHint.text(locale)),
+                |ui| {
+                    if widgets::switch(ui, &mut on, &Msg::PrefsTrash.text(locale)).changed() {
+                        actions.push(Action::AccountSetting(AccountSettingChange::TrashEnabled(
+                            on,
+                        )));
+                    }
+                },
+            );
+        }
+        if let Some(name) = &folder_name {
+            widgets::divider(ui);
+            let click = folder_chooser(
+                ui,
+                locale,
+                (&Msg::PrefsAccountFolder, &Msg::PrefsAccountFolderHint),
+                Some(name),
+                (true, false),
+            );
+            if matches!(click, Some(FolderClick::Choose)) {
+                app.ui.folders.start_for_account(workers);
+            }
+        }
+    });
+    if let Some(reason) = &app.state.account_setting.error {
+        ui.add(
+            egui::Label::new(
+                RichText::new(
+                    Msg::AccountSettingFailed {
+                        reason: reason.clone(),
+                    }
+                    .text(locale),
+                )
+                .font(theme::text(11.0))
+                .color(theme::pal().error),
+            )
+            .wrap(),
+        );
+    }
 }
 
 /// "Default app": whether put.io adder opens magnet links and `.torrent` files, and a button to make it so.
@@ -614,6 +719,14 @@ pub(crate) struct FolderPage<'a> {
 }
 
 impl FolderPage<'_> {
+    /// Choosing the account's default folder on put.io.
+    fn account() -> Self {
+        Self {
+            title: Msg::PrefsAccountFolder,
+            ..Self::choose()
+        }
+    }
+
     /// Choosing the folder new transfers are saved in.
     pub(crate) fn choose() -> Self {
         Self {
@@ -679,6 +792,71 @@ pub(crate) fn folder_page(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ui::test_support::text_boxes;
+
+    #[test]
+    fn a_folder_row_fits_the_card_in_every_language_whatever_the_folders_name() {
+        let long = "An.Extremely.Long.Folder.Name.".repeat(8);
+        for locale in [Locale::En, Locale::De, Locale::Es] {
+            for (name, can_clear) in [
+                (None, false),
+                (Some(long.as_str()), true),
+                (Some("…"), false),
+            ] {
+                let mut used = Rect::NOTHING;
+                let boxes = text_boxes(|ui| {
+                    ui.allocate_ui(Vec2::new(CONTENT_WIDTH, 200.0), |ui| {
+                        folder_chooser(
+                            ui,
+                            locale,
+                            (&Msg::PrefsAccountFolder, &Msg::PrefsAccountFolderHint),
+                            name,
+                            (true, can_clear),
+                        );
+                        used = ui.min_rect();
+                    });
+                });
+                assert!(used.width() <= CONTENT_WIDTH + 0.5, "{locale:?}: {used:?}");
+                for text_box in &boxes {
+                    assert!(
+                        text_box.visible.right() <= used.left() + CONTENT_WIDTH + 0.5,
+                        "{locale:?}: {text_box:?}"
+                    );
+                }
+                // The title, the hint, the name (cut) and the buttons are all there.
+                assert!(boxes.len() >= 4, "{locale:?}: {boxes:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_trash_row_keeps_its_switch_clear_of_the_text_in_every_language() {
+        for locale in [Locale::En, Locale::De, Locale::Es] {
+            let mut on = true;
+            let mut rows = Rect::NOTHING;
+            let boxes = text_boxes(|ui| {
+                ui.allocate_ui(Vec2::new(CONTENT_WIDTH, 200.0), |ui| {
+                    widgets::row(
+                        ui,
+                        &Msg::PrefsTrash.text(locale),
+                        Some(&Msg::PrefsTrashHint.text(locale)),
+                        |ui| {
+                            widgets::switch(ui, &mut on, &Msg::PrefsTrash.text(locale));
+                        },
+                    );
+                    rows = ui.min_rect();
+                });
+            });
+            assert!(rows.width() <= CONTENT_WIDTH + 0.5, "{locale:?}: {rows:?}");
+            // The text stops before the switch begins (the switch is 44 wide at the right edge).
+            for text_box in &boxes {
+                assert!(
+                    text_box.full.right() <= rows.left() + CONTENT_WIDTH - 44.0,
+                    "{locale:?}: {text_box:?}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn the_rows_of_the_folder_being_left_are_gone_while_the_next_one_loads() {

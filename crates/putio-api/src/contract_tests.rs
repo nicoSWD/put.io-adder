@@ -150,10 +150,38 @@ fn the_fields_we_read_exist_in_the_spec_schemas() {
             "AccountInfo.{field} is not in the spec"
         );
     }
+    // Documented exception: the settings (see `the_account_settings_are_only_partly_in_the_spec`).
+    assert!(
+        !account.contains("settings"),
+        "spec now documents `settings` in AccountInfo: model it and update docs/spikes.md"
+    );
     // Documented exception: we also read an optional `disk` that 2.8.14 no longer lists.
     assert!(
         !account.contains("disk"),
         "spec now documents `disk`: model it as required-if-present and update docs/spikes.md"
+    );
+}
+
+/// What the spec says about changing account settings is not enough to send a request by: it has the GET
+/// only, and not every setting we use. They are modelled on put.io's own SDK instead (docs/spikes.md), so
+/// this test says what the gap is and fails when the spec closes it, as a reminder to check against it.
+#[test]
+fn the_account_settings_are_only_partly_in_the_spec() {
+    let spec = spec();
+    assert!(
+        spec["paths"]["/account/settings"].get("post").is_none(),
+        "the spec documents POST /account/settings now: add it to the request list above"
+    );
+    let settings: BTreeSet<String> = spec["components"]["schemas"]["AccountSettings"]["properties"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .cloned()
+        .collect();
+    assert!(settings.contains("default_download_folder"));
+    assert!(
+        !settings.contains("trash_enabled"),
+        "the spec documents trash_enabled now: take it out of the exceptions in docs/spikes.md"
     );
 }
 
