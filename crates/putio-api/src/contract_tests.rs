@@ -247,6 +247,11 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     ok(&format!(r#"{{"transfer":{transfer}}}"#)); // transfer
     ok(r#"{"extractions":[]}"#); // extract_files
     ok(r#"{"extractions":[]}"#); // extractions
+    ok(r#"{"shared":[{"id":1,"name":"a","size":3,"share_with":"everyone"}]}"#); // shared_files
+    ok(r#"{"shared-with":[{"user_name":"jane","user_avatar_url":"/a.png","share_id":3}]}"#); // shared_with
+    ok(r#"{"friends":[{"id":1,"name":"jane"}]}"#); // friends
+    ok(r#"{"status":"OK"}"#); // share_file
+    ok(r#"{"status":"OK"}"#); // unshare_file
     ok(r#"{"feeds":[]}"#); // rss_feeds
     ok(r#"{"status":"OK"}"#); // create_rss_feed
     ok(r#"{"status":"OK"}"#); // update_rss_feed
@@ -293,6 +298,13 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     client.transfer(1).unwrap();
     client.extract_files(&[1, 2], Some("secret")).unwrap();
     client.extractions().unwrap();
+    client.shared_files().unwrap();
+    client.shared_with(1).unwrap();
+    client.friends().unwrap();
+    client
+        .share_file(1, &crate::models::ShareWith::Friends(vec!["jane".into()]))
+        .unwrap();
+    client.unshare_file(1, &[3]).unwrap();
     client.rss_feeds().unwrap();
     client.create_rss_feed(&feed).unwrap();
     client.update_rss_feed(5, &feed).unwrap();
@@ -301,7 +313,7 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     client.delete_rss_feed(5).unwrap();
 
     let requests: Vec<Request> = fake.requests();
-    assert_eq!(requests.len(), 29);
+    assert_eq!(requests.len(), 34);
     for request in &requests {
         let path = template(&request.path);
         let method = match request.method {

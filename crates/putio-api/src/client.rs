@@ -8,8 +8,8 @@ use serde_json::Value;
 use crate::error::{ApiError, ApiFailure, retry_delay};
 use crate::form::{self, Part};
 use crate::models::{
-    Account, DeviceCode, Extraction, File, FileType, Release, RssFeed, RssFeedSettings, Transfer,
-    UploadOutcome, ZipStatus,
+    Account, DeviceCode, Extraction, File, FileType, Friend, Release, RssFeed, RssFeedSettings,
+    Share, ShareWith, SharedFile, Transfer, UploadOutcome, ZipStatus,
 };
 use crate::token::Token;
 use crate::torrent;
@@ -525,6 +525,66 @@ impl<T: Transport> Client<T> {
         self.ack(&self.post_form("/files/delete", &[("file_ids", &joined)]))
     }
 
+    /// The files the account shares (each once).
+    pub fn shared_files(&self) -> Result<Vec<SharedFile>, ApiError> {
+        #[derive(serde::Deserialize)]
+        struct Reply {
+            #[serde(default)]
+            shared: Vec<SharedFile>,
+        }
+        Ok(self
+            .json::<Reply>(&self.get("/files/shared".into()))?
+            .shared)
+    }
+
+    /// Who a file is shared with.
+    pub fn shared_with(&self, file_id: i64) -> Result<Vec<Share>, ApiError> {
+        #[derive(serde::Deserialize)]
+        struct Reply {
+            #[serde(default, rename = "shared-with")]
+            shared_with: Vec<Share>,
+        }
+        Ok(self
+            .json::<Reply>(&self.get(format!("/files/{file_id}/shared-with")))?
+            .shared_with)
+    }
+
+    /// The account's friends.
+    pub fn friends(&self) -> Result<Vec<Friend>, ApiError> {
+        #[derive(serde::Deserialize)]
+        struct Reply {
+            #[serde(default)]
+            friends: Vec<Friend>,
+        }
+        Ok(self
+            .json::<Reply>(&self.get("/friends/list".into()))?
+            .friends)
+    }
+
+    /// Share a file (or folder) with friends.
+    pub fn share_file(&self, file_id: i64, with: &ShareWith) -> Result<(), ApiError> {
+        let Some(friends) = with.as_field() else {
+            return Err(ApiError::InvalidInput("nobody to share with"));
+        };
+        self.ack(&self.post_form(
+            "/files/share",
+            &[("file_ids", &file_id.to_string()), ("friends", &friends)],
+        ))
+    }
+
+    /// End shares of a file, by the ids [`shared_with`](Self::shared_with) gave.
+    pub fn unshare_file(&self, file_id: i64, share_ids: &[i64]) -> Result<(), ApiError> {
+        if share_ids.is_empty() {
+            return Err(ApiError::InvalidInput("no shares"));
+        }
+        let joined = share_ids
+            .iter()
+            .map(i64::to_string)
+            .collect::<Vec<_>>()
+            .join(",");
+        self.ack(&self.post_form(&format!("/files/{file_id}/unshare"), &[("shares", &joined)]))
+    }
+
     /// Unpack ZIP or RAR archives into folders next to them. A `password` is sent only when there is one.
     /// The answer says where each extraction starts (usually queued); follow them with
     /// [`Client::extractions`].
@@ -717,6 +777,103 @@ mod tests {
             Some(0.25)
         );
         assert_eq!(fake.requests()[0].describe(), "GET /account/info");
+    }
+
+    #[test]
+    fn what_is_shared_and_with_whom_is_read_and_odd_values_do_not_lose_the_list() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            200,
+            r#"{"status":"OK","shared":[{"id":5,"name":"Movies","size":0,"share_with":"everyone"},{"id":6,"name":7,"share_with":3},{"name":"no id"}]}"#,
+        );
+        fake.push_json(
+            200,
+            r#"{"status":"OK","shared-with":[{"user_name":"jane","user_avatar_url":"/a.png","share_id":3913572317},{"share_id":4,"user_name":null}]}"#,
+        );
+        fake.push_json(
+            200,
+            r#"{"status":"OK","friends":[{"id":1,"name":"jane","avatar_url":"x"},{"id":2}]}"#,
+        );
+        let c = client(&fake);
+        // An entry without an id cannot be used for anything and is the one thing that fails the list.
+        assert!(matches!(c.shared_files(), Err(ApiError::Decode(_))));
+        let shared = c.shared_with(5).unwrap();
+        assert_eq!(
+            fake.last_request().unwrap().describe(),
+            "GET /files/5/shared-with"
+        );
+        assert_eq!(
+            (shared[0].share_id, shared[0].user_name.as_str()),
+            (3_913_572_317, "jane")
+        );
+        assert_eq!(shared[1].user_name, "");
+        let friends = c.friends().unwrap();
+        assert_eq!(fake.last_request().unwrap().describe(), "GET /friends/list");
+        assert_eq!((friends[0].id, friends[0].name.as_str()), (1, "jane"));
+        assert_eq!(friends[1].name, "");
+    }
+
+    #[test]
+    fn the_shared_files_list_is_read() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            200,
+            r#"{"status":"OK","shared":[{"id":5,"name":"Movies","size":0,"share_with":"everyone"},{"id":6,"name":7,"share_with":3}]}"#,
+        );
+        let shared = client(&fake).shared_files().unwrap();
+        assert_eq!(fake.last_request().unwrap().describe(), "GET /files/shared");
+        assert_eq!(shared.iter().map(|s| s.id).collect::<Vec<_>>(), [5, 6]);
+        assert_eq!(shared[1].name, "", "a name of the wrong type is dropped");
+    }
+
+    #[test]
+    fn sharing_and_unsharing_send_what_the_api_documents() {
+        let fake = FakeTransport::new();
+        for _ in 0..4 {
+            fake.push_json(200, r#"{"status":"OK"}"#);
+        }
+        let c = client(&fake);
+        c.share_file(5, &ShareWith::Everyone).unwrap();
+        assert_eq!(
+            fake.last_request().unwrap().body,
+            Body::Form("file_ids=5&friends=everyone".into())
+        );
+        assert_eq!(fake.last_request().unwrap().describe(), "POST /files/share");
+        c.share_file(
+            5,
+            &ShareWith::Friends(vec!["jane".into(), "john doe".into()]),
+        )
+        .unwrap();
+        assert_eq!(
+            fake.last_request().unwrap().body,
+            Body::Form("file_ids=5&friends=jane%2Cjohn%20doe".into())
+        );
+        c.unshare_file(5, &[3, 9]).unwrap();
+        assert_eq!(
+            fake.last_request().unwrap().describe(),
+            "POST /files/5/unshare"
+        );
+        assert_eq!(
+            fake.last_request().unwrap().body,
+            Body::Form("shares=3%2C9".into())
+        );
+        // Nothing is sent for nobody, or for a name that would read as two.
+        let sent = fake.requests().len();
+        for with in [
+            ShareWith::Friends(vec![]),
+            ShareWith::Friends(vec!["a,b".into()]),
+            ShareWith::Friends(vec![" ".into()]),
+        ] {
+            assert!(matches!(
+                c.share_file(5, &with),
+                Err(ApiError::InvalidInput(_))
+            ));
+        }
+        assert!(matches!(
+            c.unshare_file(5, &[]),
+            Err(ApiError::InvalidInput(_))
+        ));
+        assert_eq!(fake.requests().len(), sent);
     }
 
     #[test]

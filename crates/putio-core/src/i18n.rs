@@ -207,6 +207,17 @@ pub enum Msg {
     FilesNewFolder,
     FileMenuRename,
     FileMenuMove,
+    FileMenuShare,
+    FileSharedBadge,
+    ShareTitle,
+    ShareSharedWith,
+    ShareNobody,
+    ShareStop,
+    ShareWithTitle,
+    ShareAllFriends,
+    ShareNoFriends,
+    ShareConfirm,
+    ShareNotAllowed,
     FileMenuDelete,
     FileRenameTitle,
     FileRenameConfirm,
@@ -862,7 +873,9 @@ impl Msg {
                 format!("Descarga iniciada · put.io omitió {missing} archivo(s)")
             ),
             Self::DetailGroupTransfer => tr!(l, "Transfer", "Übertragung", "Transferencia").into(),
-            Self::DetailGroupSharing => tr!(l, "Sharing", "Teilen", "Compartir").into(),
+            Self::DetailGroupSharing | Self::ShareTitle => {
+                tr!(l, "Sharing", "Teilen", "Compartir").into()
+            }
             Self::DetailGroupDates => tr!(l, "Dates", "Zeitpunkte", "Fechas").into(),
             Self::MenuCopyLink => tr!(
                 l,
@@ -1709,6 +1722,40 @@ impl Msg {
                 "Renombrar…"
             )
             .into(),
+            Self::FileMenuShare => tr!(l, "Share…", "Teilen …", "Compartir…").into(),
+            Self::FileSharedBadge => tr!(l, "Shared", "Geteilt", "Compartido").into(),
+            Self::ShareSharedWith => tr!(l, "Shared with", "Geteilt mit", "Compartido con").into(),
+            Self::ShareNobody => tr!(
+                l,
+                "Not shared with anyone yet.",
+                "Noch mit niemandem geteilt.",
+                "Aún no se comparte con nadie."
+            )
+            .into(),
+            Self::ShareStop => tr!(
+                l,
+                "Stop sharing",
+                "Nicht mehr teilen",
+                "Dejar de compartir"
+            )
+            .into(),
+            Self::ShareWithTitle => tr!(l, "Share with", "Teilen mit", "Compartir con").into(),
+            Self::ShareAllFriends => tr!(l, "All friends", "Alle Freunde", "Todos los amigos").into(),
+            Self::ShareNoFriends => tr!(
+                l,
+                "You have no friends on put.io yet.",
+                "Du hast noch keine Freunde auf put.io.",
+                "Aún no tienes amigos en put.io."
+            )
+            .into(),
+            Self::ShareConfirm => tr!(l, "Share", "Teilen", "Compartir").into(),
+            Self::ShareNotAllowed => tr!(
+                l,
+                "put.io does not let this app do that.",
+                "put.io erlaubt dieser App das nicht.",
+                "put.io no permite esto a esta app."
+            )
+            .into(),
             Self::FileMenuMove => tr!(
                 l,
                 "Move…",
@@ -2188,6 +2235,34 @@ mod tests {
             Msg::DetailFromFeed,
             Msg::DetailFromFeedUnknown,
             Msg::MenuShowInFiles,
+        ];
+        for msg in all {
+            let texts = [Locale::En, Locale::De, Locale::Es].map(|l| msg.text(l));
+            for text in &texts {
+                assert!(!text.trim().is_empty(), "{msg:?}");
+                assert_eq!(text, text.trim(), "{msg:?}");
+            }
+            assert!(
+                texts[0] != texts[1] && texts[0] != texts[2],
+                "{msg:?}: {texts:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_messages_of_sharing_are_written_in_every_language() {
+        let all = [
+            Msg::FileMenuShare,
+            Msg::FileSharedBadge,
+            Msg::ShareTitle,
+            Msg::ShareSharedWith,
+            Msg::ShareNobody,
+            Msg::ShareStop,
+            Msg::ShareWithTitle,
+            Msg::ShareAllFriends,
+            Msg::ShareNoFriends,
+            Msg::ShareConfirm,
+            Msg::ShareNotAllowed,
         ];
         for msg in all {
             let texts = [Locale::En, Locale::De, Locale::Es].map(|l| msg.text(l));
