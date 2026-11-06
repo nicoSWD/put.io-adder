@@ -1,8 +1,6 @@
 //! The transfers list: one card per transfer, with a slim progress bar.
 
-use eframe::egui::{
-    self, Align, Align2, Color32, CornerRadius, Layout, Pos2, Rect, RichText, Sense, Vec2,
-};
+use eframe::egui::{self, Align2, Color32, CornerRadius, Pos2, Rect, Sense, Vec2};
 use putio_api::{Transfer, TransferStatus};
 use putio_core::format;
 use putio_core::i18n::{Locale, Msg};
@@ -11,14 +9,13 @@ use putio_core::transfers::{self, SortKey};
 
 use super::icons::MenuIcon;
 use super::menu::{self, Tint};
-use super::{icons, theme, update, widgets};
+use super::{icons, theme, widgets};
 use crate::app::App;
 
 const ROW_HEIGHT: f32 = 56.0;
 /// Width of the sort drop-down card.
 const SORT_MENU_WIDTH: f32 = 236.0;
 const ROW_GAP: f32 = 6.0;
-const TOOLBAR_HEIGHT: f32 = 28.0;
 /// Space kept free at the right of the cards for the scroll bar.
 const SCROLLBAR_ROOM: f32 = 8.0;
 /// Room kept free on the right of a row for the size, percentage and the "⋯" button.
@@ -31,9 +28,9 @@ const MORE_SIZE: f32 = 28.0;
 /// Width of the card context menu.
 const MENU_WIDTH: f32 = 252.0;
 
+/// The list of transfers (the tab bar above it is [`super::tabs`]).
 pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
     let ctx = ui.ctx().clone();
-    toolbar(ui, app, &ctx);
 
     // A sorted copy for display: the core keeps its own (default) order.
     let mut rows = app.state.transfers.clone();
@@ -63,51 +60,6 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
     }
 }
 
-/// The row above the list: an update notice on the left, the sort menu on the right.
-fn toolbar(ui: &mut egui::Ui, app: &mut App, ctx: &egui::Context) {
-    let locale = app.state.locale;
-    ui.allocate_ui_with_layout(
-        Vec2::new(ui.available_width(), TOOLBAR_HEIGHT),
-        Layout::left_to_right(Align::Center),
-        |ui| {
-            ui.label(
-                RichText::new(Msg::TransfersTitle.text(locale))
-                    .font(theme::bold(13.0))
-                    .color(theme::pal().text),
-            );
-            count_pill(ui, app.state.transfers.len());
-            if let Some(look) = update::look(&app.state) {
-                ui.add_space(8.0);
-                let response = update::pill(ui, &look);
-                if response.clicked()
-                    && let Some(click) = look.click
-                {
-                    app.dispatch(ctx, click.event());
-                }
-            }
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                sort_menu(ui, app);
-            });
-        },
-    );
-}
-
-/// A small rounded number next to the title.
-fn count_pill(ui: &mut egui::Ui, count: usize) {
-    let galley =
-        ui.painter()
-            .layout_no_wrap(count.to_string(), theme::bold(10.5), theme::pal().on_yellow);
-    let size = Vec2::new((galley.size().x + 14.0).max(22.0), 18.0);
-    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-    ui.painter()
-        .rect_filled(rect, CornerRadius::same(9), theme::YELLOW);
-    ui.painter().galley(
-        rect.center() - galley.size() / 2.0,
-        galley,
-        theme::pal().on_yellow,
-    );
-}
-
 fn sort_label(key: SortKey) -> Msg {
     match key {
         SortKey::Default => Msg::SortStatus,
@@ -120,7 +72,7 @@ fn sort_label(key: SortKey) -> Msg {
 }
 
 /// The sort control: a quiet pill showing the current order, and a card to change it.
-fn sort_menu(ui: &mut egui::Ui, app: &mut App) {
+pub(crate) fn sort_menu(ui: &mut egui::Ui, app: &mut App) {
     let p = theme::pal();
     let locale = app.state.locale;
     let text = format!(
@@ -573,7 +525,7 @@ fn card(ui: &mut egui::Ui, app: &mut App, transfer: &Transfer, clearable: usize)
 }
 
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // each channel stays within 0..=255
-fn mix(from: Color32, to: Color32, amount: f32) -> Color32 {
+pub(crate) fn mix(from: Color32, to: Color32, amount: f32) -> Color32 {
     let lerp = |a: u8, b: u8| {
         (f32::from(a) + (f32::from(b) - f32::from(a)) * amount.clamp(0.0, 1.0)).round() as u8
     };

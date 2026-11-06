@@ -178,7 +178,6 @@ pub enum Msg {
     FeedMenuDelete,
     FeedEditTitle,
     FeedFieldUrl,
-    FeedFieldTitle,
     FeedTitleHint,
     FeedFieldFolder,
     FeedFolderLoading,
@@ -1320,13 +1319,6 @@ impl Msg {
                 "Dirección del feed"
             )
             .into(),
-            Self::FeedFieldTitle => tr!(
-                l,
-                "Name",
-                "Name",
-                "Nombre"
-            )
-            .into(),
             Self::FeedTitleHint => tr!(
                 l,
                 "Optional. Defaults to the feed's website.",
@@ -1627,7 +1619,6 @@ mod tests {
             Msg::FeedMenuDelete,
             Msg::FeedEditTitle,
             Msg::FeedFieldUrl,
-            Msg::FeedFieldTitle,
             Msg::FeedTitleHint,
             Msg::FeedFieldFolder,
             Msg::FeedFolderLoading,
@@ -1692,7 +1683,7 @@ mod tests {
         }
         // A translation that is just the English text would be a forgotten one.
         for msg in feed_messages() {
-            if matches!(msg, Msg::TabFeeds | Msg::FeedProblem | Msg::FeedFieldTitle) {
+            if matches!(msg, Msg::TabFeeds | Msg::FeedProblem) {
                 continue; // the same word in all three languages
             }
             let en = msg.text(Locale::En);

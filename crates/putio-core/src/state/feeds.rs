@@ -73,11 +73,11 @@ pub(super) fn select_tab(state: &mut State, now: Millis, tab: Tab, fx: &mut Vec<
     state.tab = tab;
     state.settings.tab = tab;
     fx.push(Effect::SaveSettings(state.settings.clone()));
-    let stale = state
+    let outdated = state
         .feed_schedule
         .loaded_at
         .is_none_or(|at| now.saturating_sub(at) >= STALE_AFTER);
-    if tab == Tab::Feeds && stale {
+    if tab == Tab::Feeds && outdated {
         refresh_soon(state, now);
     }
 }

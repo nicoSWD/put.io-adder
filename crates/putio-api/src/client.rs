@@ -444,6 +444,15 @@ impl<T: Transport> Client<T> {
         Ok(FileListing { parent, files })
     }
 
+    /// One file or folder: its name, mostly (the feed form shows which folder a feed saves into).
+    pub fn file(&self, id: i64) -> Result<File, ApiError> {
+        #[derive(serde::Deserialize)]
+        struct Reply {
+            file: File,
+        }
+        Ok(self.json::<Reply>(&self.get(format!("/files/{id}")))?.file)
+    }
+
     /// A signed, IP-bound URL for a file. It carries its own credentials, so the account token never
     /// has to be handed to a player. Always `https`.
     pub fn file_url(&self, file_id: i64) -> Result<String, ApiError> {
@@ -716,6 +725,21 @@ mod tests {
             unwanted_keywords: String::new(),
             skip_existing: false,
         }
+    }
+
+    #[test]
+    fn a_folders_name_is_read_from_its_properties() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            200,
+            r#"{"status":"OK","file":{"id":42,"name":"TV Shows","file_type":"FOLDER","parent_id":0}}"#,
+        );
+        let folder = client(&fake).file(42).unwrap();
+        assert_eq!(fake.last_request().unwrap().describe(), "GET /files/42");
+        assert_eq!((folder.id, folder.name.as_str()), (42, "TV Shows"));
+        // A reply without the file is an error, not an empty folder.
+        fake.push_json(200, r#"{"status":"OK"}"#);
+        assert!(matches!(client(&fake).file(42), Err(ApiError::Decode(_))));
     }
 
     #[test]

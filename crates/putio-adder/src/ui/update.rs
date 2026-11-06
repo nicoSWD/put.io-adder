@@ -146,8 +146,21 @@ fn percent(fraction: f32) -> u8 {
     percent
 }
 
-const PILL_HEIGHT: f32 = 26.0;
+pub(crate) const PILL_HEIGHT: f32 = 26.0;
 const PROGRESS_WIDTH: f32 = 132.0;
+
+/// How wide [`pill`] is for `look`, so a row can tell beforehand whether the pill fits.
+pub(crate) fn pill_width(ui: &egui::Ui, look: &Look) -> f32 {
+    if look.progress.is_some() {
+        return PROGRESS_WIDTH;
+    }
+    let galley = ui.painter().layout_no_wrap(
+        look.label.clone(),
+        theme::bold(11.0),
+        egui::Color32::PLACEHOLDER,
+    );
+    10.0 + 16.0 + 6.0 + galley.size().x + 12.0
+}
 
 /// The pill in the toolbar. Painted at fixed positions: when the pointer arrives only the background
 /// changes, so the label and the icon never move. Returns the response (clicks only count when
@@ -158,11 +171,7 @@ pub(crate) fn pill(ui: &mut egui::Ui, look: &Look) -> egui::Response {
     let galley = ui
         .painter()
         .layout_no_wrap(look.label.clone(), font, egui::Color32::PLACEHOLDER);
-    let width = if look.progress.is_some() {
-        PROGRESS_WIDTH
-    } else {
-        10.0 + 16.0 + 6.0 + galley.size().x + 12.0
-    };
+    let width = pill_width(ui, look);
     let sense = if look.click.is_some() {
         Sense::click()
     } else {

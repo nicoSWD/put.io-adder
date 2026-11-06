@@ -18,7 +18,7 @@ use crate::worker::{Job, Workers};
 const CONTENT_WIDTH: f32 = 456.0;
 const FOLDER_ROW_HEIGHT: f32 = 40.0;
 /// put.io's name for the top of an account's files.
-const ROOT_NAME: &str = "Your Files";
+pub(crate) const ROOT_NAME: &str = "Your Files";
 
 /// Browsing put.io folders to choose the destination of new transfers.
 #[derive(Debug, Default)]
@@ -50,7 +50,18 @@ impl FolderPicker {
         }
     }
 
-    fn start(&mut self, workers: &Workers) {
+    /// Whether the folder page is showing (instead of the page it was opened from).
+    pub(crate) fn is_open(&self) -> bool {
+        self.open
+    }
+
+    /// Go back from the folder page.
+    pub(crate) fn close(&mut self) {
+        self.open = false;
+    }
+
+    /// Open the folder page at the top of the account's files.
+    pub(crate) fn start(&mut self, workers: &Workers) {
         self.open = true;
         self.trail.clear();
         self.enter(workers, 0, ROOT_NAME.into());
@@ -582,7 +593,8 @@ fn folder_list(ui: &mut egui::Ui, app: &App, locale: Locale) -> Option<(i64, Str
     enter
 }
 
-fn folder_page(
+/// The folder page: where to go, and a button that chooses the folder being shown.
+pub(crate) fn folder_page(
     ui: &mut egui::Ui,
     app: &mut App,
     workers: &Workers,

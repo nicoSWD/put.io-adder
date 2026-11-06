@@ -176,7 +176,7 @@ pub fn status_of(feed: &RssFeed) -> FeedStatus {
 
 /// Newest first, which is the order put.io creates them in: a feed just added is at the top.
 pub fn sort_feeds(feeds: &mut [RssFeed]) {
-    feeds.sort_by(|a, b| b.id.cmp(&a.id));
+    feeds.sort_by_key(|feed| std::cmp::Reverse(feed.id));
 }
 
 #[cfg(test)]

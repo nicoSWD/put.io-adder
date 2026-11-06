@@ -220,6 +220,7 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     ok(r#"{"url":"https://x.invalid/f"}"#); // file_url
     ok(r#"{"zip_id":9}"#); // create_zip
     ok(r#"{"zip_status":"NEW"}"#); // zip_status
+    ok(r#"{"file":{"id":1,"name":"f"}}"#); // file
     ok(r#"{"feeds":[]}"#); // rss_feeds
     ok(r#"{"status":"OK"}"#); // create_rss_feed
     ok(r#"{"status":"OK"}"#); // update_rss_feed
@@ -257,6 +258,7 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
         unwanted_keywords: "CAM".into(),
         skip_existing: true,
     };
+    client.file(1).unwrap();
     client.rss_feeds().unwrap();
     client.create_rss_feed(&feed).unwrap();
     client.update_rss_feed(5, &feed).unwrap();
@@ -265,7 +267,7 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     client.delete_rss_feed(5).unwrap();
 
     let requests: Vec<Request> = fake.requests();
-    assert_eq!(requests.len(), 20);
+    assert_eq!(requests.len(), 21);
     for request in &requests {
         let path = template(&request.path);
         let method = match request.method {
