@@ -43,3 +43,5 @@ back-off, auto-close and status-line expiry are all unit-tested without sleeping
 - **Polling** starts right after sign-in and backs off on errors and rate limits.
 - **Avatars:** the header shows the account's initial. A Gravatar would need a hash of the e-mail sent to a third party, so there is none.
 - **Updates** compare semantic versions; installing one is described in [updates.md](updates.md).
+- **RSS feeds** live on put.io, which watches them and turns new items into transfers; the app only manages the list (`state/feeds.rs`). The list is fetched when the Feeds tab is open and not otherwise, a form is checked before anything is sent (`feeds.rs`), and what put.io refuses is explained in the user's language. A feed's address often carries a private key, so only its host is ever shown and only a web address is ever copied.
+- **The window's tabs** (`ui/tabs.rs`) are planned before they are painted: counts go first, then labels are cut, so the longest German or Spanish word cannot push the controls beside it out of place. The tests draw each piece in every language at the narrowest window and look at where the text lands.

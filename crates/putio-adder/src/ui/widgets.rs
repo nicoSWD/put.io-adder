@@ -573,6 +573,57 @@ mod tests {
         }
     }
 
+    /// Run `frames` frames of a text field, feeding `events` to the second one.
+    fn typed_into_a_field(events: Vec<egui::Event>, limit: usize) -> String {
+        let ctx = egui::Context::default();
+        theme::apply(&ctx, putio_core::settings::ThemeChoice::Light);
+        let mut value = String::new();
+        for frame in 0..4 {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    Pos2::ZERO,
+                    Vec2::new(400.0, 300.0),
+                )),
+                events: if frame == 2 {
+                    events.clone()
+                } else {
+                    Vec::new()
+                },
+                ..Default::default()
+            };
+            let output = ctx.run_ui(input, |ui| {
+                let label = ui.label("Address").id;
+                let field =
+                    text_field(ui, &mut value, "https://example.com/feed.xml", label, limit);
+                if frame == 0 {
+                    field.request_focus();
+                }
+            });
+            output.drop_without_applying_deltas();
+        }
+        value
+    }
+
+    #[test]
+    fn what_is_typed_or_pasted_lands_in_the_field_and_stops_at_its_limit() {
+        assert_eq!(
+            typed_into_a_field(vec![egui::Event::Text("abc".into())], 100),
+            "abc"
+        );
+        assert_eq!(
+            typed_into_a_field(
+                vec![egui::Event::Paste("https://example.com/feed.xml".into())],
+                100
+            ),
+            "https://example.com/feed.xml"
+        );
+        assert_eq!(
+            typed_into_a_field(vec![egui::Event::Paste("0123456789ABCDEF".into())], 10),
+            "0123456789",
+            "the limit holds for a paste too"
+        );
+    }
+
     #[test]
     fn text_is_cut_with_an_ellipsis_only_when_it_does_not_fit() {
         #[allow(clippy::cast_precision_loss)] // tiny test strings
