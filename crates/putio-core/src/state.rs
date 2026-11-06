@@ -175,6 +175,7 @@ pub enum StreamFailure {
 pub enum SettingsChange {
     CloseAfterMagnet(bool),
     CloseAfterTorrent(bool),
+    TrashTorrentAfterUpload(bool),
     CheckForUpdates(bool),
     DefaultFolder(Option<Folder>),
     Theme(ThemeChoice),
@@ -369,6 +370,8 @@ pub enum Effect {
         op: OpId,
         path: PathBuf,
         parent: Option<i64>,
+        /// Move the file to the Trash once put.io has taken it (the setting, as it was when the upload started).
+        trash_after: bool,
     },
     CancelTransfer {
         op: OpId,
@@ -951,6 +954,9 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
             match change {
                 SettingsChange::CloseAfterMagnet(on) => state.settings.close_after_magnet = on,
                 SettingsChange::CloseAfterTorrent(on) => state.settings.close_after_torrent = on,
+                SettingsChange::TrashTorrentAfterUpload(on) => {
+                    state.settings.trash_torrent_after_upload = on;
+                }
                 SettingsChange::CheckForUpdates(on) => state.settings.check_for_updates = on,
                 SettingsChange::DefaultFolder(folder) => state.settings.default_folder = folder,
                 SettingsChange::Theme(theme) => state.settings.theme = theme,
@@ -1414,7 +1420,12 @@ fn intake(state: &mut State, item: Intake, fx: &mut Vec<Effect>) {
         Intake::TorrentFile(path) => {
             let op = state.op(Op::UploadTorrent);
             state.say_until_replaced(Msg::Uploading { name });
-            fx.push(Effect::UploadTorrent { op, path, parent });
+            fx.push(Effect::UploadTorrent {
+                op,
+                path,
+                parent,
+                trash_after: state.settings.trash_torrent_after_upload,
+            });
         }
     }
 }
@@ -3275,6 +3286,43 @@ mod tests {
             Event::SettingsChanged(SettingsChange::DefaultFolder(Some(folder.clone()))),
         );
         assert_eq!(state.settings.default_folder, Some(folder));
+    }
+
+    #[test]
+    fn the_trash_setting_is_applied_saved_and_handed_to_each_upload() {
+        let (mut state, _) = signed_in(no_updates());
+        poll_ok(&mut state, 0, vec![]);
+        let upload = |state: &mut State| {
+            update(
+                state,
+                10,
+                Event::Intake(Intake::TorrentFile("/tmp/a.torrent".into())),
+            )
+        };
+        // Off by default: the file is left where it is.
+        assert!(matches!(
+            &upload(&mut state)[..],
+            [Effect::UploadTorrent {
+                trash_after: false,
+                ..
+            }]
+        ));
+        let fx = update(
+            &mut state,
+            20,
+            Event::SettingsChanged(SettingsChange::TrashTorrentAfterUpload(true)),
+        );
+        assert!(matches!(&fx[..], [Effect::SaveSettings(s)] if s.trash_torrent_after_upload));
+        assert!(matches!(
+            &upload(&mut state)[..],
+            [Effect::UploadTorrent {
+                trash_after: true,
+                ..
+            }]
+        ));
+        // Magnet links have no file to move.
+        let fx = update(&mut state, 30, Event::Intake(magnet("Show")));
+        assert!(matches!(&fx[..], [Effect::AddMagnet { .. }]));
     }
 
     #[test]

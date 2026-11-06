@@ -164,7 +164,7 @@ fn form(ctx: &egui::Context, app: &mut App) {
     let workers = app.workers();
     let (frame, backdrop) = widgets::dialog_frame();
     let mut chosen: Option<Folder> = None;
-    let response = egui::Modal::new(Id::new("feed-form"))
+    let response = egui::Modal::new(Id::unique("feed-form"))
         .backdrop_color(backdrop)
         .frame(frame)
         .show(ctx, |ui| {
@@ -531,7 +531,7 @@ fn ask_to_delete(ctx: &egui::Context, app: &mut App) {
     let (frame, backdrop) = widgets::dialog_frame();
     let mut confirmed = false;
     let mut cancelled = false;
-    let response = egui::Modal::new(Id::new("feed-delete"))
+    let response = egui::Modal::new(Id::unique("feed-delete"))
         .backdrop_color(backdrop)
         .frame(frame)
         .show(ctx, |ui| {

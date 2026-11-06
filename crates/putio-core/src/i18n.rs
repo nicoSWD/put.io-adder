@@ -259,6 +259,8 @@ pub enum Msg {
     PrefsQuitMagnetHint,
     PrefsQuitTorrent,
     PrefsQuitTorrentHint,
+    PrefsTrashTorrent,
+    PrefsTrashTorrentHint,
     PrefsCheckUpdatesHint,
     PrefsDownloads,
     PrefsSaveIn,
@@ -891,6 +893,20 @@ impl Msg {
                 "Closes the app 5 seconds after the upload finished.",
                 "Schließt die App 5 Sekunden nach dem Hochladen.",
                 "Cierra la app 5 segundos después de terminar la subida."
+            )
+            .into(),
+            Self::PrefsTrashTorrent => tr!(
+                l,
+                "Move .torrent files to the Trash after uploading",
+                "Hochgeladene .torrent-Dateien in den Papierkorb",
+                "Mover los .torrent a la papelera tras subirlos"
+            )
+            .into(),
+            Self::PrefsTrashTorrentHint => tr!(
+                l,
+                "Only once put.io has taken the file.",
+                "Erst, nachdem put.io die Datei angenommen hat.",
+                "Solo cuando put.io haya aceptado el archivo."
             )
             .into(),
             Self::PrefsCheckUpdatesHint => tr!(
@@ -1707,6 +1723,8 @@ mod tests {
             Msg::AuthRequired,
             Msg::ColName,
             Msg::PrefsTitle,
+            Msg::PrefsTrashTorrent,
+            Msg::PrefsTrashTorrentHint,
             Msg::UpToDate,
             Msg::LinkInstructions,
             Msg::NotificationTitle,

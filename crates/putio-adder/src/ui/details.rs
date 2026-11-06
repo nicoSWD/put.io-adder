@@ -41,7 +41,7 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
     let locale = app.state.locale;
     let (frame, backdrop) = widgets::dialog_frame();
     let mut action = None;
-    let response = egui::Modal::new(egui::Id::new("transfer-details"))
+    let response = egui::Modal::new(egui::Id::unique("transfer-details"))
         .backdrop_color(backdrop)
         .frame(frame)
         .show(ctx, |ui| {

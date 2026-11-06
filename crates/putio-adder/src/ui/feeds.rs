@@ -6,8 +6,7 @@
 //! colours and nothing moves, and every text is cut to its room, so no language can push a card out of shape.
 
 use eframe::egui::{
-    self, Align2, Color32, CornerRadius, Pos2, Rect, Sense, Stroke, Ui, Vec2, WidgetInfo,
-    WidgetType,
+    self, Align2, Color32, CornerRadius, Pos2, Rect, Role, Sense, Stroke, Ui, Vec2, WidgetInfo,
 };
 use putio_api::RssFeed;
 use putio_core::feeds::{FeedStatus, display_title, host_of, status_of};
@@ -213,12 +212,12 @@ fn draw_card(ui: &mut Ui, feed: &RssFeed, selected: bool, locale: Locale) -> Car
     .text(locale);
     widgets::describe(
         &body,
-        WidgetType::Button,
+        Role::Button,
         &format!("{title}, {host}, {status_text}"),
     );
     widgets::describe(
         &more,
-        WidgetType::Button,
+        Role::Button,
         &format!("{}: {title}", Msg::A11yFeedActions.text(locale)),
     );
     widgets::focus_ring(ui, &body, rect, CornerRadius::same(10));
@@ -507,7 +506,7 @@ fn paint_add_button(ui: &mut Ui, label: &str) -> egui::Response {
     let size = Vec2::new(10.0 + 12.0 + 6.0 + galley.size().x + 14.0, ADD_HEIGHT);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, label));
+    response.widget_info(|| WidgetInfo::labeled(Role::Button, true, label));
     widgets::focus_ring(ui, &response, rect, CornerRadius::same(13));
     ui.painter().rect_filled(
         rect,

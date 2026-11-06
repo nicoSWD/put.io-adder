@@ -6,8 +6,7 @@
 //! first, then the labels are shortened with an ellipsis, and the right-hand side never moves.
 
 use eframe::egui::{
-    self, Align, CornerRadius, Layout, Pos2, Rect, Sense, Ui, UiBuilder, Vec2, WidgetInfo,
-    WidgetType,
+    self, Align, CornerRadius, Layout, Pos2, Rect, Role, Sense, Ui, UiBuilder, Vec2, WidgetInfo,
 };
 use putio_core::i18n::Msg;
 use putio_core::settings::Tab;
@@ -297,13 +296,17 @@ fn count_width(painter: &egui::Painter, count: usize) -> f32 {
 fn tab(ui: &mut Ui, rect: Rect, item: &Item, slot: &Slot, selected: bool) -> egui::Response {
     let p = theme::pal();
     let response = ui
-        .interact(rect, egui::Id::new(("tab", item.tab as u8)), Sense::click())
+        .interact(
+            rect,
+            egui::Id::unique(("tab", item.tab as u8)),
+            Sense::click(),
+        )
         .on_hover_cursor(egui::CursorIcon::PointingHand);
     let name = match item.count {
         Some(count) => format!("{}, {count}", item.label),
         None => item.label.clone(),
     };
-    response.widget_info(|| WidgetInfo::selected(WidgetType::RadioButton, true, selected, &name));
+    response.widget_info(|| WidgetInfo::selected(Role::RadioButton, true, selected, &name));
     widgets::focus_ring(
         ui,
         &response,

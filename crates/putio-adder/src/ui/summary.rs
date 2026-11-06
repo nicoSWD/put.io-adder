@@ -193,7 +193,7 @@ pub(crate) fn show(ui: &egui::Ui, app: &App, area: Rect) {
 
     // The whole sentence, for anyone who wants it.
     let shown = Rect::from_min_max(area.min, Pos2::new((x - GAP).min(area.right()), area.max.y));
-    ui.interact(shown, egui::Id::new("summary-chips"), Sense::hover())
+    ui.interact(shown, egui::Id::unique("summary-chips"), Sense::hover())
         .on_hover_text(app.state.status_text(app.now()));
 }
 
