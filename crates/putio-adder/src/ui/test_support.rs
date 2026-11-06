@@ -49,6 +49,52 @@ pub(crate) fn rendered_text(mut add: impl FnMut(&mut egui::Ui)) -> Vec<String> {
     out
 }
 
+/// A piece of text as drawn: what it says, and the part of it that can be seen.
+#[derive(Debug, Clone)]
+pub(crate) struct TextBox {
+    pub(crate) text: String,
+    /// The text's rectangle cut to the clip rectangle it was painted with: what the user sees.
+    pub(crate) visible: Rect,
+    /// The text's rectangle as laid out, before any clipping.
+    pub(crate) full: Rect,
+}
+
+/// Every piece of text drawn by one frame of `add`, with where it is. Layout is what the tests of
+/// "does this language fit" are made of: a text that sticks out of its container shows up here as a box
+/// whose `visible` rectangle crosses the container's edge.
+pub(crate) fn text_boxes(mut add: impl FnMut(&mut egui::Ui)) -> Vec<TextBox> {
+    fn collect(shape: &egui::Shape, clip: Rect, out: &mut Vec<TextBox>) {
+        match shape {
+            egui::Shape::Text(text) => {
+                let full = text.visual_bounding_rect();
+                out.push(TextBox {
+                    text: text.galley.text().to_owned(),
+                    visible: full.intersect(clip),
+                    full,
+                });
+            }
+            egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, clip, out)),
+            _ => {}
+        }
+    }
+    let ctx = egui::Context::default();
+    theme::apply(&ctx, ThemeChoice::Light);
+    let mut out = Vec::new();
+    for _ in 0..3 {
+        out.clear();
+        let input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(900.0, 1200.0))),
+            ..Default::default()
+        };
+        let output = ctx.run_ui(input, |ui| add(ui));
+        for clipped in &output.shapes {
+            collect(&clipped.shape, clipped.clip_rect, &mut out);
+        }
+        output.drop_without_applying_deltas();
+    }
+    out
+}
+
 /// What a screen reader is told about one frame of `add`: (role, name) of every node that has a name.
 /// A control that is only painted and never described does not show up here.
 pub(crate) fn accessible_names(mut add: impl FnMut(&mut egui::Ui)) -> Vec<(String, String)> {

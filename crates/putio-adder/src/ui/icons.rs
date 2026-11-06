@@ -2,6 +2,7 @@
 
 use eframe::egui::{self, Color32, CornerRadius, Painter, Pos2, Rect, Stroke, StrokeKind, Vec2};
 use putio_api::TransferStatus;
+use putio_core::feeds::FeedStatus;
 
 use super::theme;
 
@@ -31,6 +32,9 @@ pub(crate) enum Glyph {
     Check,
     Cross,
     ArrowDown,
+    /// The feed symbol: a dot and two arcs.
+    Rss,
+    Plus,
 }
 
 pub(crate) fn glyph(painter: &Painter, center: Pos2, glyph: Glyph, scale: f32, color: Color32) {
@@ -49,6 +53,17 @@ pub(crate) fn glyph(painter: &Painter, center: Pos2, glyph: Glyph, scale: f32, c
             painter.line_segment([at(0.0, -4.5), at(0.0, 3.5)], stroke);
             painter.line_segment([at(-3.8, 0.0), at(0.0, 4.0)], stroke);
             painter.line_segment([at(3.8, 0.0), at(0.0, 4.0)], stroke);
+        }
+        Glyph::Rss => {
+            let corner = at(-3.6, 3.6);
+            painter.circle_filled(corner, (1.7 * scale).max(1.2), color);
+            let thin = Stroke::new((1.8 * scale).max(1.3), color);
+            arc(painter, corner, 4.6 * scale, 0.0, 90.0, thin);
+            arc(painter, corner, 8.4 * scale, 0.0, 90.0, thin);
+        }
+        Glyph::Plus => {
+            painter.line_segment([at(-4.0, 0.0), at(4.0, 0.0)], stroke);
+            painter.line_segment([at(0.0, -4.0), at(0.0, 4.0)], stroke);
         }
     }
 }
@@ -69,6 +84,8 @@ pub(crate) enum MenuIcon {
     Info,
     Download,
     Check,
+    Pause,
+    Edit,
 }
 
 /// A circular arc as a polyline (angles in degrees, 0 = right, increasing counter-clockwise on screen).
@@ -207,6 +224,18 @@ pub(crate) fn menu_icon(painter: &Painter, center: Pos2, icon: MenuIcon, color: 
             painter.line_segment([at(-6.5, 7.0), at(6.5, 7.0)], stroke);
             painter.line_segment([at(6.5, 7.0), at(6.5, 3.0)], stroke);
         }
+        MenuIcon::Pause => {
+            painter.line_segment([at(-3.2, -5.5), at(-3.2, 5.5)], stroke);
+            painter.line_segment([at(3.2, -5.5), at(3.2, 5.5)], stroke);
+        }
+        MenuIcon::Edit => {
+            // A pencil: the body running up to the right, a tip at the lower left and a line under it.
+            painter.line_segment([at(-5.5, 5.5), at(-4.6, 1.6)], stroke);
+            painter.line_segment([at(-5.5, 5.5), at(-1.6, 4.6)], stroke);
+            painter.line_segment([at(-4.6, 1.6), at(2.6, -5.6)], stroke);
+            painter.line_segment([at(-1.6, 4.6), at(5.6, -2.6)], stroke);
+            painter.line_segment([at(2.6, -5.6), at(5.6, -2.6)], stroke);
+        }
         MenuIcon::Check => {
             painter.line_segment([at(-6.0, 0.5), at(-2.0, 4.5)], stroke);
             painter.line_segment([at(-2.0, 4.5), at(6.5, -4.5)], stroke);
@@ -282,6 +311,34 @@ pub(crate) fn empty_badge(painter: &Painter, center: Pos2) {
         [center + Vec2::new(7.5, 1.0), center + Vec2::new(0.0, 8.5)],
         stroke,
     );
+}
+
+/// The round badge of a feed's row, in the colours of its state (the same family as [`status_badge`]).
+pub(crate) fn feed_badge(painter: &Painter, center: Pos2, status: FeedStatus) {
+    let radius = 12.0;
+    let p = theme::pal();
+    match status {
+        FeedStatus::Active => {
+            painter.circle_filled(center, radius, p.yellow_soft);
+            glyph(painter, center, Glyph::Rss, 1.0, p.accent_text);
+        }
+        FeedStatus::Paused => {
+            painter.circle_filled(center, radius, p.neutral_soft);
+            glyph(painter, center, Glyph::Rss, 1.0, p.muted);
+        }
+        FeedStatus::Problem => {
+            painter.circle_filled(center, radius, p.error_soft);
+            painter.circle_stroke(center, radius, Stroke::new(1.0, p.error));
+            glyph(painter, center, Glyph::Rss, 1.0, p.error);
+        }
+    }
+}
+
+/// The big round badge of the empty feeds list, like [`empty_badge`] with the feed symbol.
+pub(crate) fn empty_feeds_badge(painter: &Painter, center: Pos2) {
+    painter.circle_filled(center, 26.0, theme::pal().yellow_soft);
+    painter.circle_stroke(center, 26.0, Stroke::new(1.5, theme::pal().badge_border));
+    glyph(painter, center, Glyph::Rss, 2.1, theme::pal().accent_text);
 }
 
 /// A slim rounded progress bar: `fraction` in `0.0..=1.0` painted over an empty track.

@@ -1,6 +1,8 @@
 //! Drawing. Reads the core [`State`](putio_core::state::State) and reports user actions as events.
 
 pub(crate) mod details;
+pub(crate) mod feed_form;
+pub(crate) mod feeds;
 pub(crate) mod handler;
 pub(crate) mod header;
 pub(crate) mod icons;
@@ -9,6 +11,7 @@ pub(crate) mod menu;
 pub(crate) mod prefs;
 pub(crate) mod summary;
 pub(crate) mod table;
+pub(crate) mod tabs;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub(crate) mod theme;
@@ -36,6 +39,8 @@ pub(crate) enum Overlay {
     Sort,
     /// The "⋯" menu of the transfer with this id.
     Card(i64),
+    /// The "⋯" menu of the feed with this id.
+    FeedCard(i64),
 }
 
 /// State that only the UI cares about.
@@ -50,9 +55,15 @@ pub(crate) struct UiState {
     pub(crate) open_once: Option<Overlay>,
     /// The transfer last clicked (highlighted).
     pub(crate) selected: Option<i64>,
+    /// The feed last clicked (highlighted).
+    pub(crate) selected_feed: Option<i64>,
+    /// The add / edit feed form and the delete confirmation.
+    pub(crate) feed_dialog: feed_form::FeedDialog,
     /// The transfer whose details panel is open.
     pub(crate) details: Option<i64>,
     pub(crate) folders: prefs::FolderPicker,
+    /// Names of the folders asked about so far (`None`: put.io could not say).
+    pub(crate) folder_names: std::collections::HashMap<i64, Option<String>>,
 }
 
 impl Default for UiState {
@@ -64,13 +75,20 @@ impl Default for UiState {
             menu_open: false,
             open_once: None,
             selected: None,
+            selected_feed: None,
+            feed_dialog: feed_form::FeedDialog::default(),
             details: None,
             folders: prefs::FolderPicker::default(),
+            folder_names: std::collections::HashMap::new(),
         }
     }
 }
 
 impl UiState {
+    pub(crate) fn folder_named(&mut self, id: i64, name: Option<String>) {
+        self.folder_names.insert(id, name);
+    }
+
     pub(crate) fn folder_listed(&mut self, parent: i64, result: Result<FileListing, ApiError>) {
         self.folders.listed(parent, result);
     }
@@ -94,7 +112,7 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
                 |ui| {
                     if matches!(app.state.auth, Auth::SignedIn) {
                         if app.state.transfers_expanded {
-                            table::show(ui, app);
+                            tabs::show(ui, app);
                         }
                     } else {
                         login::show(ui, app);
@@ -103,6 +121,7 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
             );
         });
     prefs::show(&ctx, app);
+    feed_form::show(&ctx, app);
     details::show(&ctx, app);
     handler::show(&ctx, app);
 }

@@ -20,7 +20,9 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use putio_api::client::FileListing;
-use putio_api::{ApiError, Client, FileType, Token, Transport, UploadOutcome, UreqTransport};
+use putio_api::{
+    ApiError, Client, FileType, RssFeedSettings, Token, Transport, UploadOutcome, UreqTransport,
+};
 use putio_core::state::{Event, OpId, Prepared, StreamFailure};
 use putio_core::update::UpdateAsset;
 use putio_platform::handler;
@@ -91,6 +93,25 @@ pub(crate) enum Job {
     ListFolders {
         parent: i64,
     },
+    /// The name of a folder, for the feed form (UI-local too).
+    FolderName {
+        id: i64,
+    },
+    LoadFeeds,
+    SaveFeed {
+        op: OpId,
+        id: Option<i64>,
+        settings: RssFeedSettings,
+    },
+    SetFeedPaused {
+        op: OpId,
+        id: i64,
+        paused: bool,
+    },
+    DeleteFeed {
+        op: OpId,
+        id: i64,
+    },
 }
 
 impl Job {
@@ -121,6 +142,11 @@ pub(crate) enum WorkerMsg {
     Folders {
         parent: i64,
         result: Result<FileListing, ApiError>,
+    },
+    /// The answer to `Job::FolderName`: `None` when put.io could not say.
+    FolderName {
+        id: i64,
+        name: Option<String>,
     },
     /// An update is downloaded and unpacked. The unpacked update itself (paths) stays with the app,
     /// not in the core state machine, which is told only whether it worked.
@@ -406,6 +432,29 @@ fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
             WorkerMsg::Core(Event::DefaultHandlerRegistered(handler::register()))
         }
         Job::LatestRelease => WorkerMsg::Core(Event::ReleaseFetched(client.latest_release())),
+        Job::LoadFeeds => WorkerMsg::Core(Event::FeedsLoaded(client.rss_feeds())),
+        Job::SaveFeed { op, id, settings } => {
+            let result = match id {
+                Some(id) => client.update_rss_feed(id, &settings),
+                None => client.create_rss_feed(&settings),
+            };
+            WorkerMsg::Core(Event::FeedSaved { op, result })
+        }
+        Job::SetFeedPaused { op, id, paused } => WorkerMsg::Core(Event::FeedPauseFinished {
+            op,
+            id,
+            paused,
+            result: client.set_rss_feed_paused(id, paused),
+        }),
+        Job::DeleteFeed { op, id } => WorkerMsg::Core(Event::FeedDeleteFinished {
+            op,
+            id,
+            result: client.delete_rss_feed(id),
+        }),
+        Job::FolderName { id } => WorkerMsg::FolderName {
+            id,
+            name: client.file(id).ok().map(|file| file.name),
+        },
         Job::ListFolders { parent } => WorkerMsg::Folders {
             parent,
             result: client.list_files(parent, Some(FileType::Folder)),
@@ -884,6 +933,9 @@ mod tests {
             Job::DeviceCode,
             Job::LatestRelease,
             Job::Cancel { op: OpId(1), id: 1 },
+            Job::LoadFeeds,
+            Job::DeleteFeed { op: OpId(1), id: 1 },
+            Job::FolderName { id: 1 },
             Job::AddMagnet {
                 op: OpId(1),
                 uri: String::new(),
@@ -891,6 +943,178 @@ mod tests {
             },
         ] {
             assert!(!job.is_heavy(), "{job:?}");
+        }
+    }
+
+    fn feed_settings() -> RssFeedSettings {
+        RssFeedSettings {
+            title: "Releases".into(),
+            url: "https://example.invalid/feed.xml".into(),
+            parent_dir_id: 3,
+            ..RssFeedSettings::default()
+        }
+    }
+
+    #[test]
+    fn feeds_are_listed_and_the_answer_goes_to_the_core() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            200,
+            r#"{"status":"OK","feeds":[{"id":4,"title":"A","rss_source_url":"https://e.invalid/f"}]}"#,
+        );
+        let msg = execute(&client(&fake), Job::LoadFeeds);
+        assert_eq!(fake.last_request().unwrap().describe(), "GET /rss/list");
+        match msg {
+            WorkerMsg::Core(Event::FeedsLoaded(Ok(feeds))) => {
+                assert_eq!(feeds.len(), 1);
+                assert_eq!(feeds[0].id, 4);
+            }
+            other => panic!("{other:?}"),
+        }
+        // A failure is carried to the core, which decides what to say.
+        fake.push_json(500, r#"{"error_type":"Boom","error_message":"x"}"#);
+        assert!(matches!(
+            execute(&client(&fake), Job::LoadFeeds),
+            WorkerMsg::Core(Event::FeedsLoaded(Err(_)))
+        ));
+    }
+
+    #[test]
+    fn saving_a_feed_creates_a_new_one_and_updates_an_existing_one() {
+        let fake = FakeTransport::new();
+        fake.push_json(200, r#"{"status":"OK"}"#);
+        fake.push_json(200, r#"{"status":"OK"}"#);
+        let create = execute(
+            &client(&fake),
+            Job::SaveFeed {
+                op: OpId(5),
+                id: None,
+                settings: feed_settings(),
+            },
+        );
+        assert!(matches!(
+            create,
+            WorkerMsg::Core(Event::FeedSaved {
+                op: OpId(5),
+                result: Ok(())
+            })
+        ));
+        let update = execute(
+            &client(&fake),
+            Job::SaveFeed {
+                op: OpId(6),
+                id: Some(12),
+                settings: feed_settings(),
+            },
+        );
+        assert!(matches!(
+            update,
+            WorkerMsg::Core(Event::FeedSaved {
+                op: OpId(6),
+                result: Ok(())
+            })
+        ));
+        let sent: Vec<String> = fake
+            .requests()
+            .iter()
+            .map(putio_api::Request::describe)
+            .collect();
+        assert_eq!(sent, ["POST /rss/create", "POST /rss/12"]);
+    }
+
+    #[test]
+    fn pausing_resuming_and_deleting_report_which_feed_they_were_about() {
+        let fake = FakeTransport::new();
+        for _ in 0..3 {
+            fake.push_json(200, r#"{"status":"OK"}"#);
+        }
+        let c = client(&fake);
+        let paused = execute(
+            &c,
+            Job::SetFeedPaused {
+                op: OpId(1),
+                id: 8,
+                paused: true,
+            },
+        );
+        assert!(matches!(
+            paused,
+            WorkerMsg::Core(Event::FeedPauseFinished {
+                op: OpId(1),
+                id: 8,
+                paused: true,
+                result: Ok(())
+            })
+        ));
+        let resumed = execute(
+            &c,
+            Job::SetFeedPaused {
+                op: OpId(2),
+                id: 8,
+                paused: false,
+            },
+        );
+        assert!(matches!(
+            resumed,
+            WorkerMsg::Core(Event::FeedPauseFinished { paused: false, .. })
+        ));
+        let deleted = execute(&c, Job::DeleteFeed { op: OpId(3), id: 8 });
+        assert!(matches!(
+            deleted,
+            WorkerMsg::Core(Event::FeedDeleteFinished {
+                op: OpId(3),
+                id: 8,
+                result: Ok(())
+            })
+        ));
+        let sent: Vec<String> = fake
+            .requests()
+            .iter()
+            .map(putio_api::Request::describe)
+            .collect();
+        assert_eq!(
+            sent,
+            [
+                "POST /rss/8/pause",
+                "POST /rss/8/resume",
+                "POST /rss/8/delete"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_folders_name_comes_back_or_not_at_all() {
+        let fake = FakeTransport::new();
+        fake.push_json(200, r#"{"file":{"id":3,"name":"TV Shows"}}"#);
+        match execute(&client(&fake), Job::FolderName { id: 3 }) {
+            WorkerMsg::FolderName { id: 3, name } => assert_eq!(name.as_deref(), Some("TV Shows")),
+            other => panic!("{other:?}"),
+        }
+        fake.push_json(404, r#"{"error_type":"NotFound","error_message":"gone"}"#);
+        match execute(&client(&fake), Job::FolderName { id: 3 }) {
+            WorkerMsg::FolderName { id: 3, name } => assert_eq!(name, None),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn feed_jobs_belong_to_the_session_that_sent_them() {
+        for job in [
+            Job::LoadFeeds,
+            Job::DeleteFeed { op: OpId(1), id: 1 },
+            Job::SetFeedPaused {
+                op: OpId(1),
+                id: 1,
+                paused: true,
+            },
+            Job::SaveFeed {
+                op: OpId(1),
+                id: None,
+                settings: feed_settings(),
+            },
+            Job::FolderName { id: 1 },
+        ] {
+            assert!(job.is_session_bound(), "{job:?}");
         }
     }
 }

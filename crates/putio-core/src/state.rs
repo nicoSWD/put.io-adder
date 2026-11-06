@@ -9,7 +9,10 @@
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 
-use putio_api::{Account, ApiError, DeviceCode, Release, Token, Transfer, ZipState, ZipStatus};
+use putio_api::{
+    Account, ApiError, DeviceCode, Release, RssFeed, RssFeedSettings, Token, Transfer, ZipState,
+    ZipStatus,
+};
 
 use crate::update::UpdateAsset;
 
@@ -17,9 +20,13 @@ use crate::download;
 use crate::handler;
 use crate::i18n::{Locale, Msg};
 use crate::intake::{Intake, IntakeError};
-use crate::settings::{Folder, Settings, ThemeChoice, WindowSize};
+use crate::settings::{Folder, Settings, Tab, ThemeChoice, WindowSize};
 use crate::transfers::{self, Summary, Tracker};
 use crate::update::{self, UpdateStatus};
+
+mod feeds;
+
+pub use feeds::{FeedList, FeedSave};
 
 /// Monotonic milliseconds supplied by the shell.
 pub type Millis = u64;
@@ -96,6 +103,10 @@ enum Op {
     Download,
     Update,
     Stream,
+    FeedCreate,
+    FeedUpdate,
+    FeedPause,
+    FeedDelete,
 }
 
 /// Where an in-place update has got to.
@@ -290,6 +301,41 @@ pub enum Event {
     ToggleTransfers,
     SettingsChanged(SettingsChange),
 
+    /// Show another list under the header.
+    SelectTab(Tab),
+    /// The answer to `Effect::LoadFeeds`.
+    FeedsLoaded(Result<Vec<RssFeed>, ApiError>),
+    /// "Try again" after the feeds could not be loaded.
+    FeedsRefreshRequested,
+    /// Add a feed (`id: None`) or change one.
+    FeedSaveRequested {
+        id: Option<i64>,
+        settings: RssFeedSettings,
+    },
+    FeedSaved {
+        op: OpId,
+        result: Result<(), ApiError>,
+    },
+    /// The add / edit form has seen how its request ended and closed.
+    FeedSaveDismissed,
+    FeedPauseRequested {
+        id: i64,
+        paused: bool,
+    },
+    FeedPauseFinished {
+        op: OpId,
+        id: i64,
+        paused: bool,
+        result: Result<(), ApiError>,
+    },
+    FeedDeleteRequested(i64),
+    FeedCopyAddressRequested(i64),
+    FeedDeleteFinished {
+        op: OpId,
+        id: i64,
+        result: Result<(), ApiError>,
+    },
+
     CheckForUpdates {
         user_initiated: bool,
     },
@@ -338,6 +384,23 @@ pub enum Effect {
     CleanTransfers {
         op: OpId,
         ids: Vec<i64>,
+    },
+    /// Fetch the account's RSS feeds (answered with `Event::FeedsLoaded`).
+    LoadFeeds,
+    /// Add a feed (`id: None`) or change one.
+    SaveFeed {
+        op: OpId,
+        id: Option<i64>,
+        settings: RssFeedSettings,
+    },
+    SetFeedPaused {
+        op: OpId,
+        id: i64,
+        paused: bool,
+    },
+    DeleteFeed {
+        op: OpId,
+        id: i64,
     },
     /// Put text on the system clipboard. Only ever built here, from validated data.
     CopyText(String),
@@ -395,6 +458,10 @@ pub struct State {
     pub transfers: Vec<Transfer>,
     pub summary: Summary,
     pub transfers_expanded: bool,
+    /// The list showing under the header.
+    pub tab: Tab,
+    /// The account's RSS feeds as last fetched.
+    pub feeds: FeedList,
     pub update: UpdateStatus,
     pub install: Install,
     pub install_target: InstallTarget,
@@ -418,6 +485,8 @@ pub struct State {
     poll_in_flight: bool,
     next_poll_at: Option<Millis>,
     zip: Option<ZipJob>,
+    feed_save: FeedSave,
+    feed_schedule: feeds::Schedule,
     failures: u32,
     close_at: Option<Millis>,
     badge: Option<u8>,
@@ -436,6 +505,8 @@ impl State {
     pub fn new(settings: Settings, locale: Locale, current_version: &str) -> Self {
         Self {
             transfers_expanded: settings.transfers_expanded,
+            tab: settings.tab,
+            feeds: FeedList::default(),
             settings,
             locale,
             auth: Auth::Starting,
@@ -460,6 +531,8 @@ impl State {
             poll_in_flight: false,
             next_poll_at: None,
             zip: None,
+            feed_save: FeedSave::Idle,
+            feed_schedule: feeds::Schedule::default(),
             failures: 0,
             close_at: None,
             badge: None,
@@ -469,6 +542,12 @@ impl State {
             opening: None,
             handler_asked: false,
         }
+    }
+
+    /// How the add / edit feed form's request stands.
+    #[must_use]
+    pub fn feed_save(&self) -> &FeedSave {
+        &self.feed_save
     }
 
     /// The message for the status line right now: a recent notice, else the standing message.
@@ -849,6 +928,28 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
             state.settings.transfers_expanded = state.transfers_expanded;
             fx.push(Effect::SaveSettings(state.settings.clone()));
         }
+        Event::SelectTab(tab) => feeds::select_tab(state, now, tab, &mut fx),
+        Event::FeedsLoaded(result) => feeds::loaded(state, now, result, &mut fx),
+        Event::FeedsRefreshRequested => feeds::retry(state, now),
+        Event::FeedSaveRequested { id, settings } => {
+            feeds::save_requested(state, id, settings, &mut fx);
+        }
+        Event::FeedSaved { op, result } => feeds::save_finished(state, now, op, result, &mut fx),
+        Event::FeedSaveDismissed => feeds::save_dismissed(state),
+        Event::FeedPauseRequested { id, paused } => {
+            feeds::pause_requested(state, id, paused, &mut fx);
+        }
+        Event::FeedPauseFinished {
+            op,
+            id,
+            paused,
+            result,
+        } => feeds::pause_finished(state, now, (op, id, paused), result, &mut fx),
+        Event::FeedDeleteRequested(id) => feeds::delete_requested(state, id, &mut fx),
+        Event::FeedDeleteFinished { op, id, result } => {
+            feeds::delete_finished(state, now, (op, id), result, &mut fx);
+        }
+        Event::FeedCopyAddressRequested(id) => feeds::copy_address(state, now, id, &mut fx),
         Event::SettingsChanged(change) => {
             match change {
                 SettingsChange::CloseAfterMagnet(on) => state.settings.close_after_magnet = on,
@@ -1018,6 +1119,7 @@ fn sign_out(state: &mut State, fx: &mut Vec<Effect>) {
     state.pending_intake.clear();
     state.close_at = None;
     state.zip = None;
+    feeds::reset(state);
     // What was running for this account has no one to report to. (An update is not tied to the account.)
     state.ops.retain(|_, kind| *kind == Op::Update);
     state.busy = u32::try_from(state.ops.len()).unwrap_or(u32::MAX);
@@ -1443,6 +1545,7 @@ fn polled(
 }
 
 fn maybe_poll(state: &mut State, now: Millis, fx: &mut Vec<Effect>) {
+    feeds::maybe_load(state, now, fx);
     if state.is_signed_in()
         && !state.poll_in_flight
         && state.next_poll_at.is_some_and(|at| now >= at)

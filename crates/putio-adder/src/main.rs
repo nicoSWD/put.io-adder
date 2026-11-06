@@ -93,6 +93,9 @@ fn main() -> eframe::Result {
             .as_deref(),
     );
     let locale = sys_locale::get_locale().map_or(Locale::En, |tag| Locale::from_tag(&tag));
+    // Debug builds only: `PUTIO_ADDER_LOCALE=de` (or `es`) to look at a translation.
+    #[cfg(debug_assertions)]
+    let locale = std::env::var("PUTIO_ADDER_LOCALE").map_or(locale, |tag| Locale::from_tag(&tag));
 
     let (secrets, secrets_persist): (Arc<dyn SecretStore>, bool) = if demo {
         (Arc::new(MemoryStore::new()), true) // a demo run never touches the OS keychain, so it never prompts

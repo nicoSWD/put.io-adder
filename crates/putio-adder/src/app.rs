@@ -305,6 +305,31 @@ impl App {
                 transfers: Ok(transfers),
             },
         );
+        self.start_demo_feeds(ctx, view);
+    }
+
+    /// Debug builds only: the Feeds tab in each of its states (`feeds`, `feeds-empty`, `feeds-loading`,
+    /// `feeds-failed`, `feed-card-menu`) and its two cards (`feed-add`, `feed-edit`, `feed-delete`).
+    #[cfg(debug_assertions)]
+    fn start_demo_feeds(&mut self, ctx: &egui::Context, view: &str) {
+        if !view.starts_with("feed") {
+            return;
+        }
+        self.state.transfers_expanded = true;
+        self.dispatch(ctx, Event::SelectTab(putio_core::settings::Tab::Feeds));
+        let items = match view {
+            "feeds-empty" | "feeds-loading" | "feeds-failed" => Vec::new(),
+            _ => crate::demo::feeds(),
+        };
+        self.state.feeds = putio_core::state::FeedList {
+            loaded: !matches!(view, "feeds-loading" | "feeds-failed"),
+            failed: view == "feeds-failed",
+            items,
+        };
+        if view == "feed-card-menu" {
+            self.ui.open_once = Some(crate::ui::Overlay::FeedCard(5));
+        }
+        ui::feed_form::demo(self, ctx, view);
     }
 
     /// Debug builds only: the update flow in each of its states (`update`, `update-installing`,
@@ -410,6 +435,12 @@ impl App {
                 parent,
                 trash_after,
             }),
+            Effect::LoadFeeds => self.send(Job::LoadFeeds),
+            Effect::SaveFeed { op, id, settings } => self.send(Job::SaveFeed { op, id, settings }),
+            Effect::SetFeedPaused { op, id, paused } => {
+                self.send(Job::SetFeedPaused { op, id, paused });
+            }
+            Effect::DeleteFeed { op, id } => self.send(Job::DeleteFeed { op, id }),
             Effect::CancelTransfer { op, id } => self.send(Job::Cancel { op, id }),
             Effect::RetryTransfer { op, id } => self.send(Job::Retry { op, id }),
             Effect::CleanTransfers { op, ids } => self.send(Job::Clean { op, ids }),
@@ -487,6 +518,17 @@ impl App {
 
     fn pump(&mut self, ctx: &egui::Context) {
         self.token_loaded(ctx);
+        if self.state.is_signed_in()
+            && !self.ui.prefs_open
+            && !self.ui.feed_dialog.is_open()
+            && let Some(tab) = ui::tabs::pressed(ctx)
+        {
+            // A shortcut for a list also opens the list if it was folded away.
+            if !self.state.transfers_expanded {
+                self.dispatch(ctx, Event::ToggleTransfers);
+            }
+            self.dispatch(ctx, Event::SelectTab(tab));
+        }
         if ctx.input_mut(|input| input.consume_shortcut(&ui::menu::preferences_shortcut())) {
             self.ui.prefs_open = true;
         }
@@ -497,6 +539,7 @@ impl App {
             match message {
                 WorkerMsg::Core(event) => self.dispatch(ctx, event),
                 WorkerMsg::Folders { parent, result } => self.ui.folder_listed(parent, result),
+                WorkerMsg::FolderName { id, name } => self.ui.folder_named(id, name),
                 WorkerMsg::UpdatePrepared { op, result } => {
                     let result = result.map(|prepared| self.prepared_update = Some(prepared));
                     self.dispatch(ctx, Event::UpdatePrepared { op, result });

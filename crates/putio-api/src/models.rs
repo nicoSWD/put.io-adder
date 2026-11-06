@@ -19,6 +19,15 @@ where
     Ok(value.and_then(|value| serde_json::from_value(value).ok()))
 }
 
+/// Like [`lenient`], but a missing, `null` or wrongly typed value becomes `T::default()`.
+fn lenient_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: serde::de::DeserializeOwned + Default,
+{
+    lenient(deserializer).map(Option::unwrap_or_default)
+}
+
 fn null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
     D: Deserializer<'de>,
@@ -429,4 +438,59 @@ mod tests {
             assert_eq!(parsed, kind);
         }
     }
+}
+
+/// An RSS feed that put.io watches: new items in it become transfers, saved in `parent_dir_id`.
+///
+/// Every text field is **untrusted** server text. Nothing here may fail the whole feed list: a value of an
+/// unexpected type is dropped (or replaced by the default) on its own.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+pub struct RssFeed {
+    pub id: i64,
+    #[serde(default, deserialize_with = "lenient_default")]
+    pub title: String,
+    /// The address of the feed itself.
+    #[serde(default, deserialize_with = "lenient_default")]
+    pub rss_source_url: String,
+    /// The folder new items are saved in (`0` is the top level).
+    #[serde(default, deserialize_with = "lenient")]
+    pub parent_dir_id: Option<i64>,
+    #[serde(default, deserialize_with = "lenient_default")]
+    pub delete_old_files: bool,
+    /// Only items whose title contains one of these comma-separated words are taken.
+    #[serde(default, deserialize_with = "lenient")]
+    pub keyword: Option<String>,
+    /// Items whose title contains one of these comma-separated words are skipped.
+    #[serde(default, deserialize_with = "lenient")]
+    pub unwanted_keywords: Option<String>,
+    #[serde(default, deserialize_with = "lenient_default")]
+    pub paused: bool,
+    /// Timestamps are ISO 8601 as sent, without a time zone.
+    #[serde(default, deserialize_with = "lenient")]
+    pub created_at: Option<String>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub updated_at: Option<String>,
+    /// When put.io last looked at the feed.
+    #[serde(default, deserialize_with = "lenient")]
+    pub last_fetch: Option<String>,
+    /// Why the last look failed, when it did.
+    #[serde(default, deserialize_with = "lenient")]
+    pub last_error: Option<String>,
+}
+
+/// What the user chooses for a feed: the fields of `POST /rss/create` and `POST /rss/{id}`.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct RssFeedSettings {
+    pub title: String,
+    /// The address of the feed (`rss_source_url`).
+    pub url: String,
+    /// The folder new items are saved in (`0` is the top level).
+    pub parent_dir_id: i64,
+    pub delete_old_files: bool,
+    /// Comma-separated words; empty for no filter.
+    pub keyword: String,
+    /// Comma-separated words; empty for no filter.
+    pub unwanted_keywords: String,
+    /// Only when creating: ignore the items already in the feed.
+    pub skip_existing: bool,
 }

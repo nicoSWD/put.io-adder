@@ -280,15 +280,34 @@ pub(crate) fn action_button(
     label: &str,
     primary: bool,
 ) -> Response {
-    button(ui, Some(icon), label, primary)
+    button(ui, Some(icon), label, Kind::of(primary))
 }
 
 /// [`action_button`] without the icon: a plain labelled button, painted the same way.
 pub(crate) fn text_button(ui: &mut egui::Ui, label: &str, primary: bool) -> Response {
-    button(ui, None, label, primary)
+    button(ui, None, label, Kind::of(primary))
 }
 
-fn button(ui: &mut egui::Ui, icon: Option<MenuIcon>, label: &str, primary: bool) -> Response {
+/// A button for something that cannot be taken back (the confirmation of a delete): red like the
+/// "failed" badges, painted the same way as [`text_button`].
+pub(crate) fn danger_button(ui: &mut egui::Ui, label: &str) -> Response {
+    button(ui, None, label, Kind::Danger)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    Primary,
+    Quiet,
+    Danger,
+}
+
+impl Kind {
+    fn of(primary: bool) -> Self {
+        if primary { Self::Primary } else { Self::Quiet }
+    }
+}
+
+fn button(ui: &mut egui::Ui, icon: Option<MenuIcon>, label: &str, kind: Kind) -> Response {
     let p = theme::pal();
     let font = theme::bold(12.0);
     let galley = ui
@@ -305,10 +324,15 @@ fn button(ui: &mut egui::Ui, icon: Option<MenuIcon>, label: &str, primary: bool)
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
     describe(&response, egui::Role::Button, label);
     focus_ring(ui, &response, rect, CornerRadius::same(10));
-    let (fill, hover_fill, ink, quiet_ink) = if primary {
-        (theme::YELLOW, p.yellow_pressed, p.on_yellow, p.on_yellow)
-    } else {
-        (p.inset, p.card_hover, p.text, p.muted)
+    let (fill, hover_fill, ink, quiet_ink) = match kind {
+        Kind::Primary => (theme::YELLOW, p.yellow_pressed, p.on_yellow, p.on_yellow),
+        Kind::Quiet => (p.inset, p.card_hover, p.text, p.muted),
+        Kind::Danger => (
+            p.error_soft,
+            p.error_soft.gamma_multiply(0.85),
+            p.error,
+            p.error,
+        ),
     };
     let ink_now = if response.hovered() { ink } else { quiet_ink };
     ui.painter().rect_filled(
@@ -316,11 +340,16 @@ fn button(ui: &mut egui::Ui, icon: Option<MenuIcon>, label: &str, primary: bool)
         CornerRadius::same(10),
         if response.hovered() { hover_fill } else { fill },
     );
-    if !primary {
+    if kind != Kind::Primary {
+        let edge = if kind == Kind::Danger {
+            p.error
+        } else {
+            p.divider
+        };
         ui.painter().rect_stroke(
             rect,
             CornerRadius::same(10),
-            Stroke::new(1.0, p.divider),
+            Stroke::new(1.0, edge),
             egui::StrokeKind::Inside,
         );
     }
@@ -345,6 +374,72 @@ fn button(ui: &mut egui::Ui, icon: Option<MenuIcon>, label: &str, primary: bool)
 
 /// Height of [`action_button`].
 pub(crate) const ACTION_HEIGHT: f32 = 36.0;
+
+/// Height of a [`text_field`].
+pub(crate) const FIELD_HEIGHT: f32 = 34.0;
+
+/// A single-line text input in the look of the other controls: a quiet inset pill, a ring when it has the
+/// keyboard. The field is `labelled_by` the label above it (for screen readers) and shows `hint` while it
+/// is empty. Typing stops at `max_chars`.
+pub(crate) fn text_field(
+    ui: &mut egui::Ui,
+    value: &mut String,
+    hint: &str,
+    labelled_by: egui::Id,
+    max_chars: usize,
+) -> Response {
+    let p = theme::pal();
+    let (rect, _) = ui.allocate_exact_size(
+        Vec2::new(ui.available_width(), FIELD_HEIGHT),
+        Sense::hover(),
+    );
+    // The frame goes behind the text, but its colour depends on what the text edit finds out (focus), so a
+    // slot is reserved now and filled in afterwards.
+    let frame = ui.painter().add(egui::Shape::Noop);
+    let inner = rect.shrink2(Vec2::new(11.0, 0.0));
+    let mut child = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(inner)
+            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+    );
+    let response = child
+        .add(
+            egui::TextEdit::singleline(value)
+                .frame(egui::Frame::NONE)
+                .margin(egui::Margin::ZERO)
+                .font(theme::text(12.5))
+                .char_limit(max_chars)
+                .desired_width(inner.width())
+                .hint_text(
+                    egui::RichText::new(hint)
+                        .font(theme::text(12.5))
+                        .color(p.muted),
+                ),
+        )
+        .labelled_by(labelled_by);
+    let focused = response.has_focus();
+    let hovered = ui.rect_contains_pointer(rect);
+    ui.painter().set(
+        frame,
+        egui::Shape::rect_filled(
+            rect,
+            CornerRadius::same(10),
+            if hovered && !focused {
+                p.card_hover
+            } else {
+                p.inset
+            },
+        ),
+    );
+    ui.painter().rect_stroke(
+        rect,
+        CornerRadius::same(10),
+        Stroke::new(1.0, p.divider),
+        egui::StrokeKind::Inside,
+    );
+    focus_ring(ui, &response, rect, CornerRadius::same(10));
+    response
+}
 
 /// The card of a dialog (Preferences, Details) and the dimmed backdrop behind it.
 pub(crate) fn dialog_frame() -> (egui::Frame, Color32) {
@@ -476,6 +571,57 @@ mod tests {
                 "text position changed on hover (selected: {selected})"
             );
         }
+    }
+
+    /// Run `frames` frames of a text field, feeding `events` to the second one.
+    fn typed_into_a_field(events: &[egui::Event], limit: usize) -> String {
+        let ctx = egui::Context::default();
+        theme::apply(&ctx, putio_core::settings::ThemeChoice::Light);
+        let mut value = String::new();
+        for frame in 0..4 {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    Pos2::ZERO,
+                    Vec2::new(400.0, 300.0),
+                )),
+                events: if frame == 2 {
+                    events.to_vec()
+                } else {
+                    Vec::new()
+                },
+                ..Default::default()
+            };
+            let output = ctx.run_ui(input, |ui| {
+                let label = ui.label("Address").id;
+                let field =
+                    text_field(ui, &mut value, "https://example.com/feed.xml", label, limit);
+                if frame == 0 {
+                    field.request_focus();
+                }
+            });
+            output.drop_without_applying_deltas();
+        }
+        value
+    }
+
+    #[test]
+    fn what_is_typed_or_pasted_lands_in_the_field_and_stops_at_its_limit() {
+        assert_eq!(
+            typed_into_a_field(&[egui::Event::Text("abc".into())], 100),
+            "abc"
+        );
+        assert_eq!(
+            typed_into_a_field(
+                &[egui::Event::Paste("https://example.com/feed.xml".into())],
+                100
+            ),
+            "https://example.com/feed.xml"
+        );
+        assert_eq!(
+            typed_into_a_field(&[egui::Event::Paste("0123456789ABCDEF".into())], 10),
+            "0123456789",
+            "the limit holds for a paste too"
+        );
     }
 
     #[test]

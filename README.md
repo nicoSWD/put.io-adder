@@ -6,6 +6,7 @@ A small cross-platform app for **macOS, Windows and Linux** (x86-64 and arm64), 
 - **Magnet links and `.torrent` files** go straight to your put.io queue. The app asks once whether it should be the default app for them, and sets itself up if you say yes. Optionally it moves a `.torrent` to the Trash once put.io has taken it
 - **Your transfers** at a glance: progress, speed, ETA and size, sorted how you like, with a notification when one finishes
 - **Right-click a transfer** (or use its "⋯" button) for a details panel (peers, share ratio, tracker message, dates), retry, copy the put.io link or the magnet link, cancel or stop seeding, clear finished ones, stream in [VLC](https://www.videolan.org/vlc/), or download the file or folder through your browser
+- **RSS feeds** on their own tab: add a feed, choose where its items are saved, filter by words, pause, edit or delete it. put.io does the watching and the transfers show up in the list like any other (⌘1 / ⌘2, or Ctrl+1 / Ctrl+2, switch tabs)
 - **Updates itself** from GitHub releases when you press *Update now* (see [What the updater checks](#updates))
 - Optional: choose the put.io folder new transfers are saved in
 - Light and dark theme, a resizable window, English, German and Spanish
@@ -18,6 +19,10 @@ A small cross-platform app for **macOS, Windows and Linux** (x86-64 and arm64), 
   <tr>
     <td><img src="docs/images/screenshot-light.png" alt="put.io adder in the light theme, showing running, queued, finished and failed transfers" width="420"></td>
     <td><img src="docs/images/screenshot-dark.png" alt="put.io adder in the dark theme, showing running, queued, finished and failed transfers" width="420"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/screenshot-feeds-light.png" alt="The Feeds tab in the light theme, with running, paused and broken feeds" width="420"></td>
+    <td><img src="docs/images/screenshot-feeds-dark.png" alt="The Feeds tab in the dark theme, with running, paused and broken feeds" width="420"></td>
   </tr>
 </table>
 

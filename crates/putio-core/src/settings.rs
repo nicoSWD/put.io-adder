@@ -21,6 +21,17 @@ pub enum ThemeChoice {
     Dark,
 }
 
+/// Which list the main window shows under the header.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Tab {
+    Feeds,
+    /// Also what a preferences file from a newer version with another tab is read as.
+    #[default]
+    #[serde(other)]
+    Transfers,
+}
+
 /// The window's size when the transfers list is open, remembered between runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WindowSize {
@@ -70,8 +81,10 @@ pub struct Settings {
     pub ask_default_handler: bool,
     /// `None` means put.io's own default folder.
     pub default_folder: Option<Folder>,
-    /// Whether the transfers list was open when the app last ran.
+    /// Whether the list under the header was open when the app last ran.
     pub transfers_expanded: bool,
+    /// The list that was showing when the app last ran.
+    pub tab: Tab,
     pub theme: ThemeChoice,
     /// How big the user made the window (with the list open). `None` until they resize it.
     pub window_size: Option<WindowSize>,
@@ -88,6 +101,7 @@ impl Default for Settings {
             ask_default_handler: true,
             default_folder: None,
             transfers_expanded: false,
+            tab: Tab::Transfers,
             theme: ThemeChoice::System,
             window_size: None,
         }
@@ -258,6 +272,28 @@ mod tests {
         assert!(s.close_after_torrent);
         assert!(s.check_for_updates);
         assert_eq!(s.version, CURRENT_VERSION);
+    }
+
+    #[test]
+    fn the_open_tab_is_remembered_and_an_unknown_one_is_read_as_the_default() {
+        assert_eq!(Settings::default().tab, Tab::Transfers);
+        let feeds = Settings {
+            tab: Tab::Feeds,
+            ..Settings::default()
+        };
+        let json = feeds.to_json();
+        assert!(json.contains(r#""tab": "feeds""#), "{json}");
+        assert_eq!(Settings::from_json_or_default(Some(&json)), feeds);
+        // A tab a newer version added, and a file from before tabs existed.
+        let newer = Settings::from_json_or_default(Some(
+            r#"{"tab": "shares", "close_after_magnet": true}"#,
+        ));
+        assert_eq!(newer.tab, Tab::Transfers);
+        assert!(newer.close_after_magnet, "the rest of the file is kept");
+        assert_eq!(
+            Settings::from_json_or_default(Some(r#"{"close_after_magnet": true}"#)).tab,
+            Tab::Transfers
+        );
     }
 
     #[test]

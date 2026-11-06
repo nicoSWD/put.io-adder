@@ -1,7 +1,7 @@
 //! Sample data for looking at the UI without an account. Debug builds only
 //! (`PUTIO_ADDER_DEMO=1 cargo run -p putio-adder`): this module does not exist in release builds.
 
-use putio_api::{Account, Disk, Transfer, TransferKind, TransferStatus};
+use putio_api::{Account, Disk, RssFeed, Transfer, TransferKind, TransferStatus};
 
 fn transfer(
     id: i64,
@@ -95,6 +95,53 @@ pub(crate) fn transfers() -> Vec<Transfer> {
     ];
     add_details(&mut list);
     list
+}
+
+/// A few feeds in different states, newest first like the real list: running, filtered, paused, one put.io
+/// cannot read, one without a name, and one with a name too long for its card.
+pub(crate) fn feeds() -> Vec<RssFeed> {
+    let feed = |id: i64, title: &str, url: &str, keyword: &str| RssFeed {
+        id,
+        title: title.into(),
+        rss_source_url: url.into(),
+        parent_dir_id: Some(12),
+        keyword: (!keyword.is_empty()).then(|| keyword.to_owned()),
+        ..RssFeed::default()
+    };
+    vec![
+        feed(
+            6,
+            "Weekly releases",
+            "https://releases.example.invalid/rss/weekly.xml?key=SECRET",
+            "1080p, 2160p",
+        ),
+        feed(5, "", "https://feeds.example.invalid/all.xml", ""),
+        RssFeed {
+            paused: true,
+            ..feed(
+                4,
+                "Open-source ISOs",
+                "https://downloads.example.invalid/isos.rss",
+                "",
+            )
+        },
+        RssFeed {
+            last_error: Some("FEED_CANNOT_FETCHED".into()),
+            ..feed(
+                3,
+                "Podcast (moved, address no longer works)",
+                "https://old.example.invalid/podcast.xml",
+                "",
+            )
+        },
+        feed(
+            2,
+            "A feed with a very long name that keeps going and going so that it has to be cut to fit",
+            "https://a-really-long-host-name-for-a-feed.subdomain.example.invalid/some/path.xml",
+            "uncompressed, remux, hdr10plus, dolby vision, atmos, truehd, 7.1",
+        ),
+        feed(1, "Short", "https://x.example.invalid/f", "hd"),
+    ]
 }
 
 pub(crate) fn account() -> Account {

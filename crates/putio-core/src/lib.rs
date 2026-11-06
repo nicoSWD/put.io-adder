@@ -8,6 +8,7 @@
 #![cfg_attr(test, allow(clippy::assert_is_empty))] // `assert!(fx.is_empty())` reads better than a typed empty array
 
 pub mod download;
+pub mod feeds;
 pub mod format;
 pub mod handler;
 pub mod i18n;

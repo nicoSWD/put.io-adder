@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 use serde_json::Value;
 
 use crate::Client;
-use crate::models::{FileType, Transfer, TransferStatus};
+use crate::models::{FileType, RssFeedSettings, Transfer, TransferStatus};
 use crate::testing::FakeTransport;
 use crate::token::Token;
 use crate::transport::{Body, Host, Method, Request};
@@ -116,6 +116,22 @@ fn the_fields_we_read_exist_in_the_spec_schemas() {
     ] {
         assert!(file.contains(field), "File.{field} is not in the spec");
     }
+    // `unwanted_keywords`, `last_fetch` and `last_error` are sent by the live API but missing from the spec's
+    // `RssFeed`; they are read tolerantly, so they are not listed here.
+    let feed = props("RssFeed");
+    for field in [
+        "id",
+        "title",
+        "rss_source_url",
+        "parent_dir_id",
+        "delete_old_files",
+        "keyword",
+        "paused",
+        "created_at",
+        "updated_at",
+    ] {
+        assert!(feed.contains(field), "RssFeed.{field} is not in the spec");
+    }
     let account = props("AccountInfo");
     for field in ["user_id", "username", "mail", "monthly_bandwidth_usage"] {
         assert!(
@@ -204,6 +220,13 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     ok(r#"{"url":"https://x.invalid/f"}"#); // file_url
     ok(r#"{"zip_id":9}"#); // create_zip
     ok(r#"{"zip_status":"NEW"}"#); // zip_status
+    ok(r#"{"file":{"id":1,"name":"f"}}"#); // file
+    ok(r#"{"feeds":[]}"#); // rss_feeds
+    ok(r#"{"status":"OK"}"#); // create_rss_feed
+    ok(r#"{"status":"OK"}"#); // update_rss_feed
+    ok(r#"{"status":"OK"}"#); // pause
+    ok(r#"{"status":"OK"}"#); // resume
+    ok(r#"{"status":"OK"}"#); // delete
 
     let client = Client::with_token(&fake, Token::new("t").unwrap());
     client.oob_code(711, "put.io adder").unwrap();
@@ -226,9 +249,25 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     client.file_url(1).unwrap();
     client.create_zip(&[1, 2]).unwrap();
     client.zip_status(9).unwrap();
+    let feed = RssFeedSettings {
+        title: "Releases".into(),
+        url: "https://example.invalid/feed.xml".into(),
+        parent_dir_id: 3,
+        delete_old_files: true,
+        keyword: "1080p".into(),
+        unwanted_keywords: "CAM".into(),
+        skip_existing: true,
+    };
+    client.file(1).unwrap();
+    client.rss_feeds().unwrap();
+    client.create_rss_feed(&feed).unwrap();
+    client.update_rss_feed(5, &feed).unwrap();
+    client.set_rss_feed_paused(5, true).unwrap();
+    client.set_rss_feed_paused(5, false).unwrap();
+    client.delete_rss_feed(5).unwrap();
 
     let requests: Vec<Request> = fake.requests();
-    assert_eq!(requests.len(), 14);
+    assert_eq!(requests.len(), 21);
     for request in &requests {
         let path = template(&request.path);
         let method = match request.method {
@@ -281,7 +320,15 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
                     "{method} {path}: form field `{sent}` is not in the spec"
                 );
             }
-            for required in schema["required"].as_array().into_iter().flatten() {
+            // The spec lists `url` as required for the feed forms but documents `rss_source_url` as the
+            // property (and that is what put.io's own SDK sends): a mistake in the spec, so a required name
+            // that is not a property cannot be sent and is skipped.
+            for required in schema["required"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter(|name| properties.contains(name.as_str().unwrap()))
+            {
                 assert!(
                     form_fields(&request.body).contains(required.as_str().unwrap()),
                     "{method} {path}: required field {required} missing"

@@ -159,6 +159,57 @@ pub enum Msg {
     HandlerKeptOther,
     A11yClose,
     A11yBack,
+    // Feeds
+    TabFeeds,
+    FeedsEmptyTitle,
+    FeedsEmptyHint,
+    FeedsAdd,
+    FeedsLoading,
+    FeedsLoadFailed,
+    FeedsRetry,
+    FeedActive,
+    FeedPaused,
+    FeedProblem,
+    FeedProblemHint,
+    FeedMenuPause,
+    FeedMenuResume,
+    FeedMenuEdit,
+    FeedMenuCopyAddress,
+    FeedMenuDelete,
+    FeedEditTitle,
+    FeedFieldUrl,
+    FeedTitleHint,
+    FeedFieldFolder,
+    FeedFolderLoading,
+    FeedFieldInclude,
+    FeedFieldExclude,
+    FeedKeywordsHint,
+    FeedSkipExisting,
+    FeedSkipExistingHint,
+    FeedDeleteOld,
+    FeedDeleteOldHint,
+    FeedSave,
+    FeedSaving,
+    FeedErrUrlMissing,
+    FeedErrUrlInvalid,
+    FeedErrCannotFetch,
+    FeedErrCannotParse,
+    FeedErrTooMany,
+    FeedDeleteTitle,
+    FeedDeleteBody {
+        title: String,
+    },
+    FeedDeleteConfirm,
+    FeedAdded,
+    FeedUpdated,
+    FeedPausedNotice,
+    FeedResumedNotice,
+    FeedDeletedNotice,
+    FeedActionFailed {
+        reason: String,
+    },
+    A11yFeedActions,
+    A11yTabs,
     A11yTransferActions,
     MenuDetails,
     DetailsTitle,
@@ -810,9 +861,9 @@ impl Msg {
             Self::MenuSignOut => tr!(l, "Sign out", "Abmelden", "Cerrar sesión").into(),
             Self::TooltipToggleTransfers => tr!(
                 l,
-                "Show or hide transfers",
-                "Übertragungen ein- oder ausblenden",
-                "Mostrar u ocultar transferencias"
+                "Show or hide the list",
+                "Liste ein- oder ausblenden",
+                "Mostrar u ocultar la lista"
             )
             .into(),
             Self::PrefsGeneral => tr!(l, "General", "Allgemein", "General").into(),
@@ -1158,6 +1209,326 @@ impl Msg {
             .into(),
             Self::A11yClose => tr!(l, "Close", "Schließen", "Cerrar").into(),
             Self::A11yBack => tr!(l, "Back", "Zurück", "Atrás").into(),
+            Self::TabFeeds => tr!(
+                l,
+                "Feeds",
+                "Feeds",
+                "Feeds"
+            )
+            .into(),
+            Self::FeedsEmptyTitle => tr!(
+                l,
+                "No feeds yet",
+                "Noch keine Feeds",
+                "Aún no hay feeds"
+            )
+            .into(),
+            Self::FeedsEmptyHint => tr!(
+                l,
+                "Add an RSS feed and put.io saves its new items for you.",
+                "Füge einen RSS-Feed hinzu, und put.io speichert neue Einträge für dich.",
+                "Añade un feed RSS y put.io guardará sus novedades por ti."
+            )
+            .into(),
+            Self::FeedsAdd => tr!(
+                l,
+                "Add feed",
+                "Feed hinzufügen",
+                "Añadir feed"
+            )
+            .into(),
+            Self::FeedsLoading => tr!(
+                l,
+                "Loading feeds…",
+                "Feeds werden geladen …",
+                "Cargando feeds…"
+            )
+            .into(),
+            Self::FeedsLoadFailed => tr!(
+                l,
+                "Couldn't load your feeds.",
+                "Die Feeds konnten nicht geladen werden.",
+                "No se pudieron cargar los feeds."
+            )
+            .into(),
+            Self::FeedsRetry => tr!(
+                l,
+                "Try again",
+                "Erneut versuchen",
+                "Reintentar"
+            )
+            .into(),
+            Self::FeedActive => tr!(
+                l,
+                "Active",
+                "Aktiv",
+                "Activo"
+            )
+            .into(),
+            Self::FeedPaused => tr!(
+                l,
+                "Paused",
+                "Pausiert",
+                "En pausa"
+            )
+            .into(),
+            Self::FeedProblem => tr!(
+                l,
+                "Problem",
+                "Problem",
+                "Problema"
+            )
+            .into(),
+            Self::FeedProblemHint => tr!(
+                l,
+                "put.io could not read this feed the last time it looked.",
+                "put.io konnte diesen Feed beim letzten Abruf nicht lesen.",
+                "put.io no pudo leer este feed la última vez que lo revisó."
+            )
+            .into(),
+            Self::FeedMenuPause => tr!(
+                l,
+                "Pause feed",
+                "Feed pausieren",
+                "Pausar feed"
+            )
+            .into(),
+            Self::FeedMenuResume => tr!(
+                l,
+                "Resume feed",
+                "Feed fortsetzen",
+                "Reanudar feed"
+            )
+            .into(),
+            Self::FeedMenuEdit => tr!(
+                l,
+                "Edit…",
+                "Bearbeiten …",
+                "Editar…"
+            )
+            .into(),
+            Self::FeedMenuCopyAddress => tr!(
+                l,
+                "Copy feed address",
+                "Feed-Adresse kopieren",
+                "Copiar dirección del feed"
+            )
+            .into(),
+            Self::FeedMenuDelete => tr!(
+                l,
+                "Delete…",
+                "Löschen …",
+                "Eliminar…"
+            )
+            .into(),
+            Self::FeedEditTitle => tr!(
+                l,
+                "Edit feed",
+                "Feed bearbeiten",
+                "Editar feed"
+            )
+            .into(),
+            Self::FeedFieldUrl => tr!(
+                l,
+                "Feed address",
+                "Feed-Adresse",
+                "Dirección del feed"
+            )
+            .into(),
+            Self::FeedTitleHint => tr!(
+                l,
+                "Optional. Defaults to the feed's website.",
+                "Optional. Standardmäßig die Website des Feeds.",
+                "Opcional. Por defecto, el sitio web del feed."
+            )
+            .into(),
+            Self::FeedFieldFolder => tr!(
+                l,
+                "Save to",
+                "Speichern in",
+                "Guardar en"
+            )
+            .into(),
+            Self::FeedFolderLoading => tr!(
+                l,
+                "Loading…",
+                "Lädt …",
+                "Cargando…"
+            )
+            .into(),
+            Self::FeedFieldInclude => tr!(
+                l,
+                "Only items containing",
+                "Nur Einträge mit",
+                "Solo elementos con"
+            )
+            .into(),
+            Self::FeedFieldExclude => tr!(
+                l,
+                "Skip items containing",
+                "Einträge mit … überspringen",
+                "Omitir elementos con"
+            )
+            .into(),
+            Self::FeedKeywordsHint => tr!(
+                l,
+                "Separate words with commas.",
+                "Wörter durch Kommas trennen.",
+                "Separa las palabras con comas."
+            )
+            .into(),
+            Self::FeedSkipExisting => tr!(
+                l,
+                "Ignore items already in the feed",
+                "Vorhandene Einträge ignorieren",
+                "Ignorar lo que ya hay en el feed"
+            )
+            .into(),
+            Self::FeedSkipExistingHint => tr!(
+                l,
+                "Only items that appear from now on are saved.",
+                "Nur künftig erscheinende Einträge werden gespeichert.",
+                "Solo se guardan los elementos que aparezcan a partir de ahora."
+            )
+            .into(),
+            Self::FeedDeleteOld => tr!(
+                l,
+                "Delete old files when space is low",
+                "Alte Dateien bei Platzmangel löschen",
+                "Borrar archivos antiguos si falta espacio"
+            )
+            .into(),
+            Self::FeedDeleteOldHint => tr!(
+                l,
+                "put.io removes the oldest files in the folder.",
+                "put.io entfernt die ältesten Dateien im Ordner.",
+                "put.io elimina los archivos más antiguos de la carpeta."
+            )
+            .into(),
+            Self::FeedSave => tr!(
+                l,
+                "Save",
+                "Speichern",
+                "Guardar"
+            )
+            .into(),
+            Self::FeedSaving => tr!(
+                l,
+                "Saving…",
+                "Speichert …",
+                "Guardando…"
+            )
+            .into(),
+            Self::FeedErrUrlMissing => tr!(
+                l,
+                "Enter the address of the feed.",
+                "Gib die Adresse des Feeds ein.",
+                "Introduce la dirección del feed."
+            )
+            .into(),
+            Self::FeedErrUrlInvalid => tr!(
+                l,
+                "That is not a web address. It should start with http:// or https://",
+                "Das ist keine Webadresse. Sie sollte mit http:// oder https:// beginnen.",
+                "Eso no es una dirección web. Debe empezar por http:// o https://"
+            )
+            .into(),
+            Self::FeedErrCannotFetch => tr!(
+                l,
+                "put.io could not download that address.",
+                "put.io konnte diese Adresse nicht abrufen.",
+                "put.io no pudo descargar esa dirección."
+            )
+            .into(),
+            Self::FeedErrCannotParse => tr!(
+                l,
+                "That address is not an RSS feed.",
+                "Unter dieser Adresse gibt es keinen RSS-Feed.",
+                "Esa dirección no es un feed RSS."
+            )
+            .into(),
+            Self::FeedErrTooMany => tr!(
+                l,
+                "You have reached the most feeds put.io allows.",
+                "Du hast die höchste Anzahl an Feeds erreicht, die put.io erlaubt.",
+                "Has alcanzado el máximo de feeds que permite put.io."
+            )
+            .into(),
+            Self::FeedDeleteTitle => tr!(
+                l,
+                "Delete this feed?",
+                "Diesen Feed löschen?",
+                "¿Eliminar este feed?"
+            )
+            .into(),
+            Self::FeedDeleteConfirm => tr!(
+                l,
+                "Delete feed",
+                "Feed löschen",
+                "Eliminar feed"
+            )
+            .into(),
+            Self::FeedAdded => tr!(
+                l,
+                "Feed added",
+                "Feed hinzugefügt",
+                "Feed añadido"
+            )
+            .into(),
+            Self::FeedUpdated => tr!(
+                l,
+                "Feed saved",
+                "Feed gespeichert",
+                "Feed guardado"
+            )
+            .into(),
+            Self::FeedPausedNotice => tr!(
+                l,
+                "Feed paused",
+                "Feed pausiert",
+                "Feed en pausa"
+            )
+            .into(),
+            Self::FeedResumedNotice => tr!(
+                l,
+                "Feed resumed",
+                "Feed fortgesetzt",
+                "Feed reanudado"
+            )
+            .into(),
+            Self::FeedDeletedNotice => tr!(
+                l,
+                "Feed deleted",
+                "Feed gelöscht",
+                "Feed eliminado"
+            )
+            .into(),
+            Self::A11yFeedActions => tr!(
+                l,
+                "Feed actions",
+                "Feed-Aktionen",
+                "Acciones del feed"
+            )
+            .into(),
+            Self::A11yTabs => tr!(
+                l,
+                "Lists",
+                "Listen",
+                "Listas"
+            )
+            .into(),
+            Self::FeedDeleteBody { title } => tr!(
+                l,
+                format!("put.io stops checking “{title}”. The files it already saved stay in your account."),
+                format!("put.io prüft „{title}“ nicht mehr. Bereits gespeicherte Dateien bleiben in deinem Konto."),
+                format!("put.io dejará de revisar «{title}». Los archivos ya guardados se quedan en tu cuenta.")
+            ),
+            Self::FeedActionFailed { reason } => tr!(
+                l,
+                format!("The feed was not changed: {reason}"),
+                format!("Der Feed wurde nicht geändert: {reason}"),
+                format!("No se cambió el feed: {reason}")
+            ),
             Self::A11yTransferActions => {
                 tr!(l, "Actions", "Aktionen", "Acciones").into()
             }
@@ -1240,6 +1611,108 @@ mod tests {
             assert!(msg.text(locale).contains("Sintel"));
             assert!(Msg::RateLimited { seconds: 42 }.text(locale).contains("42"));
             assert!(Msg::Adding { name: "X".into() }.text(locale).contains('X'));
+        }
+    }
+
+    /// Every message of the feeds feature, with a stand-in for each argument.
+    fn feed_messages() -> Vec<Msg> {
+        vec![
+            Msg::TabFeeds,
+            Msg::FeedsEmptyTitle,
+            Msg::FeedsEmptyHint,
+            Msg::FeedsAdd,
+            Msg::FeedsLoading,
+            Msg::FeedsLoadFailed,
+            Msg::FeedsRetry,
+            Msg::FeedActive,
+            Msg::FeedPaused,
+            Msg::FeedProblem,
+            Msg::FeedProblemHint,
+            Msg::FeedMenuPause,
+            Msg::FeedMenuResume,
+            Msg::FeedMenuEdit,
+            Msg::FeedMenuCopyAddress,
+            Msg::FeedMenuDelete,
+            Msg::FeedEditTitle,
+            Msg::FeedFieldUrl,
+            Msg::FeedTitleHint,
+            Msg::FeedFieldFolder,
+            Msg::FeedFolderLoading,
+            Msg::FeedFieldInclude,
+            Msg::FeedFieldExclude,
+            Msg::FeedKeywordsHint,
+            Msg::FeedSkipExisting,
+            Msg::FeedSkipExistingHint,
+            Msg::FeedDeleteOld,
+            Msg::FeedDeleteOldHint,
+            Msg::FeedSave,
+            Msg::FeedSaving,
+            Msg::FeedErrUrlMissing,
+            Msg::FeedErrUrlInvalid,
+            Msg::FeedErrCannotFetch,
+            Msg::FeedErrCannotParse,
+            Msg::FeedErrTooMany,
+            Msg::FeedDeleteTitle,
+            Msg::FeedDeleteBody {
+                title: "Spring".into(),
+            },
+            Msg::FeedDeleteConfirm,
+            Msg::FeedAdded,
+            Msg::FeedUpdated,
+            Msg::FeedPausedNotice,
+            Msg::FeedResumedNotice,
+            Msg::FeedDeletedNotice,
+            Msg::FeedActionFailed {
+                reason: "Spring".into(),
+            },
+            Msg::A11yFeedActions,
+            Msg::A11yTabs,
+        ]
+    }
+
+    #[test]
+    fn every_feed_message_is_written_in_every_language() {
+        for locale in [Locale::En, Locale::De, Locale::Es] {
+            for msg in feed_messages() {
+                let text = msg.text(locale);
+                assert!(!text.trim().is_empty(), "{msg:?} / {locale:?}");
+                assert!(!text.contains(['{', '}']), "{msg:?} / {locale:?}: {text}");
+                assert_eq!(text, text.trim(), "{msg:?} / {locale:?}");
+            }
+        }
+        // The arguments arrive in the sentence, whatever the language.
+        for locale in [Locale::En, Locale::De, Locale::Es] {
+            assert!(
+                Msg::FeedDeleteBody {
+                    title: "Spring".into()
+                }
+                .text(locale)
+                .contains("Spring")
+            );
+            assert!(
+                Msg::FeedActionFailed {
+                    reason: "Spring".into()
+                }
+                .text(locale)
+                .contains("Spring")
+            );
+        }
+        // A translation that is just the English text would be a forgotten one.
+        for msg in feed_messages() {
+            if matches!(msg, Msg::TabFeeds | Msg::FeedProblem) {
+                continue; // the same word in all three languages
+            }
+            let en = msg.text(Locale::En);
+            assert_ne!(
+                en,
+                msg.text(Locale::De),
+                "{msg:?} is not translated to German"
+            );
+            assert_ne!(
+                en,
+                msg.text(Locale::Es),
+                "{msg:?} is not translated to Spanish"
+            );
         }
     }
 
