@@ -143,6 +143,12 @@ pub(crate) fn demo(app: &mut App, ctx: &egui::Context, view: &str) {
             }
         }
         "file-new-folder" => open_new_folder(app, ctx),
+        "file-move-long" => {
+            if let Some(file) = first {
+                open_move(app, ctx, &file);
+                app.ui.folders = super::prefs::FolderPicker::demo_long();
+            }
+        }
         "file-move" => {
             if let Some(file) = first {
                 open_move(app, ctx, &file);
