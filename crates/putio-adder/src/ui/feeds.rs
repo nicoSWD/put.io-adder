@@ -5,7 +5,7 @@
 //! (paused, or put.io could not read it). Everything is painted at fixed positions, so hovering changes
 //! colours and nothing moves, and every text is cut to its room, so no language can push a card out of shape.
 
-use eframe::egui::{self, Align2, CornerRadius, Pos2, Rect, Sense, Ui, Vec2, WidgetType};
+use eframe::egui::{self, Align2, CornerRadius, Pos2, Rect, Role, Sense, Ui, Vec2};
 use putio_api::RssFeed;
 use putio_core::feeds::{FeedStatus, display_title, host_of, status_of};
 use putio_core::i18n::{Locale, Msg};
@@ -208,12 +208,12 @@ fn draw_card(ui: &mut Ui, feed: &RssFeed, selected: bool, locale: Locale) -> Car
     .text(locale);
     widgets::describe(
         &body,
-        WidgetType::Button,
+        Role::Button,
         &format!("{title}, {host}, {status_text}"),
     );
     widgets::describe(
         &more,
-        WidgetType::Button,
+        Role::Button,
         &format!("{}: {title}", Msg::A11yFeedActions.text(locale)),
     );
     widgets::focus_ring(ui, &body, rect, CornerRadius::same(10));

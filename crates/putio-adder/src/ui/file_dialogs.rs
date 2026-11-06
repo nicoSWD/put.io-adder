@@ -196,7 +196,7 @@ fn naming(ctx: &egui::Context, app: &mut App) {
     let (frame, backdrop) = widgets::dialog_frame();
     let mut submit = false;
     let mut close = false;
-    let response = egui::Modal::new(Id::new("file-name"))
+    let response = egui::Modal::new(Id::unique("file-name"))
         .backdrop_color(backdrop)
         .frame(frame)
         .show(ctx, |ui| {
@@ -308,7 +308,7 @@ fn moving(ctx: &egui::Context, app: &mut App) {
     let workers = app.workers();
     let (frame, backdrop) = widgets::dialog_frame();
     let mut chosen = None;
-    let response = egui::Modal::new(Id::new("file-move"))
+    let response = egui::Modal::new(Id::unique("file-move"))
         .backdrop_color(backdrop)
         .frame(frame)
         .show(ctx, |ui| {
@@ -359,7 +359,7 @@ fn password(ctx: &egui::Context, app: &mut App) {
     let mut submit = false;
     let mut close = false;
     let typed = &mut app.ui.file_dialog.password;
-    let response = egui::Modal::new(Id::new("file-password"))
+    let response = egui::Modal::new(Id::unique("file-password"))
         .backdrop_color(backdrop)
         .frame(frame)
         .show(ctx, |ui| {
@@ -430,7 +430,7 @@ fn deleting(ctx: &egui::Context, app: &mut App) {
     let (frame, backdrop) = widgets::dialog_frame();
     let mut confirmed = false;
     let mut cancelled = false;
-    let response = egui::Modal::new(Id::new("file-delete"))
+    let response = egui::Modal::new(Id::unique("file-delete"))
         .backdrop_color(backdrop)
         .frame(frame)
         .show(ctx, |ui| {
