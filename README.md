@@ -27,7 +27,7 @@ Download the file for your system from the [latest release](https://github.com/n
 
 | System | File | Notes |
 |---|---|---|
-| macOS (Apple Silicon / Intel) | `putio-adder-vX.Y.Z-macos-arm64.dmg` / `-x64.dmg` | Drag the app to *Applications*. If the build is not notarized, right-click → *Open* once. |
+| macOS (Apple Silicon / Intel) | `putio-adder-vX.Y.Z-macos-arm64.dmg` / `-x64.dmg` | Drag the app to *Applications*. Releases are signed with a Developer ID and notarized by Apple, so it opens without a warning. |
 | Windows (x64 / arm64) | `…-windows-x64-setup.exe` (or the `.zip`) | Installs for your user, no administrator rights. |
 | Linux (x86_64 / aarch64) | `putio-adder-vX.Y.Z-linux-x86_64.tar.gz` | Unpack, run `./install.sh` (add `--set-default` to take over magnet links). Needs a Secret Service (GNOME Keyring, KWallet). |
 
@@ -40,7 +40,7 @@ When a newer stable release exists, the transfers toolbar shows **Update now**. 
 
 ## Verify your download
 
-Releases are built by GitHub Actions from a signed tag. Every file has a build-provenance attestation, and there is a `SHA256SUMS` file and a software bill of materials (`sbom.cdx.json`):
+Releases are built by GitHub Actions from a tag on `master` whose CI passed. Every file has a build-provenance attestation, and there is a `SHA256SUMS` file and a software bill of materials (`sbom.cdx.json`):
 
 ```sh
 shasum -a 256 -c SHA256SUMS --ignore-missing
