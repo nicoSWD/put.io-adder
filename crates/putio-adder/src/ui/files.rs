@@ -402,10 +402,10 @@ pub(crate) fn plan_crumbs(widths: &[f32], available: f32) -> (Vec<Part>, f32) {
         return (vec![Part::Crumb(0)], available.max(MIN_LAST).min(width(0)));
     }
     // With the top level kept, which steps from `from` up to the last stay? The choice that keeps the most
-    // steps wins, while the last step keeps at least `least` of its width; if even the fewest steps cannot
+    // steps wins, while the last step keeps at least `keep` of its width; if even the fewest steps cannot
     // give it that, it may shrink to the very least.
-    for least in [PREFERRED_LAST, MIN_LAST] {
-        let least = least.min(width(last));
+    for floor in [PREFERRED_LAST, MIN_LAST] {
+        let keep = floor.min(width(last));
         let mut best: Option<(usize, usize, f32)> = None;
         for from in 1..=last {
             let ellipsis = from > 1;
@@ -413,7 +413,7 @@ pub(crate) fn plan_crumbs(widths: &[f32], available: f32) -> (Vec<Part>, f32) {
                 + SEPARATOR
                 + (from..last).map(|i| width(i) + SEPARATOR).sum::<f32>()
                 + if ellipsis { ELLIPSIS + SEPARATOR } else { 0.0 };
-            if others + least <= available && best.is_none_or(|(kept, ..)| last - from + 1 > kept) {
+            if others + keep <= available && best.is_none_or(|(kept, ..)| last - from + 1 > kept) {
                 best = Some((last - from + 1, from, others));
             }
         }
