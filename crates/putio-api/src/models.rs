@@ -141,6 +141,12 @@ pub struct Transfer {
     pub created_at: Option<String>,
     #[serde(default, deserialize_with = "lenient")]
     pub finished_at: Option<String>,
+    /// The folder the transfer saves into.
+    #[serde(default, deserialize_with = "lenient")]
+    pub save_parent_id: Option<i64>,
+    /// The RSS feed that added the transfer, when one did.
+    #[serde(default, deserialize_with = "lenient")]
+    pub subscription_id: Option<i64>,
 }
 
 impl Transfer {

@@ -289,6 +289,10 @@ pub enum Msg {
     DetailFinished,
     DetailYes,
     DetailNo,
+    DetailSavedIn,
+    DetailFromFeed,
+    DetailFromFeedUnknown,
+    MenuShowInFiles,
     KindTorrent,
     KindUrl,
     KindPlaylist,
@@ -753,6 +757,14 @@ impl Msg {
             Self::DetailError => tr!(l, "Error", "Fehler", "Error").into(),
             Self::DetailAdded => tr!(l, "Added", "Hinzugefügt", "Añadido").into(),
             Self::DetailFinished => tr!(l, "Finished", "Abgeschlossen", "Finalizado").into(),
+            Self::DetailSavedIn => tr!(l, "Saved in", "Gespeichert in", "Guardado en").into(),
+            Self::DetailFromFeed => {
+                tr!(l, "Added by", "Hinzugefügt von", "Añadido por").into()
+            }
+            Self::DetailFromFeedUnknown => tr!(l, "RSS feed", "RSS-Feed", "Feed RSS").into(),
+            Self::MenuShowInFiles => {
+                tr!(l, "Show in Files", "In Dateien", "Ver en Archivos").into()
+            }
             Self::DetailYes => tr!(l, "Yes", "Ja", "Sí").into(),
             Self::DetailNo => tr!(l, "No", "Nein", "No").into(),
             Self::KindTorrent => tr!(l, "Torrent", "Torrent", "Torrent").into(),
@@ -2066,6 +2078,27 @@ mod tests {
                 reason: "Spring".into(),
             },
         ]
+    }
+
+    #[test]
+    fn the_messages_of_the_details_panel_are_written_in_every_language() {
+        let all = [
+            Msg::DetailSavedIn,
+            Msg::DetailFromFeed,
+            Msg::DetailFromFeedUnknown,
+            Msg::MenuShowInFiles,
+        ];
+        for msg in all {
+            let texts = [Locale::En, Locale::De, Locale::Es].map(|l| msg.text(l));
+            for text in &texts {
+                assert!(!text.trim().is_empty(), "{msg:?}");
+                assert_eq!(text, text.trim(), "{msg:?}");
+            }
+            assert!(
+                texts[0] != texts[1] && texts[0] != texts[2],
+                "{msg:?}: {texts:?}"
+            );
+        }
     }
 
     #[test]

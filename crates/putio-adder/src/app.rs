@@ -262,13 +262,6 @@ impl App {
             "card-menu-done" => Some(crate::ui::Overlay::Card(5)),
             _ => None,
         };
-        self.ui.details = match view {
-            "details" => Some(6),
-            "details-failed" => Some(7),
-            "details-downloading" => Some(1),
-            "details-long" => Some(2),
-            _ => None,
-        };
         if view == "menu-update" {
             self.state.update = demo_update(true);
         }
@@ -305,6 +298,25 @@ impl App {
         );
         self.start_demo_feeds(ctx, view);
         self.start_demo_files(ctx, view);
+        let open = match view {
+            "details" => Some(6),
+            "details-failed" => Some(7),
+            "details-downloading" => Some(1),
+            "details-long" => Some(2),
+            _ => None,
+        };
+        if let Some(id) = open {
+            for (folder, name) in crate::demo::folder_names() {
+                self.ui.folder_named(folder, Some(name.to_owned()));
+            }
+            // The feed that added the seeding transfer is known once the Feeds tab has been looked at.
+            self.state.feeds = putio_core::state::FeedList {
+                loaded: true,
+                failed: false,
+                items: crate::demo::feeds(),
+            };
+            self.dispatch(ctx, Event::TransferDetailsOpened(id));
+        }
     }
 
     /// Debug builds only: the Feeds tab in each of its states (`feeds`, `feeds-empty`, `feeds-loading`,
@@ -513,6 +525,7 @@ impl App {
             }
             Effect::DeleteFeed { op, id } => self.send(Job::DeleteFeed { op, id }),
             Effect::ListFiles { parent } => self.send(Job::ListFiles { parent }),
+            Effect::FetchTransfer { id } => self.send(Job::FetchTransfer { id }),
             Effect::SearchFiles { query } => self.send(Job::SearchFiles { query }),
             Effect::RenameFile { op, id, name } => self.send(Job::RenameFile { op, id, name }),
             Effect::CreateFolder { op, parent, name } => {

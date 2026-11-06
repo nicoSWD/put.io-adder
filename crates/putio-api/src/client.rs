@@ -234,6 +234,18 @@ impl<T: Transport> Client<T> {
             .transfers)
     }
 
+    /// One transfer, with everything put.io knows about it right now. A transfer that is gone (cleared or
+    /// cancelled) answers with an [`ApiError::Api`] whose status is 404.
+    pub fn transfer(&self, id: i64) -> Result<Transfer, ApiError> {
+        #[derive(serde::Deserialize)]
+        struct Reply {
+            transfer: Transfer,
+        }
+        Ok(self
+            .json::<Reply>(&self.get(format!("/transfers/{id}")))?
+            .transfer)
+    }
+
     /// Add a magnet link or HTTP(S) URL. `save_parent_id` is the destination folder (account default if `None`).
     pub fn add_transfer(
         &self,
@@ -806,6 +818,42 @@ mod tests {
             unwanted_keywords: String::new(),
             skip_existing: false,
         }
+    }
+
+    #[test]
+    fn one_transfer_is_read_with_where_it_saves_and_which_feed_added_it() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            200,
+            r#"{"status":"OK","transfer":{"id":77,"name":"Show S01E01","status":"SEEDING","type":"TORRENT",
+                "peers":12,"current_ratio":1.5,"save_parent_id":42,"subscription_id":5,"file_id":900}}"#,
+        );
+        let transfer = client(&fake).transfer(77).unwrap();
+        assert_eq!(fake.last_request().unwrap().describe(), "GET /transfers/77");
+        assert_eq!(transfer.id, 77);
+        assert_eq!(transfer.peers, Some(12));
+        assert_eq!(transfer.save_parent_id, Some(42));
+        assert_eq!(transfer.subscription_id, Some(5));
+        assert_eq!(transfer.file_id, Some(900));
+        // Neither is sent for a transfer that was not added by a feed, and odd values are dropped.
+        fake.push_json(
+            200,
+            r#"{"transfer":{"id":78,"save_parent_id":"x","subscription_id":null}}"#,
+        );
+        let plain = client(&fake).transfer(78).unwrap();
+        assert_eq!((plain.save_parent_id, plain.subscription_id), (None, None));
+        // A transfer that is gone is a 404, and a reply without the transfer is an error.
+        fake.push_json(404, r#"{"error_type":"NotFound","error_message":"gone"}"#);
+        let gone = client(&fake).transfer(79).unwrap_err();
+        assert!(
+            matches!(&gone, ApiError::Api(f) if f.status == 404),
+            "{gone:?}"
+        );
+        fake.push_json(200, r#"{"status":"OK"}"#);
+        assert!(matches!(
+            client(&fake).transfer(80),
+            Err(ApiError::Decode(_))
+        ));
     }
 
     #[test]

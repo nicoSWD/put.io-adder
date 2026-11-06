@@ -214,10 +214,10 @@ enum Act {
 }
 
 impl Act {
-    /// The core event for this entry, or `None` for one the UI handles itself (the details panel).
-    fn event(self, id: i64) -> Option<Event> {
-        Some(match self {
-            Self::Details => return None,
+    /// The core event for this entry.
+    fn event(self, id: i64) -> Event {
+        match self {
+            Self::Details => Event::TransferDetailsOpened(id),
             Self::Open => Event::OpenTransferOnPutio(id),
             Self::Download => Event::DownloadRequested(id),
             Self::Stream => Event::StreamRequested(id),
@@ -226,7 +226,7 @@ impl Act {
             Self::Retry => Event::RetryRequested(id),
             Self::Cancel => Event::CancelRequested(id),
             Self::Clear => Event::ClearRequested,
-        })
+        }
     }
 }
 
@@ -516,10 +516,8 @@ fn card(ui: &mut egui::Ui, app: &mut App, transfer: &Transfer, clearable: usize)
     }
     popup.show(|ui| chosen = chosen.or(menu_body(ui, locale, transfer, clearable)));
 
-    match chosen {
-        Some(Act::Details) => app.ui.details = Some(transfer.id),
-        Some(act) => action = act.event(transfer.id),
-        None => {}
+    if let Some(act) = chosen {
+        action = Some(act.event(transfer.id));
     }
     action
 }
@@ -663,8 +661,11 @@ mod tests {
 
     #[test]
     fn every_action_targets_the_transfer_it_was_opened_for() {
-        assert!(Act::Details.event(9).is_none());
-        let event = |act: Act| act.event(9).expect("a core event");
+        let event = |act: Act| act.event(9);
+        assert!(matches!(
+            event(Act::Details),
+            Event::TransferDetailsOpened(9)
+        ));
         assert!(matches!(event(Act::Open), Event::OpenTransferOnPutio(9)));
         assert!(matches!(event(Act::Stream), Event::StreamRequested(9)));
         assert!(matches!(event(Act::Download), Event::DownloadRequested(9)));

@@ -112,6 +112,10 @@ pub(crate) enum Job {
     ListFiles {
         parent: i64,
     },
+    /// One transfer, for the open details panel.
+    FetchTransfer {
+        id: i64,
+    },
     SearchFiles {
         query: String,
     },
@@ -441,6 +445,10 @@ fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
         Job::ListFiles { parent } => WorkerMsg::Core(Event::FilesListed {
             parent,
             result: client.list_files(parent, None),
+        }),
+        Job::FetchTransfer { id } => WorkerMsg::Core(Event::TransferDetailsFetched {
+            id,
+            result: client.transfer(id),
         }),
         Job::SearchFiles { query } => {
             let result = client.search_files(&query);
@@ -1002,8 +1010,43 @@ mod tests {
                 settings: feed_settings(),
             },
             Job::FolderName { id: 1 },
+            Job::FetchTransfer { id: 1 },
         ] {
             assert!(job.is_session_bound(), "{job:?}");
+        }
+    }
+
+    #[test]
+    fn one_transfer_is_fetched_for_the_details_panel() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            200,
+            r#"{"transfer":{"id":8,"name":"x","status":"SEEDING","save_parent_id":4,"subscription_id":2}}"#,
+        );
+        match execute(&client(&fake), Job::FetchTransfer { id: 8 }) {
+            WorkerMsg::Core(Event::TransferDetailsFetched {
+                id: 8,
+                result: Ok(transfer),
+            }) => {
+                assert_eq!(
+                    (transfer.save_parent_id, transfer.subscription_id),
+                    (Some(4), Some(2))
+                );
+            }
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(fake.last_request().unwrap().describe(), "GET /transfers/8");
+        // A transfer that is gone is told apart from a network problem.
+        fake.push_json(
+            404,
+            r#"{"status":"ERROR","error_type":"NotFound","error_message":"gone"}"#,
+        );
+        match execute(&client(&fake), Job::FetchTransfer { id: 8 }) {
+            WorkerMsg::Core(Event::TransferDetailsFetched {
+                result: Err(ApiError::Api(failure)),
+                ..
+            }) => assert_eq!(failure.status, 404),
+            other => panic!("{other:?}"),
         }
     }
 
