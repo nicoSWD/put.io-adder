@@ -72,14 +72,14 @@ impl State {
     }
 }
 
-fn problem(state: &State, error: &ApiError) -> Problem {
+pub(super) fn problem(state: &State, error: &ApiError) -> Problem {
     match error {
         ApiError::Unauthorized => Problem::NotAllowed,
         other => Problem::Failed(state.reason(other)),
     }
 }
 
-fn fetch_of<T>(state: &State, result: Result<T, ApiError>) -> Fetch<T> {
+pub(super) fn fetch_of<T>(state: &State, result: Result<T, ApiError>) -> Fetch<T> {
     match result {
         Ok(value) => Fetch::Ready(value),
         Err(error) => Fetch::Failed(problem(state, &error)),

@@ -42,3 +42,5 @@ Phase 0 spike 1 is open. Everything the client assumes about behaviour the spec 
 7. Does `POST /transfers/cancel` return an empty body or `{"status":"OK"}`? (The spec shows no content; the client accepts both.)
 
 Replace `crates/putio-api/tests/fixtures/*.json` with scrubbed recordings afterwards.
+
+7c. **Friends** (`GET /friends/list`, `GET /friends/waiting-requests`, `POST /friends/{username}/request|approve|deny|unfriend`) is built on the spec and has not been run against a live account. Unknown: whether this app's token may use them (same doubt as sharing), the error type put.io gives for an unknown user name (the card shows its message as it is), and whether a name needs the exact case. The calls send an empty POST body, as the spec lists no fields.

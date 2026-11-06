@@ -185,6 +185,8 @@ fn template(path: &str) -> String {
                 "{id}".to_owned()
             } else if segment == "ABCD1234" {
                 "{code}".to_owned()
+            } else if segment == "someuser" {
+                "{username}".to_owned()
             } else {
                 segment.to_owned()
             }
@@ -252,6 +254,10 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     ok(r#"{"friends":[{"id":1,"name":"jane"}]}"#); // friends
     ok(r#"{"status":"OK"}"#); // share_file
     ok(r#"{"status":"OK"}"#); // unshare_file
+    ok(r#"{"friends":[{"id":1,"name":"jane"}]}"#); // friend_requests
+    for _ in 0..4 {
+        ok(r#"{"status":"OK"}"#); // request, approve, deny, unfriend
+    }
     ok(r#"{"feeds":[]}"#); // rss_feeds
     ok(r#"{"status":"OK"}"#); // create_rss_feed
     ok(r#"{"status":"OK"}"#); // update_rss_feed
@@ -305,6 +311,15 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
         .share_file(1, &crate::models::ShareWith::Friends(vec!["jane".into()]))
         .unwrap();
     client.unshare_file(1, &[3]).unwrap();
+    client.friend_requests().unwrap();
+    for change in [
+        crate::models::FriendChange::Request("someuser".into()),
+        crate::models::FriendChange::Approve("someuser".into()),
+        crate::models::FriendChange::Deny("someuser".into()),
+        crate::models::FriendChange::Unfriend("someuser".into()),
+    ] {
+        client.change_friend(&change).unwrap();
+    }
     client.rss_feeds().unwrap();
     client.create_rss_feed(&feed).unwrap();
     client.update_rss_feed(5, &feed).unwrap();
@@ -313,7 +328,7 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     client.delete_rss_feed(5).unwrap();
 
     let requests: Vec<Request> = fake.requests();
-    assert_eq!(requests.len(), 34);
+    assert_eq!(requests.len(), 39);
     for request in &requests {
         let path = template(&request.path);
         let method = match request.method {
