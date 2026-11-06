@@ -298,6 +298,7 @@ impl App {
         );
         self.start_demo_feeds(ctx, view);
         self.start_demo_files(ctx, view);
+        ui::friends_card::demo(self, ctx, view);
         let open = match view {
             "details" => Some(6),
             "details-failed" => Some(7),
@@ -491,6 +492,9 @@ impl App {
     /// The effects of the sharing card and of the marks in the Files list: each is one job.
     fn send_sharing(&self, effect: Effect) {
         let job = match effect {
+            Effect::FetchFriendList => Job::FetchFriendList,
+            Effect::FetchFriendRequests => Job::FetchFriendRequests,
+            Effect::ChangeFriend { op, change } => Job::ChangeFriend { op, change },
             Effect::FetchSharedWith { file_id } => Job::FetchSharedWith { file_id },
             Effect::FetchFriends { file_id } => Job::FetchFriends { file_id },
             Effect::ShareFile { op, file_id, with } => Job::ShareFile { op, file_id, with },
@@ -547,7 +551,10 @@ impl App {
             }
             Effect::DeleteFeed { op, id } => self.send(Job::DeleteFeed { op, id }),
             Effect::ListFiles { parent } => self.send(Job::ListFiles { parent }),
-            Effect::FetchSharedWith { .. }
+            Effect::FetchFriendList
+            | Effect::FetchFriendRequests
+            | Effect::ChangeFriend { .. }
+            | Effect::FetchSharedWith { .. }
             | Effect::FetchFriends { .. }
             | Effect::ShareFile { .. }
             | Effect::UnshareFile { .. }

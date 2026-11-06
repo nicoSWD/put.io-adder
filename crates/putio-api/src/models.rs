@@ -241,6 +241,42 @@ pub struct Friend {
     pub name: String,
 }
 
+/// A change to a friendship, by the other person's user name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FriendChange {
+    /// Ask somebody to be a friend.
+    Request(String),
+    /// Accept a request somebody sent.
+    Approve(String),
+    /// Turn a request down.
+    Deny(String),
+    /// End a friendship. put.io takes the files shared with all friends out of the old friend's folder.
+    Unfriend(String),
+}
+
+impl FriendChange {
+    /// The name of the person it is about.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Request(name) | Self::Approve(name) | Self::Deny(name) | Self::Unfriend(name) => {
+                name
+            }
+        }
+    }
+
+    /// The last part of the call's path.
+    #[must_use]
+    pub fn verb(&self) -> &'static str {
+        match self {
+            Self::Request(_) => "request",
+            Self::Approve(_) => "approve",
+            Self::Deny(_) => "deny",
+            Self::Unfriend(_) => "unfriend",
+        }
+    }
+}
+
 /// One person a file is shared with. `share_id` is what ends the share.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
 pub struct Share {

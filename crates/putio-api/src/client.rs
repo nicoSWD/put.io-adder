@@ -8,8 +8,8 @@ use serde_json::Value;
 use crate::error::{ApiError, ApiFailure, retry_delay};
 use crate::form::{self, Part};
 use crate::models::{
-    Account, DeviceCode, File, FileType, Friend, Release, RssFeed, RssFeedSettings, Share,
-    ShareWith, SharedFile, Transfer, UploadOutcome, ZipStatus,
+    Account, DeviceCode, File, FileType, Friend, FriendChange, Release, RssFeed, RssFeedSettings,
+    Share, ShareWith, SharedFile, Transfer, UploadOutcome, ZipStatus,
 };
 use crate::token::Token;
 use crate::torrent;
@@ -561,6 +561,28 @@ impl<T: Transport> Client<T> {
             .friends)
     }
 
+    /// The requests to be a friend that others have sent.
+    pub fn friend_requests(&self) -> Result<Vec<Friend>, ApiError> {
+        #[derive(serde::Deserialize)]
+        struct Reply {
+            #[serde(default)]
+            friends: Vec<Friend>,
+        }
+        Ok(self
+            .json::<Reply>(&self.get("/friends/waiting-requests".into()))?
+            .friends)
+    }
+
+    /// Ask somebody to be a friend, answer a request, or end a friendship.
+    pub fn change_friend(&self, change: &FriendChange) -> Result<(), ApiError> {
+        let name = change.name();
+        if name.trim().is_empty() || name.chars().any(char::is_control) {
+            return Err(ApiError::InvalidInput("no user name"));
+        }
+        let path = format!("/friends/{}/{}", form::percent_encode(name), change.verb());
+        self.ack(&self.request(Method::Post, Host::Api, path, Body::None, JSON, true))
+    }
+
     /// Share a file (or folder) with friends.
     pub fn share_file(&self, file_id: i64, with: &ShareWith) -> Result<(), ApiError> {
         let Some(friends) = with.as_field() else {
@@ -773,6 +795,52 @@ mod tests {
         assert_eq!(fake.last_request().unwrap().describe(), "GET /friends/list");
         assert_eq!((friends[0].id, friends[0].name.as_str()), (1, "jane"));
         assert_eq!(friends[1].name, "");
+    }
+
+    #[test]
+    fn friend_requests_are_read_and_friendships_changed_by_name() {
+        let fake = FakeTransport::new();
+        fake.push_json(200, r#"{"status":"OK","friends":[{"id":4,"name":"sam"}]}"#);
+        for _ in 0..4 {
+            fake.push_json(200, r#"{"status":"OK"}"#);
+        }
+        let c = client(&fake);
+        assert_eq!(c.friend_requests().unwrap()[0].name, "sam");
+        assert_eq!(
+            fake.last_request().unwrap().describe(),
+            "GET /friends/waiting-requests"
+        );
+        for (change, path) in [
+            (
+                FriendChange::Request("jane".into()),
+                "POST /friends/jane/request",
+            ),
+            (
+                FriendChange::Approve("sam".into()),
+                "POST /friends/sam/approve",
+            ),
+            (
+                FriendChange::Deny("a b/c".into()),
+                "POST /friends/a%20b%2Fc/deny",
+            ),
+            (
+                FriendChange::Unfriend("é".into()),
+                "POST /friends/%C3%A9/unfriend",
+            ),
+        ] {
+            c.change_friend(&change).unwrap();
+            assert_eq!(fake.last_request().unwrap().describe(), path);
+            assert_eq!(fake.last_request().unwrap().body, Body::None);
+        }
+        // Nothing is sent for nobody, and a name cannot carry a new path.
+        let sent = fake.requests().len();
+        for name in ["", "  ", "a\nb"] {
+            assert!(matches!(
+                c.change_friend(&FriendChange::Request(name.into())),
+                Err(ApiError::InvalidInput(_))
+            ));
+        }
+        assert_eq!(fake.requests().len(), sent);
     }
 
     #[test]

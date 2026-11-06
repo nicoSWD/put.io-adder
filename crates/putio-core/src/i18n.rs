@@ -195,6 +195,25 @@ pub enum Msg {
     ShareNoFriends,
     ShareConfirm,
     ShareNotAllowed,
+    MenuFriends,
+    FriendsTitle,
+    FriendsAddTitle,
+    FriendsNameHint,
+    FriendsSendRequest,
+    FriendsRequestsTitle,
+    FriendsListTitle,
+    FriendsAccept,
+    FriendsDecline,
+    FriendsNone,
+    FriendsRemove,
+    FriendsRemoveAsk {
+        name: String,
+    },
+    FriendsRemoveConfirm,
+    FriendsDoneRequest,
+    FriendsDoneApprove,
+    FriendsDoneDeny,
+    FriendsDoneUnfriend,
     FileMenuDelete,
     FileRenameTitle,
     FileRenameConfirm,
@@ -1709,6 +1728,82 @@ impl Msg {
                 "Aún no tienes amigos en put.io."
             )
             .into(),
+            Self::MenuFriends => tr!(l, "Friends…", "Freunde …", "Amigos…").into(),
+            Self::FriendsTitle => tr!(l, "Friends", "Freunde", "Amigos").into(),
+            Self::FriendsAddTitle => tr!(
+                l,
+                "Add a friend",
+                "Freund hinzufügen",
+                "Añadir un amigo"
+            )
+            .into(),
+            Self::FriendsNameHint => tr!(
+                l,
+                "put.io user name",
+                "put.io-Benutzername",
+                "Nombre de usuario de put.io"
+            )
+            .into(),
+            Self::FriendsSendRequest => tr!(
+                l,
+                "Send request",
+                "Anfrage senden",
+                "Enviar solicitud"
+            )
+            .into(),
+            Self::FriendsRequestsTitle => tr!(l, "Requests", "Anfragen", "Solicitudes").into(),
+            Self::FriendsListTitle => tr!(l, "Your friends", "Deine Freunde", "Tus amigos").into(),
+            Self::FriendsAccept => tr!(l, "Accept", "Annehmen", "Aceptar").into(),
+            Self::FriendsDecline => tr!(l, "Decline", "Ablehnen", "Rechazar").into(),
+            Self::FriendsNone => tr!(
+                l,
+                "No friends yet.",
+                "Noch keine Freunde.",
+                "Aún no tienes amigos."
+            )
+            .into(),
+            Self::FriendsRemove => tr!(l, "Remove", "Entfernen", "Eliminar").into(),
+            Self::FriendsRemoveAsk { name } => tr!(
+                l,
+                format!("Remove {name} as a friend? Files you shared with all friends disappear from their folder."),
+                format!("{name} als Freund entfernen? Dateien, die du mit allen Freunden geteilt hast, verschwinden aus dem Ordner."),
+                format!("¿Eliminar a {name} de tus amigos? Los archivos compartidos con todos los amigos desaparecen de su carpeta.")
+            ),
+            Self::FriendsRemoveConfirm => tr!(
+                l,
+                "Remove friend",
+                "Freund entfernen",
+                "Eliminar amigo"
+            )
+            .into(),
+            Self::FriendsDoneRequest => tr!(
+                l,
+                "Request sent.",
+                "Anfrage gesendet.",
+                "Solicitud enviada."
+            )
+            .into(),
+            Self::FriendsDoneApprove => tr!(
+                l,
+                "Request accepted.",
+                "Anfrage angenommen.",
+                "Solicitud aceptada."
+            )
+            .into(),
+            Self::FriendsDoneDeny => tr!(
+                l,
+                "Request declined.",
+                "Anfrage abgelehnt.",
+                "Solicitud rechazada."
+            )
+            .into(),
+            Self::FriendsDoneUnfriend => tr!(
+                l,
+                "Friend removed.",
+                "Freund entfernt.",
+                "Amigo eliminado."
+            )
+            .into(),
             Self::ShareConfirm => tr!(l, "Share", "Teilen", "Compartir").into(),
             Self::ShareNotAllowed => tr!(
                 l,
@@ -2145,6 +2240,46 @@ mod tests {
                 texts[0] != texts[1] && texts[0] != texts[2],
                 "{msg:?}: {texts:?}"
             );
+        }
+    }
+
+    #[test]
+    fn the_messages_of_friends_are_written_in_every_language() {
+        let all = [
+            Msg::MenuFriends,
+            Msg::FriendsTitle,
+            Msg::FriendsAddTitle,
+            Msg::FriendsNameHint,
+            Msg::FriendsSendRequest,
+            Msg::FriendsRequestsTitle,
+            Msg::FriendsListTitle,
+            Msg::FriendsAccept,
+            Msg::FriendsDecline,
+            Msg::FriendsNone,
+            Msg::FriendsRemove,
+            Msg::FriendsRemoveAsk {
+                name: "Spring".into(),
+            },
+            Msg::FriendsRemoveConfirm,
+            Msg::FriendsDoneRequest,
+            Msg::FriendsDoneApprove,
+            Msg::FriendsDoneDeny,
+            Msg::FriendsDoneUnfriend,
+        ];
+        for msg in all {
+            let texts = [Locale::En, Locale::De, Locale::Es].map(|l| msg.text(l));
+            for text in &texts {
+                assert!(!text.trim().is_empty(), "{msg:?}");
+                assert_eq!(text, text.trim(), "{msg:?}");
+                assert!(!text.contains(['{', '}']), "{msg:?}: {text}");
+            }
+            assert!(
+                texts[0] != texts[1] && texts[0] != texts[2],
+                "{msg:?}: {texts:?}"
+            );
+            if matches!(msg, Msg::FriendsRemoveAsk { .. }) {
+                assert!(texts.iter().all(|t| t.contains("Spring")), "{texts:?}");
+            }
         }
     }
 

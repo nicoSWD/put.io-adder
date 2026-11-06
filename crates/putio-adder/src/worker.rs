@@ -20,8 +20,8 @@ use std::thread;
 
 use putio_api::client::FileListing;
 use putio_api::{
-    ApiError, Client, FileType, RssFeedSettings, ShareWith, Token, Transport, UploadOutcome,
-    UreqTransport,
+    ApiError, Client, FileType, FriendChange, RssFeedSettings, ShareWith, Token, Transport,
+    UploadOutcome, UreqTransport,
 };
 use putio_core::state::{Event, OpId, Prepared, StreamFailure};
 use putio_core::update::UpdateAsset;
@@ -112,6 +112,12 @@ pub(crate) enum Job {
     },
     ListFiles {
         parent: i64,
+    },
+    FetchFriendList,
+    FetchFriendRequests,
+    ChangeFriend {
+        op: OpId,
+        change: FriendChange,
     },
     FetchSharedWith {
         file_id: i64,
@@ -464,6 +470,14 @@ fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
             parent,
             result: client.list_files(parent, None),
         }),
+        Job::FetchFriendList => WorkerMsg::Core(Event::FriendListFetched(client.friends())),
+        Job::FetchFriendRequests => {
+            WorkerMsg::Core(Event::FriendRequestsFetched(client.friend_requests()))
+        }
+        Job::ChangeFriend { op, change } => {
+            let result = client.change_friend(&change);
+            WorkerMsg::Core(Event::FriendChangeFinished { op, change, result })
+        }
         Job::FetchSharedWith { file_id } => WorkerMsg::Core(Event::SharedWithFetched {
             file_id,
             result: client.shared_with(file_id),
@@ -1054,9 +1068,52 @@ mod tests {
             Job::FetchTransfer { id: 1 },
             Job::ListShared,
             Job::FetchFriends { file_id: 1 },
+            Job::FetchFriendList,
+            Job::ChangeFriend {
+                op: OpId(1),
+                change: FriendChange::Request("x".into()),
+            },
         ] {
             assert!(job.is_session_bound(), "{job:?}");
         }
+    }
+
+    #[test]
+    fn friend_jobs_answer_with_the_events_the_core_waits_for() {
+        let fake = FakeTransport::new();
+        fake.push_json(200, r#"{"friends":[{"id":1,"name":"jane"}]}"#);
+        fake.push_json(200, r#"{"friends":[{"id":4,"name":"sam"}]}"#);
+        fake.push_json(200, r#"{"status":"OK"}"#);
+        let c = client(&fake);
+        assert!(matches!(
+            execute(&c, Job::FetchFriendList),
+            WorkerMsg::Core(Event::FriendListFetched(Ok(list))) if list[0].name == "jane"
+        ));
+        assert!(matches!(
+            execute(&c, Job::FetchFriendRequests),
+            WorkerMsg::Core(Event::FriendRequestsFetched(Ok(list))) if list[0].name == "sam"
+        ));
+        let change = FriendChange::Approve("sam".into());
+        match execute(
+            &c,
+            Job::ChangeFriend {
+                op: OpId(6),
+                change: change.clone(),
+            },
+        ) {
+            WorkerMsg::Core(Event::FriendChangeFinished {
+                op: OpId(6),
+                change: answered,
+                result: Ok(()),
+            }) => {
+                assert_eq!(answered, change);
+            }
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(
+            fake.last_request().unwrap().describe(),
+            "POST /friends/sam/approve"
+        );
     }
 
     #[test]

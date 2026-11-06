@@ -11,8 +11,8 @@ use std::path::PathBuf;
 
 use putio_api::client::{FileListing, FileSearch};
 use putio_api::{
-    Account, ApiError, DeviceCode, Friend, Release, RssFeed, RssFeedSettings, Share, ShareWith,
-    SharedFile, Token, Transfer, ZipState, ZipStatus,
+    Account, ApiError, DeviceCode, Friend, FriendChange, Release, RssFeed, RssFeedSettings, Share,
+    ShareWith, SharedFile, Token, Transfer, ZipState, ZipStatus,
 };
 
 use crate::update::UpdateAsset;
@@ -28,12 +28,14 @@ use crate::update::{self, UpdateStatus};
 mod detail;
 mod feeds;
 mod files;
+mod friends;
 mod refresh;
 mod shares;
 
 pub use detail::TransferDetail;
 pub use feeds::{FeedList, FeedSave};
 pub use files::{Crumb, FileAction, FilesView, Search};
+pub use friends::{FriendAction, FriendsView};
 pub use shares::{Fetch, Problem, ShareAction, SharedFiles, SharingView};
 
 /// Monotonic milliseconds supplied by the shell.
@@ -121,6 +123,7 @@ enum Op {
     FileDelete,
     Share,
     Unshare,
+    Friend,
 }
 
 /// Where an in-place update has got to.
@@ -387,6 +390,19 @@ pub enum Event {
         id: i64,
         result: Result<(), ApiError>,
     },
+    /// The friends card was opened / closed.
+    FriendsCardOpened,
+    FriendsCardClosed,
+    /// The answers to `Effect::FetchFriendList` and `Effect::FetchFriendRequests`.
+    FriendListFetched(Result<Vec<Friend>, ApiError>),
+    FriendRequestsFetched(Result<Vec<Friend>, ApiError>),
+    /// Ask somebody to be a friend, answer a request, or end a friendship.
+    FriendChangeRequested(FriendChange),
+    FriendChangeFinished {
+        op: OpId,
+        change: FriendChange,
+        result: Result<(), ApiError>,
+    },
     /// The sharing card of a file was opened (named `name`) / closed.
     ShareOpened {
         file_id: i64,
@@ -530,6 +546,12 @@ pub enum Effect {
         op: OpId,
         id: i64,
     },
+    FetchFriendList,
+    FetchFriendRequests,
+    ChangeFriend {
+        op: OpId,
+        change: FriendChange,
+    },
     FetchSharedWith {
         file_id: i64,
     },
@@ -616,6 +638,8 @@ pub struct State {
     pub files: FilesView,
     /// The transfer whose details panel is open.
     pub detail: Option<TransferDetail>,
+    /// The open friends card.
+    pub friends_card: Option<FriendsView>,
     /// The open sharing card.
     pub sharing: Option<SharingView>,
     /// The files the account shares.
@@ -675,6 +699,7 @@ impl State {
             feeds: FeedList::default(),
             files: FilesView::default(),
             detail: None,
+            friends_card: None,
             sharing: None,
             shared: SharedFiles::default(),
             settings,
@@ -1176,6 +1201,16 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
         Event::FileDeleteFinished { op, id, result } => {
             files::delete_finished(state, now, (op, id), result, &mut fx);
         }
+        Event::FriendsCardOpened => friends::opened(state, &mut fx),
+        Event::FriendsCardClosed => friends::closed(state),
+        Event::FriendListFetched(result) => friends::list_fetched(state, result),
+        Event::FriendRequestsFetched(result) => friends::requests_fetched(state, result),
+        Event::FriendChangeRequested(change) => {
+            friends::change_requested(state, &change, &mut fx);
+        }
+        Event::FriendChangeFinished { op, change, result } => {
+            friends::change_finished(state, (op, change), result, &mut fx);
+        }
         Event::ShareOpened { file_id, name } => shares::opened(state, file_id, &name, &mut fx),
         Event::ShareClosed => shares::closed(state),
         Event::SharedWithFetched { file_id, result } => {
@@ -1377,6 +1412,7 @@ fn sign_out(state: &mut State, fx: &mut Vec<Effect>) {
     files::reset(state);
     detail::reset(state);
     shares::reset(state);
+    friends::reset(state);
     // What was running for this account has no one to report to. (An update is not tied to the account.)
     state.ops.retain(|_, kind| *kind == Op::Update);
     state.busy = u32::try_from(state.ops.len()).unwrap_or(u32::MAX);
