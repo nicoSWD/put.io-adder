@@ -125,7 +125,7 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
     let locale = app.state.locale;
     let mut actions = Vec::new();
     let mut folder_chosen: Option<Folder> = None;
-    let response = egui::Modal::new(egui::Id::new("preferences"))
+    let response = egui::Modal::new(egui::Id::unique("preferences"))
         .backdrop_color(backdrop)
         .frame(frame)
         .show(ctx, |ui| {

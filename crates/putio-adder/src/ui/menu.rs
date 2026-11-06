@@ -49,7 +49,7 @@ pub(crate) fn item(
     let (rect, response) =
         ui.allocate_exact_size(Vec2::new(ui.available_width(), ROW_HEIGHT), Sense::click());
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
-    super::widgets::describe(&response, egui::WidgetType::Button, label);
+    super::widgets::describe(&response, egui::Role::Button, label);
     super::widgets::focus_ring(ui, &response, rect, CornerRadius::same(9));
     if response.hovered() {
         ui.painter()

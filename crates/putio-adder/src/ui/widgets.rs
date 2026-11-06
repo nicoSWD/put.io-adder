@@ -31,7 +31,7 @@ pub(crate) fn focus_ring(
 }
 
 /// Tell assistive technology what a hand-painted control is.
-pub(crate) fn describe(response: &Response, kind: egui::WidgetType, label: &str) {
+pub(crate) fn describe(response: &Response, kind: egui::Role, label: &str) {
     response.widget_info(|| egui::WidgetInfo::labeled(kind, true, label));
 }
 
@@ -46,7 +46,7 @@ pub(crate) fn switch(ui: &mut egui::Ui, on: &mut bool, label: &str) -> Response 
         response.mark_changed();
     }
     response.widget_info(|| {
-        egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), *on, label)
+        egui::WidgetInfo::selected(egui::Role::CheckBox, ui.is_enabled(), *on, label)
     });
     let t = ui.ctx().animate_bool_with_time(response.id, *on, 0.14);
     let p = theme::pal();
@@ -109,11 +109,11 @@ pub(crate) fn segmented<T: Copy + PartialEq>(
             Vec2::new(width, height - inner * 2.0),
         );
         let response = ui
-            .interact(rect, ui.id().with(label), Sense::click())
+            .interact(rect, ui.scope_id().with(label), Sense::click())
             .on_hover_cursor(egui::CursorIcon::PointingHand);
         let selected = *value == current;
         response.widget_info(|| {
-            egui::WidgetInfo::selected(egui::WidgetType::RadioButton, true, selected, label)
+            egui::WidgetInfo::selected(egui::Role::RadioButton, true, selected, label)
         });
         focus_ring(ui, &response, rect, CornerRadius::same(8));
         if selected {
@@ -207,7 +207,7 @@ pub(crate) fn row(
 pub(crate) fn close_button(ui: &mut egui::Ui, label: &str) -> bool {
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(30.0), Sense::click());
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
-    describe(&response, egui::WidgetType::Button, label);
+    describe(&response, egui::Role::Button, label);
     focus_ring(ui, &response, rect, CornerRadius::same(15));
     let p = theme::pal();
     if response.hovered() {
@@ -227,7 +227,7 @@ pub(crate) fn close_button(ui: &mut egui::Ui, label: &str) -> bool {
 pub(crate) fn back_button(ui: &mut egui::Ui, label: &str) -> bool {
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(30.0), Sense::click());
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
-    describe(&response, egui::WidgetType::Button, label);
+    describe(&response, egui::Role::Button, label);
     focus_ring(ui, &response, rect, CornerRadius::same(15));
     let p = theme::pal();
     if response.hovered() {
@@ -303,7 +303,7 @@ fn button(ui: &mut egui::Ui, icon: Option<MenuIcon>, label: &str, primary: bool)
     let size = Vec2::new(text_left + galley.size().x + 18.0, ACTION_HEIGHT);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
-    describe(&response, egui::WidgetType::Button, label);
+    describe(&response, egui::Role::Button, label);
     focus_ring(ui, &response, rect, CornerRadius::same(10));
     let (fill, hover_fill, ink, quiet_ink) = if primary {
         (theme::YELLOW, p.yellow_pressed, p.on_yellow, p.on_yellow)
