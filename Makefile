@@ -114,7 +114,7 @@ release-dry-run: ## Check a release changes nothing yet: make release-dry-run VE
 	@[ "$(origin VERSION)" = "command line" ] || { echo "usage: make release-dry-run VERSION=x.y.z"; exit 1; }
 	tools/release.sh $(VERSION) --dry-run
 
-release-tag: ## Bump the version and make the signed tag (never pushes): make release-tag VERSION=0.2.0
+release-tag: ## Bump the version and make the tag (never pushes): make release-tag VERSION=0.2.0
 	@[ "$(origin VERSION)" = "command line" ] || { echo "usage: make release-tag VERSION=x.y.z"; exit 1; }
 	tools/release.sh $(VERSION)
 

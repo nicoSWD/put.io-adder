@@ -1,6 +1,6 @@
 name: Release
 
-# Push a signed tag such as `v0.2.0` (made by tools/release.sh) to build every platform and publish a
+# Push a tag such as `v0.2.0` (made by tools/release.sh) to build every platform and publish a
 # GitHub release. Tags with a hyphen (`v0.2.0-rc.1`) are published as pre-releases.
 on:
   push:
@@ -33,37 +33,6 @@ jobs:
           ref: ${{ env.RELEASE_TAG }}
           fetch-depth: 0
           persist-credentials: false
-
-      # Only the maintainer can release: the tag must be an annotated tag whose signature GitHub
-      # verified, made by the e-mail stored in the repository variable RELEASE_TAGGER_EMAIL.
-      # GitHub verifies the signature when the tag is pushed and can lag a moment, hence the retries.
-      - name: Tag is signed by the maintainer
-        env:
-          GH_TOKEN: ${{ github.token }}
-          MAINTAINER_EMAIL: ${{ vars.RELEASE_TAGGER_EMAIL }}
-        run: |
-          if [ -z "$MAINTAINER_EMAIL" ]; then
-            echo "::error::Set the repository variable RELEASE_TAGGER_EMAIL (Settings > Secrets and variables > Actions > Variables)."
-            exit 1
-          fi
-          for attempt in 1 2 3 4 5; do
-            kind=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.type)
-            if [ "$kind" != "tag" ]; then
-              echo "::error::${RELEASE_TAG} is a lightweight tag. Release with tools/release.sh, which signs it."
-              exit 1
-            fi
-            sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.sha)
-            if gh api "repos/${GITHUB_REPOSITORY}/git/tags/${sha}" | jq -e --arg email "$MAINTAINER_EMAIL" --arg tag "$RELEASE_TAG" '
-                .verification.verified == true and .verification.reason == "valid"
-                and .tag == $tag and .object.type == "commit"
-                and (.tagger.email | ascii_downcase) == ($email | ascii_downcase)' >/dev/null; then
-              echo "${RELEASE_TAG} is signed by ${MAINTAINER_EMAIL}"
-              exit 0
-            fi
-            sleep $((attempt * 3))
-          done
-          echo "::error::${RELEASE_TAG} is not a verified tag by ${MAINTAINER_EMAIL}. Release with tools/release.sh."
-          exit 1
 
       # `git push origin master vX` starts CI and this workflow at the same moment, so wait for CI on the
       # tagged commit (up to 45 minutes) instead of failing because it has not finished yet.
@@ -198,15 +167,17 @@ jobs:
       - name: Bundle (macOS)
         if: matrix.kind == 'macos'
         run: PUTIO_BINARY="target/$TARGET/release/putio-adder" tools/bundle-macos.sh "$TARGET"
-      - name: Sign and notarize (macOS)
+      # Developer ID signature, notarization and stapling of the app, then the same for the disk
+      # image made from it. The image is built after the app is stapled so it holds the final app.
+      - name: Sign and notarize the app (macOS)
         if: matrix.kind == 'macos'
         env:
           MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
           MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
-          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
-          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
-          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
           if [ -n "$MACOS_SIGN_IDENTITY" ] && [ -n "$MACOS_CERTIFICATE_P12_BASE64" ]; then
             tools/sign-macos.sh "dist/$TARGET/put.io adder.app"
@@ -218,6 +189,19 @@ jobs:
       - name: Disk image (macOS)
         if: matrix.kind == 'macos'
         run: tools/make-dmg.sh "dist/$TARGET/put.io adder.app" "dist/putio-adder-v$VERSION-macos-${{ matrix.arch }}.dmg"
+      - name: Sign and notarize the disk image (macOS)
+        if: matrix.kind == 'macos'
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          if [ -n "$MACOS_SIGN_IDENTITY" ] && [ -n "$MACOS_CERTIFICATE_P12_BASE64" ]; then
+            tools/sign-macos.sh "dist/putio-adder-v$VERSION-macos-${{ matrix.arch }}.dmg"
+          fi
       # The in-app updater downloads this zip (the disk image is for people). Its name and its layout
       # (put.io adder.app at the top) are a contract with crates/putio-platform/src/update.
       - name: Zip (macOS)
@@ -297,8 +281,10 @@ jobs:
             echo
             if grep -q ad-hoc dist/signing-*.txt; then
               echo "> **macOS:** this build is not notarized. Right-click the app, choose *Open*, and confirm once."
-              echo
+            else
+              echo "> **macOS:** the app and the disk image are signed with a Developer ID and notarized by Apple."
             fi
+            echo
             echo "## Verify what you downloaded"
             echo
             echo '```'

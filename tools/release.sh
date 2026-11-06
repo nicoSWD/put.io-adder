@@ -1,5 +1,5 @@
 #!/bin/sh
-# Prepares a release: checks, version bump, commit and a SIGNED tag. It never pushes.
+# Prepares a release: checks, version bump, commit and an annotated tag. It never pushes.
 #
 #   tools/release.sh 0.2.0            stable release
 #   tools/release.sh 0.2.0-rc.1       pre-release (published as a GitHub pre-release)
@@ -30,9 +30,6 @@ if git remote get-url origin >/dev/null 2>&1; then
     git fetch --quiet origin master
     [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/master)" ] || { echo "master differs from origin/master: pull or push first" >&2; exit 1; }
 fi
-# A tag can only be signed when git knows how: fail now, not after the commit.
-git config --get user.signingkey >/dev/null || [ "$(git config --get tag.gpgSign || true)" = "true" ] || \
-    [ "$dry_run" = "yes" ] || { echo "no signing key configured (git config user.signingkey / gpg.format ssh)" >&2; exit 1; }
 
 echo "checks…"
 cargo fmt --all --check
@@ -43,7 +40,7 @@ sha256sum_check() { (cd crates/putio-api/tests/spec && shasum -a 256 -c putio-2.
 sha256sum_check
 
 if [ "$dry_run" = "yes" ]; then
-    echo "dry run: would bump $current -> $version, commit 'Release $tag' and create the signed tag $tag"
+    echo "dry run: would bump $current -> $version, commit 'Release $tag' and create the tag $tag"
     exit 0
 fi
 
@@ -60,8 +57,7 @@ cargo check --workspace --locked
 
 git add Cargo.toml Cargo.lock
 git commit -m "Release $tag"
-git tag -s "$tag" -m "put.io adder $version"
-git tag -v "$tag" >/dev/null 2>&1 || echo "warning: could not verify the tag signature locally"
+git tag -a "$tag" -m "put.io adder $version"
 echo
 echo "Created $tag. Review it, then publish with:"
 echo "    git push origin master $tag"

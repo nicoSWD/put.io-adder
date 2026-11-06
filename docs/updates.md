@@ -55,7 +55,7 @@ finish**. The design follows the updater of the sibling project DegenView, with 
 This is a decision, not an oversight. The updater does **not** verify:
 
 - a **checksum** of the file (GitHub publishes a SHA-256 for every upload; it is not compared);
-- the **signature of the release tag**, or who signed it;
+- the **signature of the release tag**, if it has one;
 - a **code signature** (macOS Developer ID / Team ID, notarization, Authenticode).
 
 So the trust placed in an update is: the TLS connection to GitHub, the fact that the release is published
@@ -64,17 +64,18 @@ asset under `nicoSWD/put.io-adder` can ship code to every user who presses *Upda
 releases** in the repository settings, protect the account with a hardware key, and keep the release workflow
 the only thing that uploads assets. If you want the missing checks later, the natural places are
 `putio_platform::update::prepare_with` (compare `asset.size` and a SHA-256 from the release's `digest`
-field) and `putio_core::update::pick_asset` (pin the tagger).
+field) and `putio_core::update::pick_asset`.
 
-The release workflow still signs-checks the tag, attests build provenance and publishes `SHA256SUMS`; people
+The release workflow still checks the tag is on `master` with passing CI, attests build provenance and publishes `SHA256SUMS`; people
 who download by hand can verify those (SECURITY.md). The app just does not.
 
 ## Known gaps
 
 - **Windows "Installed apps"** keeps showing the version the installer wrote after an in-app update (DegenView
   rewrites that registry value; this app does not). Uninstalling still works.
-- **macOS asks for Keychain access again** after each update while releases are ad-hoc signed: the signature
-  changes with the binary, so the Keychain no longer recognises the app.
+- **macOS asks for Keychain access again** after an update of an ad-hoc signed build (a release made without the
+  Apple signing secrets, or a local `make app`): the signature changes with the binary, so the Keychain no longer
+  recognises the app. Developer ID signed releases keep the same identity across updates.
 - The Windows and Linux swap and relaunch run only on those systems; they are tested here with fixtures on
   macOS, and the `cfg(windows)` spawn code has no test at all.
 - Restart is held back while a magnet link or `.torrent` is being sent (the pill stays disabled); a transfer

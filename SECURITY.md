@@ -11,8 +11,8 @@ Please report vulnerabilities privately through GitHub's "Report a vulnerability
 - Anything arriving from the OS (magnet URIs, file paths, command-line arguments, IPC frames) is validated as hostile input.
 
 ## Verifying a release
-Releases are built by GitHub Actions from a signed tag, by a workflow that refuses tags not signed by the
-maintainer, not on `master`, or whose CI did not pass, and that waits for a human to approve the publish step.
+Releases are built by GitHub Actions from a tag, by a workflow that refuses tags not on `master`, or whose CI
+did not pass, and that waits for a human to approve the publish step.
 Each artifact has a build-provenance attestation:
 
     gh attestation verify <artifact> --repo nicoSWD/put.io-adder
