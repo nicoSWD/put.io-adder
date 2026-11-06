@@ -11,7 +11,7 @@ publish = false
 # that fix presents Metal frames inside the Core Animation transaction while the window resizes, which
 # deadlocks `nextDrawable` for a second at a time during the animated resize. The renderer is still
 # wgpu, with the same wgpu features egui-wgpu enables by default.
-eframe = { version = "0.36.2", default-features = false, features = [
+eframe = { version = "0.37.0", default-features = false, features = [
     "accesskit",
     "default_fonts",
     "links",
