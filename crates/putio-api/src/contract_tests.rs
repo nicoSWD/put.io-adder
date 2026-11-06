@@ -143,6 +143,13 @@ fn the_fields_we_read_exist_in_the_spec_schemas() {
             "Transfer.{field} is not in the spec"
         );
     }
+    let extraction = props("Extraction");
+    for field in ["id", "name", "status", "message", "files"] {
+        assert!(
+            extraction.contains(field),
+            "Extraction.{field} is not in the spec"
+        );
+    }
     let account = props("AccountInfo");
     for field in ["user_id", "username", "mail", "monthly_bandwidth_usage"] {
         assert!(
@@ -240,6 +247,8 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     ok(r#"{"status":"OK"}"#); // delete_files
     ok(r#"{"status":"OK","file":{"id":2}}"#); // create_folder
     ok(&format!(r#"{{"transfer":{transfer}}}"#)); // transfer
+    ok(r#"{"extractions":[]}"#); // extract_files
+    ok(r#"{"extractions":[]}"#); // extractions
     ok(r#"{"shared":[{"id":1,"name":"a","size":3,"share_with":"everyone"}]}"#); // shared_files
     ok(r#"{"shared-with":[{"user_name":"jane","user_avatar_url":"/a.png","share_id":3}]}"#); // shared_with
     ok(r#"{"friends":[{"id":1,"name":"jane"}]}"#); // friends
@@ -293,6 +302,8 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     client.delete_files(&[1, 2]).unwrap();
     client.create_folder("folder", 0).unwrap();
     client.transfer(1).unwrap();
+    client.extract_files(&[1, 2], Some("secret")).unwrap();
+    client.extractions().unwrap();
     client.shared_files().unwrap();
     client.shared_with(1).unwrap();
     client.friends().unwrap();
@@ -317,7 +328,7 @@ fn every_request_the_client_sends_exists_in_the_spec_with_the_documented_paramet
     client.delete_rss_feed(5).unwrap();
 
     let requests: Vec<Request> = fake.requests();
-    assert_eq!(requests.len(), 37);
+    assert_eq!(requests.len(), 39);
     for request in &requests {
         let path = template(&request.path);
         let method = match request.method {

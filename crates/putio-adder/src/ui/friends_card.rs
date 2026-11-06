@@ -59,7 +59,7 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
     }
     let (frame, backdrop) = widgets::dialog_frame();
     let mut changes = Vec::new();
-    let response = egui::Modal::new(Id::new("friends"))
+    let response = egui::Modal::new(Id::unique("friends"))
         .backdrop_color(backdrop)
         .frame(frame)
         .show(ctx, |ui| {

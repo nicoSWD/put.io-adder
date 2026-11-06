@@ -15,6 +15,7 @@ pub mod handler;
 pub mod i18n;
 pub mod intake;
 pub mod magnet;
+pub mod secret;
 pub mod settings;
 pub mod state;
 pub mod transfers;

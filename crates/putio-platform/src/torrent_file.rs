@@ -21,6 +21,21 @@ pub enum TorrentFileError {
     Io(#[from] io::Error),
 }
 
+/// Why an uploaded `.torrent` was left where it is instead of being moved to the Trash.
+#[derive(Debug, thiserror::Error)]
+pub enum TrashError {
+    /// A symlink, a directory or something else that is not the plain file that was uploaded.
+    #[error("not a regular file")]
+    NotAFile,
+    #[error("not a .torrent file")]
+    NotATorrent,
+    /// The file is not what was uploaded any more: it was replaced or edited in the meantime.
+    #[error("the file changed since it was uploaded")]
+    Changed,
+    #[error("could not read the file: {0}")]
+    Io(#[from] io::Error),
+}
+
 /// A `.torrent` that passed every check.
 #[derive(Debug)]
 pub struct TorrentFile {
@@ -79,6 +94,39 @@ pub fn read_torrent(path: &Path) -> Result<TorrentFile, TorrentFileError> {
         },
         bytes,
     })
+}
+
+/// Move the `.torrent` at `path` to the Trash, now that its contents (`uploaded`) reached put.io.
+///
+/// Only the very file that was uploaded is touched: it has to be a plain file (not a symlink) with the
+/// `.torrent` extension, and its bytes have to be exactly the ones that were sent. Anything else is left
+/// alone and reported. `trash` does the move (see [`move_to_trash`]); it is a parameter so tests do not
+/// touch the real Trash.
+pub fn trash_uploaded(
+    path: &Path,
+    uploaded: &[u8],
+    trash: impl FnOnce(&Path) -> io::Result<()>,
+) -> Result<(), TrashError> {
+    // `symlink_metadata` does not follow links: a link to a file is refused, never the file behind it.
+    if !std::fs::symlink_metadata(path)?.is_file() {
+        return Err(TrashError::NotAFile);
+    }
+    if !path
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("torrent"))
+    {
+        return Err(TrashError::NotATorrent);
+    }
+    if !read_torrent(path).is_ok_and(|current| current.bytes == uploaded) {
+        return Err(TrashError::Changed);
+    }
+    trash(path)?;
+    Ok(())
+}
+
+/// Put `path` in the system's Trash (Recycle Bin on Windows), where the user can get it back.
+pub fn move_to_trash(path: &Path) -> io::Result<()> {
+    trash::delete(path).map_err(|error| io::Error::other(error.to_string()))
 }
 
 #[cfg(test)]
@@ -180,5 +228,87 @@ mod tests {
         if fs::write(&path, VALID).is_ok() {
             assert_eq!(read_torrent(&path).unwrap().name, "ab.torrent");
         }
+    }
+
+    /// Run `trash_uploaded` with a mover that only records what it was asked to move.
+    fn trashed(path: &Path, uploaded: &[u8]) -> (Result<(), TrashError>, Vec<std::path::PathBuf>) {
+        let moved = std::cell::RefCell::new(Vec::new());
+        let result = trash_uploaded(path, uploaded, |p| {
+            moved.borrow_mut().push(p.to_path_buf());
+            Ok(())
+        });
+        (result, moved.into_inner())
+    }
+
+    #[test]
+    fn the_file_that_was_uploaded_is_moved_to_the_trash() {
+        let tmp = dir("trash-ok");
+        for name in ["a.torrent", "B.TORRENT"] {
+            let path = tmp.0.join(name);
+            fs::write(&path, VALID).unwrap();
+            let (result, moved) = trashed(&path, VALID);
+            assert!(result.is_ok(), "{name}");
+            assert_eq!(moved, [path]);
+        }
+    }
+
+    #[test]
+    fn a_file_that_changed_after_the_upload_is_left_alone() {
+        let tmp = dir("trash-changed");
+        let path = tmp.0.join("a.torrent");
+        fs::write(&path, b"d8:announce3:url4:infod4:name1:bee").unwrap();
+        let (result, moved) = trashed(&path, VALID);
+        assert!(matches!(result, Err(TrashError::Changed)), "{result:?}");
+        assert_eq!(moved, Vec::<std::path::PathBuf>::new());
+        // Replaced by something that is not a torrent at all.
+        fs::write(&path, b"my holiday photos").unwrap();
+        let (result, moved) = trashed(&path, VALID);
+        assert!(matches!(result, Err(TrashError::Changed)), "{result:?}");
+        assert_eq!(moved, Vec::<std::path::PathBuf>::new());
+    }
+
+    #[test]
+    fn only_plain_torrent_files_are_ever_moved() {
+        let tmp = dir("trash-refused");
+        // A directory, even one called x.torrent.
+        let folder = tmp.0.join("x.torrent");
+        fs::create_dir_all(&folder).unwrap();
+        let (result, moved) = trashed(&folder, VALID);
+        assert!(matches!(result, Err(TrashError::NotAFile)), "{result:?}");
+        assert_eq!(moved, Vec::<std::path::PathBuf>::new());
+        // Another extension.
+        let other = tmp.0.join("a.txt");
+        fs::write(&other, VALID).unwrap();
+        let (result, moved) = trashed(&other, VALID);
+        assert!(matches!(result, Err(TrashError::NotATorrent)), "{result:?}");
+        assert_eq!(moved, Vec::<std::path::PathBuf>::new());
+        // Gone already.
+        let (result, moved) = trashed(&tmp.0.join("gone.torrent"), VALID);
+        assert!(matches!(result, Err(TrashError::Io(_))), "{result:?}");
+        assert_eq!(moved, Vec::<std::path::PathBuf>::new());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_is_refused_and_the_file_behind_it_is_not_touched() {
+        let tmp = dir("trash-link");
+        let real = tmp.0.join("real.torrent");
+        fs::write(&real, VALID).unwrap();
+        let link = tmp.0.join("link.torrent");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let (result, moved) = trashed(&link, VALID);
+        assert!(matches!(result, Err(TrashError::NotAFile)), "{result:?}");
+        assert_eq!(moved, Vec::<std::path::PathBuf>::new());
+        assert!(real.exists());
+    }
+
+    #[test]
+    fn a_failing_move_is_reported_and_the_file_stays() {
+        let tmp = dir("trash-fails");
+        let path = tmp.0.join("a.torrent");
+        fs::write(&path, VALID).unwrap();
+        let result = trash_uploaded(&path, VALID, |_| Err(io::Error::other("no trash here")));
+        assert!(matches!(result, Err(TrashError::Io(_))), "{result:?}");
+        assert!(path.exists());
     }
 }

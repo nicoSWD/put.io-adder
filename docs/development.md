@@ -12,7 +12,8 @@ PUTIO_ADDER_DEMO=default-app cargo run -p putio-adder # the "make this your defa
 PUTIO_ADDER_DEMO=login cargo run -p putio-adder     # the sign-in panel with a fake code
 PUTIO_ADDER_DEMO=prefs cargo run -p putio-adder     # the list with Preferences open
 PUTIO_ADDER_DEMO=folders cargo run -p putio-adder   # Preferences on the folder chooser page
-PUTIO_ADDER_DEMO=menu cargo run -p putio-adder      # the "..." menu open (menu-update: with a new version waiting)
+PUTIO_ADDER_DEMO=menu cargo run -p putio-adder      # the "..." menu open (menu-update: with a new version waiting;
+                                                                   # collapsed-menu, collapsed-menu-update: over the closed list)
 PUTIO_ADDER_DEMO=sort cargo run -p putio-adder      # the sort drop-down open
 PUTIO_ADDER_DEMO=card-menu cargo run -p putio-adder   # a card's "⋯" menu open (also card-menu-seeding, -failed, -done)
 PUTIO_ADDER_DEMO=details cargo run -p putio-adder     # the details panel (also details-downloading, details-failed, details-long)
@@ -20,6 +21,7 @@ PUTIO_ADDER_DEMO=files cargo run -p putio-adder     # the Files tab (also files-
 PUTIO_ADDER_DEMO=file-share cargo run -p putio-adder  # the sharing card (also file-share-empty, file-share-denied); the Files views mark two entries as shared
 PUTIO_ADDER_DEMO=friends cargo run -p putio-adder     # the friends card (also friends-empty, friends-denied, friends-confirm)
 PUTIO_ADDER_DEMO=file-rename cargo run -p putio-adder # a Files card (also file-new-folder, file-move, file-delete, file-delete-folder)
+PUTIO_ADDER_DEMO=file-rename cargo run -p putio-adder # a Files card (also file-new-folder, file-move, file-delete, file-delete-folder, file-extract, file-password)
 PUTIO_ADDER_DEMO=feeds cargo run -p putio-adder     # the Feeds tab (also feeds-empty, feeds-loading, feeds-failed, feed-card-menu)
 PUTIO_ADDER_DEMO=feed-add cargo run -p putio-adder  # the add-feed form (also feed-edit, feed-delete: the question before deleting)
 PUTIO_ADDER_LOCALE=de|es PUTIO_ADDER_DEMO=feeds cargo run -p putio-adder   # any view in German or Spanish

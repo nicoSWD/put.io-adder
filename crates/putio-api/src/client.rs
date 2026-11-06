@@ -8,8 +8,8 @@ use serde_json::Value;
 use crate::error::{ApiError, ApiFailure, retry_delay};
 use crate::form::{self, Part};
 use crate::models::{
-    Account, DeviceCode, File, FileType, Friend, FriendChange, Release, RssFeed, RssFeedSettings,
-    Share, ShareWith, SharedFile, Transfer, UploadOutcome, ZipStatus,
+    Account, DeviceCode, Extraction, File, FileType, Friend, FriendChange, Release, RssFeed,
+    RssFeedSettings, Share, ShareWith, SharedFile, Transfer, UploadOutcome, ZipStatus,
 };
 use crate::token::Token;
 use crate::torrent;
@@ -607,6 +607,44 @@ impl<T: Transport> Client<T> {
         self.ack(&self.post_form(&format!("/files/{file_id}/unshare"), &[("shares", &joined)]))
     }
 
+    /// Unpack ZIP or RAR archives into folders next to them. A `password` is sent only when there is one.
+    /// The answer says where each extraction starts (usually queued); follow them with
+    /// [`Client::extractions`].
+    pub fn extract_files(
+        &self,
+        ids: &[i64],
+        password: Option<&str>,
+    ) -> Result<Vec<Extraction>, ApiError> {
+        #[derive(serde::Deserialize)]
+        struct Reply {
+            #[serde(default)]
+            extractions: Vec<Extraction>,
+        }
+        if ids.is_empty() {
+            return Err(ApiError::InvalidInput("no file ids"));
+        }
+        let joined = ids.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
+        let mut pairs = vec![("file_ids", joined.as_str())];
+        if let Some(password) = password.filter(|p| !p.is_empty()) {
+            pairs.push(("password", password));
+        }
+        Ok(self
+            .json::<Reply>(&self.post_form("/files/extract", &pairs))?
+            .extractions)
+    }
+
+    /// The extractions put.io is working on (or has just finished).
+    pub fn extractions(&self) -> Result<Vec<Extraction>, ApiError> {
+        #[derive(serde::Deserialize)]
+        struct Reply {
+            #[serde(default)]
+            extractions: Vec<Extraction>,
+        }
+        Ok(self
+            .json::<Reply>(&self.get("/files/extract".into()))?
+            .extractions)
+    }
+
     /// Make a folder inside `parent_id` (`0` is the top level).
     pub fn create_folder(&self, name: &str, parent_id: i64) -> Result<(), ApiError> {
         if name.trim().is_empty() {
@@ -1079,6 +1117,74 @@ mod tests {
             client(&fake).transfer(80),
             Err(ApiError::Decode(_))
         ));
+    }
+
+    #[test]
+    fn extracting_sends_the_ids_and_a_password_only_when_there_is_one() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            200,
+            r#"{"status":"OK","extractions":[{"id":4,"name":"a.zip","status":"IN_QUEUE","files":[9]}]}"#,
+        );
+        let started = client(&fake).extract_files(&[9], None).unwrap();
+        let request = fake.last_request().unwrap();
+        assert_eq!(request.describe(), "POST /files/extract");
+        assert_eq!(request.body, Body::Form("file_ids=9".into()));
+        assert_eq!(started.len(), 1);
+        assert_eq!(started[0].status, crate::models::ExtractStatus::InQueue);
+        assert_eq!(started[0].files, [9]);
+        fake.push_json(200, r#"{"extractions":[]}"#);
+        client(&fake)
+            .extract_files(&[9, 10], Some("s3 cret&"))
+            .unwrap();
+        assert_eq!(
+            fake.last_request().unwrap().body,
+            Body::Form("file_ids=9%2C10&password=s3%20cret%26".into())
+        );
+        // An empty password is no password.
+        fake.push_json(200, r#"{"extractions":[]}"#);
+        client(&fake).extract_files(&[9], Some("")).unwrap();
+        assert_eq!(
+            fake.last_request().unwrap().body,
+            Body::Form("file_ids=9".into())
+        );
+        let before = fake.requests().len();
+        assert_eq!(
+            client(&fake).extract_files(&[], None).unwrap_err(),
+            ApiError::InvalidInput("no file ids")
+        );
+        assert_eq!(fake.requests().len(), before);
+    }
+
+    #[test]
+    fn the_running_extractions_are_read_with_every_status_and_odd_values() {
+        use crate::models::ExtractStatus::{Error, Extracted, Extracting, Password, Unknown};
+        let fake = FakeTransport::new();
+        fake.push_json(
+            200,
+            r#"{"extractions":[
+                {"id":1,"name":"a.zip","status":"EXTRACTING","files":[3]},
+                {"id":2,"name":"b.rar","status":"PASSWORD","files":[4,5]},
+                {"id":3,"status":"ERROR","message":"corrupt archive"},
+                {"id":4,"status":"EXTRACTED"},
+                {"id":5,"status":"SOMETHING_NEW","files":"x","name":null}
+            ]}"#,
+        );
+        let list = client(&fake).extractions().unwrap();
+        assert_eq!(
+            fake.last_request().unwrap().describe(),
+            "GET /files/extract"
+        );
+        assert_eq!(
+            list.iter().map(|e| e.status).collect::<Vec<_>>(),
+            [Extracting, Password, Error, Extracted, Unknown]
+        );
+        assert_eq!(list[1].files, [4, 5]);
+        assert_eq!(list[2].message.as_deref(), Some("corrupt archive"));
+        assert!(list[4].files.is_empty() && list[4].name.is_empty());
+        // No extractions at all is an empty list.
+        fake.push_json(200, r#"{"status":"OK"}"#);
+        assert_eq!(client(&fake).extractions().unwrap(), []);
     }
 
     #[test]

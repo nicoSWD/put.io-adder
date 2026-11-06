@@ -11,8 +11,8 @@ use std::path::PathBuf;
 
 use putio_api::client::{FileListing, FileSearch};
 use putio_api::{
-    Account, ApiError, DeviceCode, Friend, FriendChange, Release, RssFeed, RssFeedSettings, Share,
-    ShareWith, SharedFile, Token, Transfer, ZipState, ZipStatus,
+    Account, ApiError, DeviceCode, Extraction, Friend, FriendChange, Release, RssFeed,
+    RssFeedSettings, Share, ShareWith, SharedFile, Token, Transfer, ZipState, ZipStatus,
 };
 
 use crate::update::UpdateAsset;
@@ -21,11 +21,13 @@ use crate::download;
 use crate::handler;
 use crate::i18n::{Locale, Msg};
 use crate::intake::{Intake, IntakeError};
+use crate::secret::Secret;
 use crate::settings::{Folder, Settings, Tab, ThemeChoice, WindowSize};
 use crate::transfers::{self, Summary, Tracker};
 use crate::update::{self, UpdateStatus};
 
 mod detail;
+mod extract;
 mod feeds;
 mod files;
 mod friends;
@@ -33,6 +35,7 @@ mod refresh;
 mod shares;
 
 pub use detail::TransferDetail;
+pub use extract::{PasswordAsk, Unpacking};
 pub use feeds::{FeedList, FeedSave};
 pub use files::{Crumb, FileAction, FilesView, Search};
 pub use friends::{FriendAction, FriendsView};
@@ -123,6 +126,7 @@ enum Op {
     FileDelete,
     Share,
     Unshare,
+    Extract,
     Friend,
 }
 
@@ -192,6 +196,7 @@ pub enum StreamFailure {
 pub enum SettingsChange {
     CloseAfterMagnet(bool),
     CloseAfterTorrent(bool),
+    TrashTorrentAfterUpload(bool),
     CheckForUpdates(bool),
     DefaultFolder(Option<Folder>),
     Theme(ThemeChoice),
@@ -446,6 +451,21 @@ pub enum Event {
         folder: i64,
         name: String,
     },
+    /// Unpack the archive `id` into a folder next to it (`password` when it has one).
+    FileExtractRequested {
+        id: i64,
+        password: Option<Secret>,
+    },
+    /// The answer to `Effect::ExtractFile`.
+    FileExtractStarted {
+        op: OpId,
+        id: i64,
+        result: Result<Vec<Extraction>, ApiError>,
+    },
+    /// The answer to `Effect::ListExtractions`.
+    ExtractionsListed(Result<Vec<Extraction>, ApiError>),
+    /// The user gave up on entering a password.
+    FileExtractPasswordDismissed,
     FileOpenRequested(i64),
     FileCopyLinkRequested(i64),
     FileDownloadRequested(i64),
@@ -490,6 +510,8 @@ pub enum Effect {
         op: OpId,
         path: PathBuf,
         parent: Option<i64>,
+        /// Move the file to the Trash once put.io has taken it (the setting, as it was when the upload started).
+        trash_after: bool,
     },
     CancelTransfer {
         op: OpId,
@@ -574,6 +596,14 @@ pub enum Effect {
     FetchTransfer {
         id: i64,
     },
+    /// Unpack an archive (answered with `Event::FileExtractStarted`).
+    ExtractFile {
+        op: OpId,
+        id: i64,
+        password: Option<Secret>,
+    },
+    /// List the running extractions (answered with `Event::ExtractionsListed`).
+    ListExtractions,
     /// Put text on the system clipboard. Only ever built here, from validated data.
     CopyText(String),
     /// Ask the system whether this app is the default for magnet links and `.torrent` files.
@@ -644,6 +674,8 @@ pub struct State {
     pub sharing: Option<SharingView>,
     /// The files the account shares.
     pub shared: SharedFiles,
+    /// Archives being unpacked on put.io.
+    pub unpacking: Vec<Unpacking>,
     pub update: UpdateStatus,
     pub install: Install,
     pub install_target: InstallTarget,
@@ -675,6 +707,8 @@ pub struct State {
     shared_refresh: refresh::Refresh,
     /// The transfer whose fetch is on its way.
     detail_requested: Option<i64>,
+    extract_ask: Option<PasswordAsk>,
+    extract_refresh: refresh::Refresh,
     /// The folder whose listing is on its way.
     files_requested: Option<i64>,
     failures: u32,
@@ -702,6 +736,7 @@ impl State {
             friends_card: None,
             sharing: None,
             shared: SharedFiles::default(),
+            unpacking: Vec::new(),
             settings,
             locale,
             auth: Auth::Starting,
@@ -733,6 +768,8 @@ impl State {
             detail_refresh: refresh::Refresh::default(),
             shared_refresh: refresh::Refresh::default(),
             detail_requested: None,
+            extract_ask: None,
+            extract_refresh: refresh::Refresh::default(),
             files_requested: None,
             failures: 0,
             close_at: None,
@@ -743,6 +780,12 @@ impl State {
             opening: None,
             handler_asked: false,
         }
+    }
+
+    /// The archive that needs a password the app does not have, if any.
+    #[must_use]
+    pub fn extract_ask(&self) -> Option<&PasswordAsk> {
+        self.extract_ask.as_ref()
     }
 
     /// How the rename, new folder or move dialog's request stands.
@@ -1238,6 +1281,14 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
             detail::fetched(state, now, id, result, &mut fx);
         }
         Event::FilesReveal { folder, name } => files::reveal(state, now, folder, &name),
+        Event::FileExtractRequested { id, password } => {
+            extract::requested(state, id, password, &mut fx);
+        }
+        Event::FileExtractStarted { op, id, result } => {
+            extract::started(state, now, (op, id), result, &mut fx);
+        }
+        Event::ExtractionsListed(result) => extract::listed(state, now, result, &mut fx),
+        Event::FileExtractPasswordDismissed => extract::password_dismissed(state),
         Event::FileOpenRequested(id) => files::open_on_putio(state, id, &mut fx),
         Event::FileCopyLinkRequested(id) => files::copy_link(state, now, id, &mut fx),
         Event::FileDownloadRequested(id) => files::download(state, now, id, &mut fx),
@@ -1246,6 +1297,9 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
             match change {
                 SettingsChange::CloseAfterMagnet(on) => state.settings.close_after_magnet = on,
                 SettingsChange::CloseAfterTorrent(on) => state.settings.close_after_torrent = on,
+                SettingsChange::TrashTorrentAfterUpload(on) => {
+                    state.settings.trash_torrent_after_upload = on;
+                }
                 SettingsChange::CheckForUpdates(on) => state.settings.check_for_updates = on,
                 SettingsChange::DefaultFolder(folder) => state.settings.default_folder = folder,
                 SettingsChange::Theme(theme) => state.settings.theme = theme,
@@ -1412,6 +1466,7 @@ fn sign_out(state: &mut State, fx: &mut Vec<Effect>) {
     files::reset(state);
     detail::reset(state);
     shares::reset(state);
+    extract::reset(state);
     friends::reset(state);
     // What was running for this account has no one to report to. (An update is not tied to the account.)
     state.ops.retain(|_, kind| *kind == Op::Update);
@@ -1713,7 +1768,12 @@ fn intake(state: &mut State, item: Intake, fx: &mut Vec<Effect>) {
         Intake::TorrentFile(path) => {
             let op = state.op(Op::UploadTorrent);
             state.say_until_replaced(Msg::Uploading { name });
-            fx.push(Effect::UploadTorrent { op, path, parent });
+            fx.push(Effect::UploadTorrent {
+                op,
+                path,
+                parent,
+                trash_after: state.settings.trash_torrent_after_upload,
+            });
         }
     }
 }
@@ -1837,6 +1897,7 @@ fn maybe_poll(state: &mut State, now: Millis, fx: &mut Vec<Effect>) {
     files::maybe_load(state, now, fx);
     detail::maybe_load(state, now, fx);
     shares::maybe_load(state, now, fx);
+    extract::maybe_poll(state, now, fx);
     if state.is_signed_in()
         && !state.poll_in_flight
         && state.next_poll_at.is_some_and(|at| now >= at)
@@ -3577,6 +3638,43 @@ mod tests {
             Event::SettingsChanged(SettingsChange::DefaultFolder(Some(folder.clone()))),
         );
         assert_eq!(state.settings.default_folder, Some(folder));
+    }
+
+    #[test]
+    fn the_trash_setting_is_applied_saved_and_handed_to_each_upload() {
+        let (mut state, _) = signed_in(no_updates());
+        poll_ok(&mut state, 0, vec![]);
+        let upload = |state: &mut State| {
+            update(
+                state,
+                10,
+                Event::Intake(Intake::TorrentFile("/tmp/a.torrent".into())),
+            )
+        };
+        // Off by default: the file is left where it is.
+        assert!(matches!(
+            &upload(&mut state)[..],
+            [Effect::UploadTorrent {
+                trash_after: false,
+                ..
+            }]
+        ));
+        let fx = update(
+            &mut state,
+            20,
+            Event::SettingsChanged(SettingsChange::TrashTorrentAfterUpload(true)),
+        );
+        assert!(matches!(&fx[..], [Effect::SaveSettings(s)] if s.trash_torrent_after_upload));
+        assert!(matches!(
+            &upload(&mut state)[..],
+            [Effect::UploadTorrent {
+                trash_after: true,
+                ..
+            }]
+        ));
+        // Magnet links have no file to move.
+        let fx = update(&mut state, 30, Event::Intake(magnet("Show")));
+        assert!(matches!(&fx[..], [Effect::AddMagnet { .. }]));
     }
 
     #[test]

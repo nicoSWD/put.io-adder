@@ -11,7 +11,7 @@
 use eframe::egui::{
     self, Align2, CornerRadius, Id, Key, Pos2, Rect, RichText, Sense, Stroke, Ui, UiBuilder, Vec2,
 };
-use putio_api::File;
+use putio_api::{ExtractStatus, File};
 use putio_core::files::{Kind, can_stream, display_name, is_folder, kind};
 use putio_core::format;
 use putio_core::i18n::{Locale, Msg};
@@ -114,6 +114,7 @@ enum Act {
     OpenOnPutio,
     Download,
     Stream,
+    Extract,
     CopyLink,
     Share,
     Rename,
@@ -144,6 +145,13 @@ fn entries(file: &File) -> Vec<Vec<Entry>> {
     open.push(entry(MenuIcon::Download, Msg::MenuDownload, Act::Download));
     if can_stream(file) {
         open.push(entry(MenuIcon::Play, Msg::MenuStream, Act::Stream));
+    }
+    if kind(file) == Kind::Archive {
+        open.push(entry(
+            MenuIcon::Download,
+            Msg::FileMenuExtract,
+            Act::Extract,
+        ));
     }
     vec![
         open,
@@ -191,6 +199,7 @@ fn apply(app: &mut App, ctx: &egui::Context, file: &File, act: Act) {
         Act::OpenOnPutio => app.dispatch(ctx, Event::FileOpenRequested(id)),
         Act::Download => app.dispatch(ctx, Event::FileDownloadRequested(id)),
         Act::Stream => app.dispatch(ctx, Event::FileStreamRequested(id)),
+        Act::Extract => app.dispatch(ctx, Event::FileExtractRequested { id, password: None }),
         Act::CopyLink => app.dispatch(ctx, Event::FileCopyLinkRequested(id)),
         Act::Share => super::share_card::open(app, ctx, id, display_name(file)),
         Act::Rename => super::file_dialogs::open_rename(app, ctx, file),
@@ -235,7 +244,34 @@ fn detail(file: &File, shared: bool, locale: Locale) -> String {
         .join(" · ")
 }
 
-fn draw_card(ui: &mut Ui, file: &File, (selected, shared): (bool, bool), locale: Locale) -> Card {
+/// The pill of a row whose archive is being unpacked (or is waiting for a password), and the words for a
+/// screen reader.
+fn unpack_look(status: ExtractStatus) -> Option<(Msg, widgets::PillLook)> {
+    let p = theme::pal();
+    match status {
+        ExtractStatus::InQueue => Some((Msg::StatusQueued, (p.neutral_soft, p.muted, None))),
+        ExtractStatus::Extracting => {
+            Some((Msg::PillExtracting, (p.yellow_soft, p.accent_text, None)))
+        }
+        ExtractStatus::Password => {
+            Some((Msg::PillPassword, (p.error_soft, p.error, Some(p.error))))
+        }
+        ExtractStatus::Extracted | ExtractStatus::Error | ExtractStatus::Unknown => None,
+    }
+}
+
+/// Where the state pill of a row ends, counted from the right edge of the row.
+const PILL_INSET: f32 = 46.0;
+/// Between a row's text and its pill.
+const TEXT_GAP: f32 = 12.0;
+
+fn draw_card(
+    ui: &mut Ui,
+    file: &File,
+    (selected, shared): (bool, bool),
+    unpacking: Option<ExtractStatus>,
+    locale: Locale,
+) -> Card {
     let p = theme::pal();
     let (rect, body) = ui.allocate_exact_size(
         Vec2::new(ui.available_width() - SCROLLBAR_ROOM, ROW_HEIGHT),
@@ -253,15 +289,19 @@ fn draw_card(ui: &mut Ui, file: &File, (selected, shared): (bool, bool), locale:
     let kind = kind(file);
     let name = display_name(file);
     let detail = detail(file, shared, locale);
-    let description = if detail.is_empty() {
+    let pill = unpacking.and_then(unpack_look);
+    let mut description = if detail.is_empty() {
         format!("{name}, {}", kind_msg(kind).text(locale))
     } else {
         format!("{name}, {}, {detail}", kind_msg(kind).text(locale))
     };
-    widgets::describe(&body, egui::WidgetType::Button, &description);
+    if let Some((msg, _)) = &pill {
+        description = format!("{description}, {}", msg.text(locale));
+    }
+    widgets::describe(&body, egui::Role::Button, &description);
     widgets::describe(
         &more,
-        egui::WidgetType::Button,
+        egui::Role::Button,
         &format!("{}: {name}", Msg::A11yFileActions.text(locale)),
     );
     widgets::focus_ring(ui, &body, rect, CornerRadius::same(10));
@@ -300,7 +340,12 @@ fn draw_card(ui: &mut Ui, file: &File, (selected, shared): (bool, bool), locale:
     );
 
     let text_left = rect.left() + 52.0;
-    let text_width = (rect.right() - MORE_INSET * 2.0 - text_left).max(0.0);
+    // The pill first: how wide it is decides how much room the text has.
+    let pill_left = pill.map(|(msg, look)| {
+        widgets::status_pill(&painter, rect, PILL_INSET, &msg.text(locale), look)
+    });
+    let text_right = pill_left.map_or(rect.right() - MORE_INSET * 2.0, |left| left - TEXT_GAP);
+    let text_width = (text_right - text_left).max(0.0);
     let title_font = theme::bold(12.5);
     let (title_at, title_align) = if detail.is_empty() {
         (Pos2::new(text_left, rect.center().y), Align2::LEFT_CENTER)
@@ -339,7 +384,13 @@ fn card(ui: &mut Ui, app: &mut App, file: &File) -> Option<Act> {
     let locale = app.state.locale;
     let selected = app.ui.selected_file == Some(file.id);
     let shared = app.state.is_shared(file.id);
-    let Card { body, more } = draw_card(ui, file, (selected, shared), locale);
+    let unpacking = app
+        .state
+        .unpacking
+        .iter()
+        .find(|item| item.file_id == file.id)
+        .map(|item| item.status);
+    let Card { body, more } = draw_card(ui, file, (selected, shared), unpacking, locale);
     let folder = is_folder(file);
     if body.clicked() || more.clicked() {
         app.ui.selected_file = Some(file.id);
@@ -519,9 +570,9 @@ fn toolbar(ui: &mut Ui, app: &mut App, ctx: &egui::Context) {
 fn clear_button(ui: &mut Ui, rect: Rect, label: &str) -> bool {
     let p = theme::pal();
     let response = ui
-        .interact(rect, Id::new("files-clear-search"), Sense::click())
+        .interact(rect, Id::unique("files-clear-search"), Sense::click())
         .on_hover_cursor(egui::CursorIcon::PointingHand);
-    widgets::describe(&response, egui::WidgetType::Button, label);
+    widgets::describe(&response, egui::Role::Button, label);
     widgets::focus_ring(ui, &response, rect, CornerRadius::same(13));
     if response.hovered() {
         ui.painter()
@@ -652,11 +703,11 @@ fn breadcrumb(ui: &mut Ui, app: &mut App, ctx: &egui::Context, area: Rect) {
                     let response = ui
                         .interact(
                             rect.expand2(Vec2::new(4.0, 0.0)),
-                            Id::new(("crumb", index)),
+                            Id::unique(("crumb", index)),
                             Sense::click(),
                         )
                         .on_hover_cursor(egui::CursorIcon::PointingHand);
-                    widgets::describe(&response, egui::WidgetType::Button, &name);
+                    widgets::describe(&response, egui::Role::Button, &name);
                     widgets::focus_ring(
                         ui,
                         &response,
@@ -909,7 +960,7 @@ mod tests {
         let rect = std::cell::Cell::new(Rect::NOTHING);
         let boxes = text_boxes(|ui| {
             ui.set_width(NARROWEST);
-            rect.set(draw_card(ui, f, (false, false), locale).body.rect);
+            rect.set(draw_card(ui, f, (false, false), None, locale).body.rect);
         });
         (rect.get(), boxes)
     }
@@ -941,7 +992,7 @@ mod tests {
             for kind in [FileType::Folder, FileType::Video] {
                 let f = file(kind, "Some.Movie.2024.mkv");
                 let (resting, hovered) = text_with_and_without_hover(|ui| {
-                    let card = draw_card(ui, &f, (false, false), locale);
+                    let card = draw_card(ui, &f, (false, false), None, locale);
                     (card.body.rect, card.body.hovered())
                 });
                 assert_eq!(resting, hovered, "{locale:?} {kind:?}");
@@ -956,6 +1007,7 @@ mod tests {
                 ui,
                 &file(FileType::Video, "a.mkv"),
                 (false, false),
+                None,
                 Locale::En,
             );
         });
@@ -1066,5 +1118,94 @@ mod tests {
                 assert!(steps.windows(2).all(|pair| pair[0] < pair[1]), "{steps:?}");
             }
         }
+    }
+
+    #[test]
+    fn only_an_archive_can_be_extracted() {
+        for (kind, extracts) in [
+            (FileType::Archive, true),
+            (FileType::Video, false),
+            (FileType::Folder, false),
+            (FileType::File, false),
+            (FileType::Unknown, false),
+        ] {
+            assert_eq!(
+                acts(&file(kind, "x")).contains(&Act::Extract),
+                extracts,
+                "{kind:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_row_being_unpacked_says_so_without_the_name_running_into_the_pill() {
+        let long = "An archive with a very long name that keeps going and going so that it has to be cut.zip";
+        for locale in LOCALES {
+            for status in [
+                ExtractStatus::InQueue,
+                ExtractStatus::Extracting,
+                ExtractStatus::Password,
+            ] {
+                let f = file(FileType::Archive, long);
+                let rect = std::cell::Cell::new(Rect::NOTHING);
+                let boxes = text_boxes(|ui| {
+                    ui.set_width(NARROWEST);
+                    rect.set(
+                        draw_card(ui, &f, (false, false), Some(status), locale)
+                            .body
+                            .rect,
+                    );
+                });
+                let card = rect.get();
+                for text in &boxes {
+                    assert!(
+                        card.expand(0.5).contains_rect(text.visible),
+                        "{locale:?} {status:?}: {:?} sticks out",
+                        text.text
+                    );
+                }
+                let (msg, _) = unpack_look(status).unwrap();
+                let pill = boxes.iter().find(|b| b.text == msg.text(locale)).unwrap();
+                let name = boxes
+                    .iter()
+                    .find(|b| b.text.starts_with("An archive"))
+                    .unwrap();
+                assert!(
+                    name.full.right() + TEXT_GAP - 1.0 <= pill.full.left(),
+                    "{locale:?} {status:?}: the name runs into the pill"
+                );
+                assert!(
+                    name.full.width() > 150.0,
+                    "{locale:?} {status:?}: too little room for the name"
+                );
+            }
+        }
+        // A finished or failed extraction leaves no pill.
+        for status in [
+            ExtractStatus::Extracted,
+            ExtractStatus::Error,
+            ExtractStatus::Unknown,
+        ] {
+            assert!(unpack_look(status).is_none());
+        }
+    }
+
+    #[test]
+    fn a_row_being_unpacked_tells_a_screen_reader() {
+        let names = accessible_names(|ui| {
+            draw_card(
+                ui,
+                &file(FileType::Archive, "a.zip"),
+                (false, false),
+                Some(ExtractStatus::Extracting),
+                Locale::En,
+            );
+        });
+        assert!(
+            names
+                .iter()
+                .any(|(_, n)| n.ends_with(", Extracting") && n.starts_with("a.zip, ")),
+            "{names:?}"
+        );
     }
 }
