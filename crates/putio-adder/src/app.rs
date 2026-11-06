@@ -249,12 +249,14 @@ impl App {
             return;
         }
         self.dispatch(ctx, Event::Started { has_token: true });
-        self.state.transfers_expanded = view != "collapsed";
+        self.state.transfers_expanded = !view.starts_with("collapsed");
         // The demo drops the update check, so show its finished state instead of a spinner.
         self.state.update = putio_core::update::UpdateStatus::UpToDate;
         self.ui.prefs_open = matches!(view, "prefs" | "folders" | "prefs-update");
         self.ui.open_once = match view {
-            "menu" | "menu-update" => Some(crate::ui::Overlay::Menu),
+            "menu" | "menu-update" | "collapsed-menu" | "collapsed-menu-update" => {
+                Some(crate::ui::Overlay::Menu)
+            }
             "sort" => Some(crate::ui::Overlay::Sort),
             "card-menu" => Some(crate::ui::Overlay::Card(1)),
             "card-menu-seeding" => Some(crate::ui::Overlay::Card(6)),
@@ -269,7 +271,7 @@ impl App {
             "details-long" => Some(2),
             _ => None,
         };
-        if view == "menu-update" {
+        if matches!(view, "menu-update" | "collapsed-menu-update") {
             self.state.update = demo_update(true);
         }
         self.start_demo_update(view);
@@ -503,9 +505,17 @@ impl App {
             }
             Effect::Poll => self.send(Job::Poll),
             Effect::AddMagnet { op, uri, parent } => self.send(Job::AddMagnet { op, uri, parent }),
-            Effect::UploadTorrent { op, path, parent } => {
-                self.send(Job::UploadTorrent { op, path, parent });
-            }
+            Effect::UploadTorrent {
+                op,
+                path,
+                parent,
+                trash_after,
+            } => self.send(Job::UploadTorrent {
+                op,
+                path,
+                parent,
+                trash_after,
+            }),
             Effect::LoadFeeds => self.send(Job::LoadFeeds),
             Effect::SaveFeed { op, id, settings } => self.send(Job::SaveFeed { op, id, settings }),
             Effect::SetFeedPaused { op, id, paused } => {
@@ -727,6 +737,9 @@ impl App {
             Mode::Login
         } else if self.state.transfers_expanded {
             Mode::List
+        } else if let Some(update_row) = ui::menu::window_room(self) {
+            // The menu is drawn inside the window, which has no room for it while collapsed.
+            Mode::Menu { update_row }
         } else {
             Mode::Collapsed
         };

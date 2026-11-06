@@ -254,10 +254,10 @@ fn draw_card(ui: &mut Ui, file: &File, selected: bool, locale: Locale) -> Card {
     } else {
         format!("{name}, {}, {detail}", kind_msg(kind).text(locale))
     };
-    widgets::describe(&body, egui::WidgetType::Button, &description);
+    widgets::describe(&body, egui::Role::Button, &description);
     widgets::describe(
         &more,
-        egui::WidgetType::Button,
+        egui::Role::Button,
         &format!("{}: {name}", Msg::A11yFileActions.text(locale)),
     );
     widgets::focus_ring(ui, &body, rect, CornerRadius::same(10));
@@ -514,9 +514,9 @@ fn toolbar(ui: &mut Ui, app: &mut App, ctx: &egui::Context) {
 fn clear_button(ui: &mut Ui, rect: Rect, label: &str) -> bool {
     let p = theme::pal();
     let response = ui
-        .interact(rect, Id::new("files-clear-search"), Sense::click())
+        .interact(rect, Id::unique("files-clear-search"), Sense::click())
         .on_hover_cursor(egui::CursorIcon::PointingHand);
-    widgets::describe(&response, egui::WidgetType::Button, label);
+    widgets::describe(&response, egui::Role::Button, label);
     widgets::focus_ring(ui, &response, rect, CornerRadius::same(13));
     if response.hovered() {
         ui.painter()
@@ -647,11 +647,11 @@ fn breadcrumb(ui: &mut Ui, app: &mut App, ctx: &egui::Context, area: Rect) {
                     let response = ui
                         .interact(
                             rect.expand2(Vec2::new(4.0, 0.0)),
-                            Id::new(("crumb", index)),
+                            Id::unique(("crumb", index)),
                             Sense::click(),
                         )
                         .on_hover_cursor(egui::CursorIcon::PointingHand);
-                    widgets::describe(&response, egui::WidgetType::Button, &name);
+                    widgets::describe(&response, egui::Role::Button, &name);
                     widgets::focus_ring(
                         ui,
                         &response,

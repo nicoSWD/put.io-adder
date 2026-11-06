@@ -137,7 +137,7 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
     let locale = app.state.locale;
     let mut actions = Vec::new();
     let mut folder_chosen: Option<Folder> = None;
-    let response = egui::Modal::new(egui::Id::new("preferences"))
+    let response = egui::Modal::new(egui::Id::unique("preferences"))
         .backdrop_color(backdrop)
         .frame(frame)
         .show(ctx, |ui| {
@@ -231,6 +231,22 @@ pub(crate) fn body_height(ui: &egui::Ui) -> f32 {
     (ui.ctx().content_rect().height() - 150.0).max(160.0)
 }
 
+/// A row with a title, a hint and an on/off switch; flipping it asks for `change(new value)`.
+fn switch_row(
+    ui: &mut egui::Ui,
+    (title, hint): (&str, &str),
+    current: bool,
+    actions: &mut Vec<Action>,
+    change: fn(bool) -> SettingsChange,
+) {
+    let mut on = current;
+    widgets::row(ui, title, Some(hint), |ui| {
+        if widgets::switch(ui, &mut on, title).changed() {
+            actions.push(Action::Settings(change(on)));
+        }
+    });
+}
+
 /// Returns `true` when the dialog should close.
 fn settings_page(
     ui: &mut egui::Ui,
@@ -273,6 +289,17 @@ fn settings_page(
                         actions.push(Action::Settings(SettingsChange::CloseAfterTorrent(torrent)));
                     }
                 },
+            );
+            widgets::divider(ui);
+            switch_row(
+                ui,
+                (
+                    &Msg::PrefsTrashTorrent.text(locale),
+                    &Msg::PrefsTrashTorrentHint.text(locale),
+                ),
+                settings.trash_torrent_after_upload,
+                actions,
+                SettingsChange::TrashTorrentAfterUpload,
             );
             widgets::divider(ui);
             default_app_row(ui, app, locale, actions);
