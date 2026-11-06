@@ -380,10 +380,14 @@ const ELLIPSIS: f32 = 14.0;
 /// The last step is never cut below this.
 const MIN_LAST: f32 = 48.0;
 
-/// Fit the way to the open folder into `available` width: everything when it fits; else the top level,
-/// "…" for the steps left out, and as many of the last steps as fit, the most that does. The last step (where
-/// the user is) is cut with an ellipsis as the final resort. Returns the pieces and the width the last step
-/// may take.
+/// The least the last step keeps when something has to give: enough to tell folders apart. Below it, steps
+/// in the middle are left out before the name is cut any more.
+const PREFERRED_LAST: f32 = 120.0;
+
+/// Fit the way to the open folder into `available` width: everything when it fits; else the top level (the
+/// way back, which must never disappear), "…" for the steps left out, and as many of the last steps as fit.
+/// A long name at the end is cut with an ellipsis rather than pushing the top level out. Returns the pieces
+/// and the width the last step may take.
 pub(crate) fn plan_crumbs(widths: &[f32], available: f32) -> (Vec<Part>, f32) {
     let Some(last) = widths.len().checked_sub(1) else {
         return (Vec::new(), 0.0);
@@ -393,46 +397,48 @@ pub(crate) fn plan_crumbs(widths: &[f32], available: f32) -> (Vec<Part>, f32) {
     if all <= available {
         return ((0..=last).map(Part::Crumb).collect(), width(last));
     }
-    // Which steps stay: the top level (or not), the steps from `from` up to the last, and the last. Steps
-    // left out between them are one "…". Of everything that fits, the choice that keeps the most steps wins
-    // (the top level breaks a tie).
-    let mut best: Option<(usize, bool, usize)> = None;
-    for root in [true, false] {
+    if last == 0 {
+        // Only the top level, and it does not fit: cut it.
+        return (vec![Part::Crumb(0)], available.max(MIN_LAST).min(width(0)));
+    }
+    // With the top level kept, which steps from `from` up to the last stay? The choice that keeps the most
+    // steps wins, while the last step keeps at least `least` of its width; if even the fewest steps cannot
+    // give it that, it may shrink to the very least.
+    for least in [PREFERRED_LAST, MIN_LAST] {
+        let least = least.min(width(last));
+        let mut best: Option<(usize, usize, f32)> = None;
         for from in 1..=last {
-            let ellipsis = !root || from > 1;
-            let cost = width(last)
-                + if root { width(0) + SEPARATOR } else { 0.0 }
+            let ellipsis = from > 1;
+            let others = width(0)
+                + SEPARATOR
                 + (from..last).map(|i| width(i) + SEPARATOR).sum::<f32>()
                 + if ellipsis { ELLIPSIS + SEPARATOR } else { 0.0 };
-            let kept = usize::from(root) + (last - from) + 1;
-            if cost <= available && best.is_none_or(|(most, ..)| kept > most) {
-                best = Some((kept, root, from));
+            if others + least <= available && best.is_none_or(|(kept, ..)| last - from + 1 > kept) {
+                best = Some((last - from + 1, from, others));
             }
         }
+        if let Some((_, from, others)) = best {
+            let mut parts = vec![Part::Crumb(0)];
+            if from > 1 {
+                parts.push(Part::Ellipsis);
+            }
+            parts.extend((from..=last).map(Part::Crumb));
+            return (parts, (available - others).min(width(last)));
+        }
     }
-    let Some((_, root, from)) = best else {
-        // Not even the top level's "…" and the last step: the last step alone, cut to what there is.
-        return if available >= ELLIPSIS + SEPARATOR + MIN_LAST {
-            (
-                vec![Part::Ellipsis, Part::Crumb(last)],
-                (available - ELLIPSIS - SEPARATOR).min(width(last)),
-            )
-        } else {
-            (
-                vec![Part::Crumb(last)],
-                available.max(MIN_LAST).min(width(last)),
-            )
-        };
-    };
-    let mut parts = Vec::new();
-    if root {
-        parts.push(Part::Crumb(0));
+    // Not even the top level and the last step's least: the end alone, so the user at least sees where
+    // they are.
+    if available >= ELLIPSIS + SEPARATOR + MIN_LAST {
+        (
+            vec![Part::Ellipsis, Part::Crumb(last)],
+            (available - ELLIPSIS - SEPARATOR).min(width(last)),
+        )
+    } else {
+        (
+            vec![Part::Crumb(last)],
+            available.max(MIN_LAST).min(width(last)),
+        )
     }
-    if !root || from > 1 {
-        parts.push(Part::Ellipsis);
-    }
-    parts.extend((from..=last).map(Part::Crumb));
-    (parts, width(last))
 }
 
 /// A count of things on screen, as a float (a trail is never long).
@@ -968,6 +974,22 @@ mod tests {
     }
 
     #[test]
+    fn a_long_folder_name_is_cut_instead_of_pushing_the_way_back_out() {
+        // The top level is 80 wide and the open folder's name 400: there are 250 to spare.
+        let (parts, cap) = plan_crumbs(&[80.0, 400.0], 250.0);
+        assert_eq!(parts, [Part::Crumb(0), Part::Crumb(1)]);
+        assert!((cap - (250.0 - 80.0 - SEPARATOR)).abs() < 0.01, "{cap}");
+        // Deeper: the top level stays, and the middle goes before the name is cut below a readable width.
+        let (parts, cap) = plan_crumbs(&[80.0, 60.0, 60.0, 400.0], 300.0);
+        assert_eq!(parts.first(), Some(&Part::Crumb(0)), "{parts:?}");
+        assert_eq!(parts.last(), Some(&Part::Crumb(3)));
+        assert!(cap >= PREFERRED_LAST, "{cap}");
+        // As narrow as it gets while the top level and a little of the name still fit.
+        let (parts, _) = plan_crumbs(&[80.0, 400.0], 80.0 + SEPARATOR + MIN_LAST);
+        assert_eq!(parts, [Part::Crumb(0), Part::Crumb(1)]);
+    }
+
+    #[test]
     fn the_trail_always_ends_at_the_open_folder_and_fits_or_cuts_the_last_step() {
         for n in 1..8 {
             for available in [0.0, 30.0, 70.0, 120.0, 200.0, 400.0, 900.0] {
@@ -994,6 +1016,14 @@ mod tests {
                     used <= available.max(MIN_LAST) + 0.5,
                     "{n} {available}: {used}"
                 );
+                // The way back stays whenever it and a little of the end fit.
+                if n > 1 && available >= 60.0 + SEPARATOR + MIN_LAST {
+                    assert_eq!(
+                        parts.first(),
+                        Some(&Part::Crumb(0)),
+                        "{n} {available}: {parts:?}"
+                    );
+                }
                 // No step appears twice, and they run in order.
                 let steps: Vec<usize> = parts
                     .iter()

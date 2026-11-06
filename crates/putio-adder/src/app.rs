@@ -367,6 +367,18 @@ impl App {
                     name: "Behind the scenes".into(),
                 },
             ]
+        } else if view == "files-long" {
+            vec![
+                Crumb {
+                    id: 0,
+                    name: String::new(),
+                },
+                Crumb {
+                    id: 11,
+                    name: "A folder with a very long name that goes on and on and on and on and on"
+                        .into(),
+                },
+            ]
         } else {
             vec![Crumb {
                 id: 0,
