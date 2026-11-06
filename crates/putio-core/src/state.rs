@@ -1139,7 +1139,7 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
             account_settings::requested(state, change, &mut fx);
         }
         Event::AccountSettingSaved { op, change, result } => {
-            account_settings::finished(state, now, (op, change), result, &mut fx);
+            account_settings::finished(state, now, (op, change), result);
         }
         Event::AccountSettingDismissed => account_settings::dismissed(state),
         Event::TransferDetailsOpened(id) => detail::opened(state, now, id),

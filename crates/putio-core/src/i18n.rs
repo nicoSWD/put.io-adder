@@ -333,6 +333,7 @@ pub enum Msg {
     PrefsTrashHint,
     PrefsAccountFolder,
     PrefsAccountFolderHint,
+    AccountSettingNotAllowed,
     AccountSettingFailed {
         reason: String,
     },
@@ -1022,6 +1023,13 @@ impl Msg {
                 "Where put.io saves transfers added without a folder, also from its website and other apps.",
                 "Wohin put.io Übertragungen ohne Ordner speichert, auch von der Website und anderen Apps.",
                 "Dónde guarda put.io las transferencias sin carpeta, también desde su web y otras apps."
+            )
+            .into(),
+            Self::AccountSettingNotAllowed => tr!(
+                l,
+                "this app is not allowed to change account settings",
+                "diese App darf Kontoeinstellungen nicht ändern",
+                "esta app no puede cambiar los ajustes de la cuenta"
             )
             .into(),
             Self::AccountSettingFailed { reason } => tr!(
@@ -2128,6 +2136,7 @@ mod tests {
             Msg::PrefsTrashHint,
             Msg::PrefsAccountFolder,
             Msg::PrefsAccountFolderHint,
+            Msg::AccountSettingNotAllowed,
             Msg::AccountSettingFailed {
                 reason: "Spring".into(),
             },

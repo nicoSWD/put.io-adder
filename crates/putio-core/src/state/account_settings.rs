@@ -4,10 +4,12 @@
 //! The settings come with every account poll; a change is sent on its own and, once put.io has agreed,
 //! applied to what the app knows and followed by a fresh poll. Until then the switch shows the position it
 //! was moved to. One change at a time: a second one waits for the first, so the answers cannot cross.
+//! put.io answering a change with "unauthorized" is a refusal, not the end of the session.
 
 use putio_api::{Account, AccountSettingChange, AccountSettings, ApiError};
 
-use super::{Effect, Millis, Op, OpId, State, session_expired};
+use super::{Effect, Millis, Op, OpId, State};
+use crate::i18n::Msg;
 
 /// What a change in progress, or the last one that failed, looks like.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -35,7 +37,6 @@ pub(super) fn finished(
     now: Millis,
     (op, change): (OpId, AccountSettingChange),
     result: Result<(), ApiError>,
-    fx: &mut Vec<Effect>,
 ) {
     if !state.finish(op, &[Op::AccountSetting]) {
         return;
@@ -57,7 +58,12 @@ pub(super) fn finished(
             // The next poll shows what put.io says now.
             state.schedule_poll(now);
         }
-        Err(ApiError::Unauthorized) => session_expired(state, fx),
+        // A 401 here does not mean the session is over (the polls, which run all the time, would say so):
+        // put.io may simply not let this app change settings. Signing the user out for it would throw
+        // away a working session over a refused switch.
+        Err(ApiError::Unauthorized) => {
+            state.account_setting.error = Some(state.text(&Msg::AccountSettingNotAllowed));
+        }
         Err(error) => state.account_setting.error = Some(state.reason(&error)),
     }
 }
@@ -247,7 +253,7 @@ mod tests {
     }
 
     #[test]
-    fn a_stale_answer_changes_nothing_and_an_expired_session_signs_out() {
+    fn a_stale_answer_changes_nothing() {
         let mut state = signed_in(Some(known()));
         let change = AccountSettingChange::TrashEnabled(false);
         update(
@@ -260,6 +266,12 @@ mod tests {
             },
         );
         assert_eq!(state.trash_enabled(), Some(true));
+    }
+
+    #[test]
+    fn put_io_saying_unauthorized_is_a_refusal_and_does_not_sign_the_user_out() {
+        let mut state = signed_in(Some(known()));
+        let change = AccountSettingChange::DefaultDownloadFolder(9);
         let op = op_of(&update(
             &mut state,
             110,
@@ -274,8 +286,20 @@ mod tests {
                 result: Err(ApiError::Unauthorized),
             },
         );
-        assert!(fx.contains(&Effect::DeleteToken));
-        assert_eq!(state.account_setting, AccountSettingSave::default());
+        assert!(!fx.contains(&Effect::DeleteToken), "{fx:?}");
+        assert_eq!(state.auth, Auth::SignedIn);
+        assert_eq!(state.account_default_folder(), Some(0), "back where it was");
+        assert!(state.account_setting.error.is_some());
+        // A session that really is over is still found out by the next poll.
+        let fx = update(
+            &mut state,
+            130,
+            Event::Polled {
+                account: Err(ApiError::Unauthorized),
+                transfers: Err(ApiError::Unauthorized),
+            },
+        );
+        assert!(fx.contains(&Effect::DeleteToken), "{fx:?}");
     }
 
     #[test]
