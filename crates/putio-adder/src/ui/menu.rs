@@ -13,6 +13,34 @@ const WIDTH: f32 = 236.0;
 const ROW_HEIGHT: f32 = 38.0;
 const ICON_X: f32 = 20.0;
 const TEXT_X: f32 = 42.0;
+/// A hairline and the space around it (see [`divider`]).
+const DIVIDER_HEIGHT: f32 = 9.0;
+/// Where the menu's top edge is, measured down from the top of the window's content: under the "..."
+/// button, plus the gap.
+const MENU_TOP: f32 = 50.0;
+/// The frame around the rows, top and bottom together.
+const MENU_PADDING: f32 = 14.0;
+/// Space kept under the menu when the window is grown to hold it.
+const MENU_BOTTOM_MARGIN: f32 = 12.0;
+
+/// Whether the menu starts with the "new version" row (see [`show`]).
+fn has_update_row(state: &putio_core::state::State) -> bool {
+    update::look(state).is_some()
+}
+
+/// How tall the window has to be for the whole menu to be inside it. A menu is drawn inside the window,
+/// so the collapsed window (only the header and the status row) would cut it off. The rows are: Preferences,
+/// check for updates, project page, sign out and quit, in three groups; the new-version row and its hairline
+/// come first when there is one.
+pub(crate) fn window_height(update_row: bool) -> f32 {
+    let (rows, dividers) = if update_row { (6.0, 3.0) } else { (5.0, 2.0) };
+    MENU_TOP + MENU_PADDING + rows * ROW_HEIGHT + dividers * DIVIDER_HEIGHT + MENU_BOTTOM_MARGIN
+}
+
+/// Whether the window has to make room for the menu when it is open: with the new-version row or not.
+pub(crate) fn window_room(app: &App) -> Option<bool> {
+    app.ui.menu_open.then(|| has_update_row(&app.state))
+}
 
 /// How the shortcut for Preferences is written on this platform.
 pub(crate) fn preferences_shortcut_label() -> &'static str {
@@ -125,6 +153,9 @@ pub(crate) fn show(button: &egui::Response, app: &mut App) {
     let mut popup = egui::Popup::menu(button)
         .align(RectAlign::BOTTOM_END)
         .gap(6.0)
+        // Always below the button: the window grows to fit, and a menu that jumped above or beside it
+        // while that happens would flicker.
+        .align_alternatives(&[])
         .width(WIDTH)
         .frame(super::widgets::popup_frame());
     if app.ui.open_once == Some(super::Overlay::Menu) {
@@ -133,7 +164,7 @@ pub(crate) fn show(button: &egui::Response, app: &mut App) {
         popup = popup.open_memory(Some(true.into()));
     }
 
-    popup.show(|ui| {
+    let shown = popup.show(|ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
 
         // A new version comes first, because it is the only thing here that asks for attention.
@@ -208,6 +239,7 @@ pub(crate) fn show(button: &egui::Response, app: &mut App) {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
     });
+    app.ui.menu_open = shown.is_some();
 }
 
 #[cfg(test)]
@@ -232,6 +264,20 @@ mod tests {
                 .any(|(r, n)| r == "Button" && n == "Preferences"),
             "{names:?}"
         );
+    }
+
+    #[test]
+    fn the_window_makes_room_for_the_menu_and_for_the_update_row() {
+        // 5 rows and 2 hairlines under the button, with the frame and a margin.
+        let plain = window_height(false);
+        assert_eq!(
+            plain,
+            MENU_TOP + MENU_PADDING + 5.0 * ROW_HEIGHT + 2.0 * DIVIDER_HEIGHT + MENU_BOTTOM_MARGIN
+        );
+        // The new-version row adds a row and a hairline.
+        assert_eq!(window_height(true) - plain, ROW_HEIGHT + DIVIDER_HEIGHT);
+        // The divider really is as tall as the constant says.
+        assert_eq!(DIVIDER_HEIGHT, 4.0 + 1.0 + 4.0);
     }
 
     #[test]
