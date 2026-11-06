@@ -67,6 +67,19 @@ pub(crate) fn demo(app: &mut App, ctx: &egui::Context, view: &str) {
             file("music.flac", 38_000_000),
         ]),
     );
+    // One that already failed, to show where the reason stays.
+    let failed = app.state.uploads.get(1).map(|u| u.op);
+    if let Some(op) = failed {
+        app.dispatch(
+            ctx,
+            Event::UploadFinished {
+                op,
+                result: Err(putio_core::state::UploadFailure::Local(
+                    "put.io says the file is too large for one upload.".into(),
+                )),
+            },
+        );
+    }
     let first = app.state.uploads.first().map(|u| (u.op, u.size));
     if let Some((op, size)) = first {
         app.dispatch(
@@ -85,15 +98,27 @@ pub(crate) fn handle_drops(ctx: &egui::Context, app: &mut App) {
     if dropped.is_empty() {
         return;
     }
+    // Native platforms give an absolute path; the contents are never read here (they can be huge).
+    let paths = dropped
+        .iter()
+        .map(|file| file.path().to_path_buf())
+        .filter(|path| path.is_absolute())
+        .collect();
+    add_paths(ctx, app, paths);
+}
+
+/// Ask for files with the system's dialog and upload what is chosen.
+pub(crate) fn choose_files(ctx: &egui::Context, app: &mut App) {
+    let title = Msg::UploadPickTitle.text(app.state.locale);
+    add_paths(ctx, app, putio_platform::file_dialog::pick_files(&title));
+}
+
+/// Upload these files (dropped, or chosen in the dialog) into the folder the Files tab shows. A `.torrent`
+/// is added to put.io as a transfer, wherever it came from; the intake knows what to do when the user is
+/// signed out.
+fn add_paths(ctx: &egui::Context, app: &mut App, paths: Vec<std::path::PathBuf>) {
     let mut files = Vec::new();
-    for file in dropped {
-        // Native platforms give an absolute path; never read the contents here (they can be huge).
-        let path = file.path().to_path_buf();
-        if !path.is_absolute() {
-            continue;
-        }
-        // A torrent is added to put.io, wherever it is dropped; the intake knows what to do when the user
-        // is signed out.
+    for path in paths {
         if let Ok(intake @ Intake::TorrentFile(_)) = Intake::parse(&path.to_string_lossy()) {
             app.dispatch(ctx, Event::Intake(intake));
         } else {
@@ -142,16 +167,30 @@ pub(crate) fn drop_hint(ctx: &egui::Context, app: &App) {
     );
 }
 
-/// The uploads going, as rows above the list. Does nothing when there are none. Returns the upload whose
-/// cancel button was pressed.
-pub(crate) fn strip(ui: &mut egui::Ui, uploads: &[Upload], locale: Locale) -> Option<OpId> {
+/// What a button in the rows asked for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Act {
+    /// Stop an upload that is going or waiting.
+    Cancel(OpId),
+    /// Put away the row of an upload that failed.
+    Dismiss(OpId),
+}
+
+/// The uploads going, and the ones that failed, as rows above the list. Does nothing when there are none.
+pub(crate) fn strip(ui: &mut egui::Ui, uploads: &[Upload], locale: Locale) -> Option<Act> {
     if uploads.is_empty() {
         return None;
     }
-    let mut cancelled = None;
+    let mut chosen = None;
+    // The first that has not failed is the one being sent; the others wait for it.
+    let sending = uploads.iter().position(|upload| upload.failed.is_none());
     for (index, upload) in uploads.iter().take(MAX_ROWS).enumerate() {
-        if row(ui, upload, index == 0, locale) {
-            cancelled = Some(upload.op);
+        if row(ui, upload, sending == Some(index), locale) {
+            chosen = Some(if upload.failed.is_some() {
+                Act::Dismiss(upload.op)
+            } else {
+                Act::Cancel(upload.op)
+            });
         }
         ui.add_space(ROW_GAP);
     }
@@ -171,62 +210,96 @@ pub(crate) fn strip(ui: &mut egui::Ui, uploads: &[Upload], locale: Locale) -> Op
         );
         ui.add_space(ROW_GAP);
     }
-    cancelled
+    chosen
 }
 
-/// One upload: its name, how far it has got (or that it waits for its turn), a bar and a stop button.
-/// Everything is painted at fixed positions. Returns whether the stop button was pressed.
+/// One upload: its name, how far it has got (or that it waits for its turn, or why it failed), a bar and a
+/// button that stops it (or puts the row away). Everything is painted at fixed positions. Returns whether
+/// the button was pressed.
 fn row(ui: &mut egui::Ui, upload: &Upload, first: bool, locale: Locale) -> bool {
     let p = theme::pal();
     let (rect, _) = ui.allocate_exact_size(
         Vec2::new(ui.available_width() - SCROLLBAR_ROOM, ROW_HEIGHT),
         Sense::hover(),
     );
-    ui.painter()
-        .rect_filled(rect, CornerRadius::same(12), p.inset);
+    let fill = if upload.failed.is_some() {
+        p.error_soft
+    } else {
+        p.inset
+    };
+    ui.painter().rect_filled(rect, CornerRadius::same(12), fill);
 
     let cancel_rect = Rect::from_center_size(
         Pos2::new(rect.right() - 14.0 - CANCEL_SIZE / 2.0, rect.top() + 18.0),
         Vec2::splat(CANCEL_SIZE),
     );
-    let state_right = cancel_rect.left() - 6.0;
-    // The first is being sent; the others wait for it (they go one at a time).
-    let state = if first || upload.sent > 0 {
-        format!("{}%", upload.percent())
+    let name_font = theme::bold(12.0);
+    let left = rect.left() + 14.0;
+    if let Some(reason) = &upload.failed {
+        // Name above, the reason in red below, both cut to what the button leaves.
+        let room = (cancel_rect.left() - 10.0 - left).max(40.0);
+        let name = widgets::fit_to_width(ui.painter(), &upload.name, &name_font, room);
+        ui.painter().text(
+            Pos2::new(left, rect.top() + 15.0),
+            Align2::LEFT_CENTER,
+            name,
+            name_font,
+            p.text,
+        );
+        let font = theme::text(10.5);
+        let reason = widgets::fit_to_width(ui.painter(), reason, &font, room);
+        ui.painter().text(
+            Pos2::new(left, rect.bottom() - 13.0),
+            Align2::LEFT_CENTER,
+            reason,
+            font,
+            p.error,
+        );
     } else {
-        Msg::UploadWaiting.text(locale)
-    };
-    let state = ui
-        .painter()
-        .layout_no_wrap(state, theme::text(11.0), p.muted);
-    let state_left = state_right - state.size().x;
-    ui.painter().galley(
-        Pos2::new(state_left, rect.top() + 18.0 - state.size().y / 2.0),
-        state,
-        p.muted,
-    );
-    // The name gets what the state leaves, so the two never meet.
-    let name_room = (state_left - 12.0 - (rect.left() + 14.0)).max(40.0);
-    let font = theme::bold(12.0);
-    let name = widgets::fit_to_width(ui.painter(), &upload.name, &font, name_room);
-    ui.painter().text(
-        Pos2::new(rect.left() + 14.0, rect.top() + 18.0),
-        Align2::LEFT_CENTER,
-        name,
-        font,
-        p.text,
-    );
-    let bar = Rect::from_min_max(
-        Pos2::new(rect.left() + 14.0, rect.bottom() - 11.0),
-        Pos2::new(rect.right() - 14.0, rect.bottom() - 7.0),
-    );
-    icons::progress_bar(
-        ui.painter(),
-        bar,
-        f32::from(upload.percent()) / 100.0,
-        theme::YELLOW,
-    );
+        let state_right = cancel_rect.left() - 6.0;
+        // The first is being sent; the others wait for it (they go one at a time).
+        let state = if first || upload.sent > 0 {
+            format!("{}%", upload.percent())
+        } else {
+            Msg::UploadWaiting.text(locale)
+        };
+        let state = ui
+            .painter()
+            .layout_no_wrap(state, theme::text(11.0), p.muted);
+        let state_left = state_right - state.size().x;
+        ui.painter().galley(
+            Pos2::new(state_left, rect.top() + 18.0 - state.size().y / 2.0),
+            state,
+            p.muted,
+        );
+        // The name gets what the state leaves, so the two never meet.
+        let name_room = (state_left - 12.0 - left).max(40.0);
+        let name = widgets::fit_to_width(ui.painter(), &upload.name, &name_font, name_room);
+        ui.painter().text(
+            Pos2::new(left, rect.top() + 18.0),
+            Align2::LEFT_CENTER,
+            name,
+            name_font,
+            p.text,
+        );
+        let bar = Rect::from_min_max(
+            Pos2::new(left, rect.bottom() - 11.0),
+            Pos2::new(rect.right() - 14.0, rect.bottom() - 7.0),
+        );
+        icons::progress_bar(
+            ui.painter(),
+            bar,
+            f32::from(upload.percent()) / 100.0,
+            theme::YELLOW,
+        );
+    }
 
+    stop_button(ui, cancel_rect, upload, locale)
+}
+
+/// The ✕ of a row: stops an upload that is going, or puts a failed one away. Returns whether it was pressed.
+fn stop_button(ui: &mut egui::Ui, cancel_rect: Rect, upload: &Upload, locale: Locale) -> bool {
+    let p = theme::pal();
     let response = ui
         .interact(
             cancel_rect,
@@ -234,14 +307,17 @@ fn row(ui: &mut egui::Ui, upload: &Upload, first: bool, locale: Locale) -> bool 
             Sense::click(),
         )
         .on_hover_cursor(egui::CursorIcon::PointingHand);
-    widgets::describe(
-        &response,
-        egui::WidgetType::Button,
-        &Msg::A11yUploadCancel {
+    let label = if upload.failed.is_some() {
+        Msg::A11yUploadDismiss {
             name: upload.name.clone(),
         }
-        .text(locale),
-    );
+    } else {
+        Msg::A11yUploadCancel {
+            name: upload.name.clone(),
+        }
+    }
+    .text(locale);
+    widgets::describe(&response, egui::WidgetType::Button, &label);
     widgets::focus_ring(ui, &response, cancel_rect, CornerRadius::same(12));
     if response.hovered() {
         ui.painter()
@@ -268,6 +344,7 @@ mod tests {
             name: name.into(),
             size,
             sent,
+            failed: None,
         }
     }
 
@@ -331,6 +408,72 @@ mod tests {
                 .any(|(role, name)| role == "Button" && name == "Cancel upload of a.mkv"),
             "{names:?}"
         );
+    }
+
+    fn failed(op: u64, name: &str, why: &str) -> Upload {
+        Upload {
+            failed: Some(why.into()),
+            ..upload(op, name, 10, 0)
+        }
+    }
+
+    #[test]
+    fn a_failed_upload_keeps_its_row_with_the_reason_and_a_button_to_put_it_away() {
+        let list = [
+            failed(1, "a.mkv", "File too large"),
+            upload(2, "b.zip", 50, 10),
+        ];
+        let boxes = text_boxes(|ui| {
+            strip(ui, &list, Locale::En);
+        });
+        let texts: Vec<&str> = boxes.iter().map(|b| b.text.as_str()).collect();
+        for wanted in ["a.mkv", "File too large", "b.zip", "20%"] {
+            assert!(texts.contains(&wanted), "missing {wanted:?} in {texts:?}");
+        }
+        // The failed one has no percentage or wait of its own, and the one after it is the one sending.
+        assert!(
+            !texts.contains(&"Waiting") && !texts.contains(&"0%"),
+            "{texts:?}"
+        );
+        let names = accessible_names(|ui| {
+            strip(ui, &list, Locale::En);
+        });
+        for wanted in [
+            "Dismiss the failed upload of a.mkv",
+            "Cancel upload of b.zip",
+        ] {
+            assert!(
+                names
+                    .iter()
+                    .any(|(role, name)| role == "Button" && name == wanted),
+                "missing {wanted:?} in {names:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_long_reason_and_name_stay_inside_a_failed_row_in_every_language() {
+        let long = "An.Extremely.Long.File.Name.".repeat(8);
+        let why = "A reason that goes on and on and on, far past what a row can hold. ".repeat(4);
+        let list = [failed(1, &long, &why)];
+        for locale in [Locale::En, Locale::De, Locale::Es] {
+            let mut used = Rect::NOTHING;
+            let boxes = text_boxes(|ui| {
+                ui.allocate_ui(Vec2::new(512.0, 300.0), |ui| {
+                    strip(ui, &list, locale);
+                    used = ui.min_rect();
+                });
+            });
+            assert!(used.width() <= 512.0 + 0.5, "{locale:?}: {used:?}");
+            for text in &boxes {
+                assert!(
+                    text.full.right() <= used.right() - 14.0 - CANCEL_SIZE,
+                    "{locale:?}: {:?} runs into the button ({:?})",
+                    text.text,
+                    text.full
+                );
+            }
+        }
     }
 
     #[test]

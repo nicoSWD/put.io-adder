@@ -44,6 +44,9 @@ pub struct Upload {
     pub size: u64,
     /// How many bytes of the file have gone.
     pub sent: u64,
+    /// Why it did not finish, in the user's words. The row stays (with this) until it is put away, so that
+    /// the reason is not lost with a notice that fades.
+    pub failed: Option<String>,
 }
 
 impl Upload {
@@ -97,6 +100,7 @@ pub(super) fn dropped(state: &mut State, items: Vec<Dropped>, fx: &mut Vec<Effec
             name: name.clone(),
             size: item.size,
             sent: 0,
+            failed: None,
         });
         fx.push(Effect::UploadFile {
             op,
@@ -112,7 +116,11 @@ pub(super) fn dropped(state: &mut State, items: Vec<Dropped>, fx: &mut Vec<Effec
 }
 
 pub(super) fn progress(state: &mut State, op: OpId, sent: u64) {
-    if let Some(upload) = state.uploads.iter_mut().find(|u| u.op == op) {
+    if let Some(upload) = state
+        .uploads
+        .iter_mut()
+        .find(|u| u.op == op && u.failed.is_none())
+    {
         // Progress only goes forward and never past the end.
         upload.sent = upload.sent.max(sent.min(upload.size));
     }
@@ -130,14 +138,15 @@ pub(super) fn finished(
     let Some(at) = state.uploads.iter().position(|u| u.op == op) else {
         return;
     };
-    let upload = state.uploads.remove(at);
     match result {
         Ok(()) => {
+            let upload = state.uploads.remove(at);
             state.say(Msg::UploadDone { name: upload.name }, now, NOTICE_TIME);
             // What was sent is in the folder now.
             state.file_refresh.soon(now);
         }
         Err(UploadFailure::Cancelled) => {
+            let upload = state.uploads.remove(at);
             state.say(Msg::UploadCancelled { name: upload.name }, now, NOTICE_TIME);
         }
         Err(failure) => {
@@ -149,11 +158,17 @@ pub(super) fn finished(
                 UploadFailure::Local(why) => why,
                 UploadFailure::Cancelled => String::new(),
             };
+            // The notice is for the moment; the row keeps the reason until it is put away.
+            let name = state
+                .uploads
+                .get(at)
+                .map(|u| u.name.clone())
+                .unwrap_or_default();
+            if let Some(upload) = state.uploads.get_mut(at) {
+                upload.failed = Some(reason.clone());
+            }
             state.say(
-                Msg::UploadFileFailed {
-                    name: upload.name,
-                    reason,
-                },
+                Msg::UploadFileFailed { name, reason },
                 now,
                 ERROR_NOTICE_TIME,
             );
@@ -161,8 +176,17 @@ pub(super) fn finished(
     }
 }
 
+/// A failed upload's row was put away.
+pub(super) fn dismissed(state: &mut State, op: OpId) {
+    state.uploads.retain(|u| u.op != op || u.failed.is_none());
+}
+
 pub(super) fn cancel_requested(state: &State, op: OpId, fx: &mut Vec<Effect>) {
-    if state.uploads.iter().any(|u| u.op == op) {
+    if state
+        .uploads
+        .iter()
+        .any(|u| u.op == op && u.failed.is_none())
+    {
         fx.push(Effect::CancelUpload { op });
     }
 }
@@ -394,7 +418,33 @@ mod tests {
             },
         );
         assert_eq!(state.status_text(3), "Could not upload b: File too large");
+        // The notice fades; the rows keep the reasons until they are put away.
+        let reasons: Vec<_> = state.uploads.iter().map(|u| u.failed.clone()).collect();
+        assert_eq!(
+            reasons,
+            [
+                Some("put.io does not let this app do that.".into()),
+                Some("File too large".into())
+            ]
+        );
+        assert!(!state.is_busy(), "a failed row is not work in flight");
+        // A failed row cannot be cancelled, and its progress does not move.
+        let fx = update(&mut state, 3, Event::UploadCancelRequested(ops[0]));
+        assert!(!fx.iter().any(|e| matches!(e, Effect::CancelUpload { .. })));
+        update(
+            &mut state,
+            3,
+            Event::UploadProgress {
+                op: ops[0],
+                sent: 5,
+            },
+        );
+        assert_eq!(state.uploads[0].sent, 0);
+        // Putting a row away takes it out, and only a failed one.
+        update(&mut state, 3, Event::UploadDismissed(ops[0]));
+        update(&mut state, 3, Event::UploadDismissed(ops[1]));
         assert!(state.uploads.is_empty());
+        update(&mut state, 3, Event::UploadDismissed(ops[1]));
         let fx = update(&mut state, 4, Event::FilesDropped(vec![file("c", 10)]));
         let op = uploads(&fx).remove(0).0;
         update(
@@ -406,6 +456,15 @@ mod tests {
             },
         );
         assert_eq!(state.status_text(5), "Could not upload c: the file changed");
+    }
+
+    #[test]
+    fn a_row_that_is_still_going_cannot_be_put_away() {
+        let mut state = signed_in();
+        let fx = update(&mut state, 1, Event::FilesDropped(vec![file("a", 10)]));
+        let op = uploads(&fx).remove(0).0;
+        update(&mut state, 2, Event::UploadDismissed(op));
+        assert_eq!(state.uploads.len(), 1);
     }
 
     #[test]

@@ -212,6 +212,11 @@ pub enum Msg {
         folder: String,
     },
     UploadWaiting,
+    UploadButton,
+    UploadPickTitle,
+    A11yUploadDismiss {
+        name: String,
+    },
     UploadsMore {
         count: usize,
     },
@@ -1873,6 +1878,20 @@ impl Msg {
                 format!("Suelta para subir a {folder}")
             ),
             Self::UploadWaiting => tr!(l, "Waiting", "Wartet", "En espera").into(),
+            Self::UploadButton => tr!(l, "Upload", "Hochladen", "Subir").into(),
+            Self::UploadPickTitle => tr!(
+                l,
+                "Choose files to upload",
+                "Dateien zum Hochladen auswählen",
+                "Elige los archivos que subir"
+            )
+            .into(),
+            Self::A11yUploadDismiss { name } => tr!(
+                l,
+                format!("Dismiss the failed upload of {name}"),
+                format!("Fehlgeschlagenes Hochladen von {name} ausblenden"),
+                format!("Descartar la subida fallida de {name}")
+            ),
             Self::UploadsMore { count } => tr!(
                 l,
                 format!("and {count} more"),
@@ -2343,6 +2362,11 @@ mod tests {
                 folder: "Spring".into(),
             },
             Msg::UploadWaiting,
+            Msg::UploadButton,
+            Msg::UploadPickTitle,
+            Msg::A11yUploadDismiss {
+                name: "Spring".into(),
+            },
             Msg::UploadsMore { count: 7 },
             Msg::A11yUploadCancel {
                 name: "Spring".into(),
@@ -2370,6 +2394,7 @@ mod tests {
                 | Msg::UploadCancelled { .. }
                 | Msg::UploadFileFailed { .. }
                 | Msg::UploadDropHere { .. }
+                | Msg::A11yUploadDismiss { .. }
                 | Msg::A11yUploadCancel { .. } => {
                     assert!(texts.iter().all(|t| t.contains("Spring")), "{texts:?}");
                 }

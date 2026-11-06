@@ -406,6 +406,8 @@ pub enum Event {
     },
     /// Stop an upload (or take it out of the queue).
     UploadCancelRequested(OpId),
+    /// The row of an upload that failed was put away.
+    UploadDismissed(OpId),
     /// The friends card was opened / closed.
     FriendsCardOpened,
     FriendsCardClosed,
@@ -1242,6 +1244,7 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
         Event::UploadProgress { op, sent } => uploads::progress(state, op, sent),
         Event::UploadFinished { op, result } => uploads::finished(state, now, op, result),
         Event::UploadCancelRequested(op) => uploads::cancel_requested(state, op, &mut fx),
+        Event::UploadDismissed(op) => uploads::dismissed(state, op),
         Event::FriendsCardOpened => friends::opened(state, &mut fx),
         Event::FriendsCardClosed => friends::closed(state),
         Event::FriendListFetched(result) => friends::list_fetched(state, result),

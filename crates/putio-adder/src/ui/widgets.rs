@@ -378,9 +378,16 @@ pub(crate) const ACTION_HEIGHT: f32 = 36.0;
 /// Height of [`accent_pill`].
 const ACCENT_PILL_HEIGHT: f32 = 26.0;
 
-/// A small yellow pill with a plus and a label: the one action of a tab ("Add feed", "New folder"). Painted at
-/// fixed positions, so hovering changes the fill and nothing moves.
+/// A small yellow pill with a plus and a label: the one action of a tab ("Add feed"). Painted at fixed
+/// positions, so hovering changes the fill and nothing moves.
 pub(crate) fn accent_pill(ui: &mut egui::Ui, label: &str) -> Response {
+    pill(ui, label, icons::Glyph::Plus, true)
+}
+
+/// A small pill with a symbol and a label, yellow for the main action of a tab and quiet (an inset) for
+/// one that goes beside it. Everything is painted at fixed positions, so hovering changes the fill and
+/// nothing moves.
+pub(crate) fn pill(ui: &mut egui::Ui, label: &str, symbol: icons::Glyph, accent: bool) -> Response {
     let p = theme::pal();
     let galley =
         ui.painter()
@@ -393,21 +400,19 @@ pub(crate) fn accent_pill(ui: &mut egui::Ui, label: &str) -> Response {
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
     focus_ring(ui, &response, rect, CornerRadius::same(13));
-    ui.painter().rect_filled(
-        rect,
-        CornerRadius::same(13),
-        if response.hovered() {
-            p.yellow_pressed
-        } else {
-            theme::YELLOW
-        },
-    );
+    let (fill, ink) = match (accent, response.hovered()) {
+        (true, true) => (p.yellow_pressed, p.on_yellow),
+        (true, false) => (theme::YELLOW, p.on_yellow),
+        (false, true) => (p.card_hover, p.text),
+        (false, false) => (p.inset, p.text),
+    };
+    ui.painter().rect_filled(rect, CornerRadius::same(13), fill);
     icons::glyph(
         ui.painter(),
         Pos2::new(rect.left() + 10.0 + 6.0, rect.center().y),
-        icons::Glyph::Plus,
+        symbol,
         0.8,
-        p.on_yellow,
+        ink,
     );
     ui.painter().galley(
         Pos2::new(
@@ -415,7 +420,7 @@ pub(crate) fn accent_pill(ui: &mut egui::Ui, label: &str) -> Response {
             rect.center().y - galley.size().y / 2.0,
         ),
         galley,
-        p.on_yellow,
+        ink,
     );
     response
 }
