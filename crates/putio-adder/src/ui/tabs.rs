@@ -12,7 +12,7 @@ use putio_core::i18n::Msg;
 use putio_core::settings::Tab;
 use putio_core::state::Event;
 
-use super::{feeds, files, table, theme, update, widgets};
+use super::{feeds, files, link_card, table, theme, update, widgets};
 use crate::app::App;
 
 /// Height of the bar, its hairline included.
@@ -198,7 +198,11 @@ pub(crate) fn show(ui: &mut Ui, app: &mut App) {
             .layout(Layout::right_to_left(Align::Center)),
     );
     match app.state.tab {
-        Tab::Transfers => table::sort_menu(&mut side, app),
+        Tab::Transfers => {
+            // The way to add something goes at the edge, the sort menu beside it.
+            link_card::button(&mut side, app);
+            table::sort_menu(&mut side, app);
+        }
         Tab::Files => files::toolbar_buttons(&mut side, app),
         // The empty list has a big button of its own; two of them would be one too many.
         Tab::Feeds if feeds::is_empty(app) => {}
@@ -501,7 +505,14 @@ mod layout_tests {
     /// The widest right-hand side the bar can have in `locale`: the longest "Sort: …" label with its arrow,
     /// or the two buttons of the Files tab.
     fn widest_side(locale: Locale) -> f32 {
-        files_side(locale).max(widest_sort(locale))
+        files_side(locale).max(transfers_side(locale))
+    }
+
+    /// The Transfers tab's side: the *Add link* pill and, beside it, the longest sort label.
+    fn transfers_side(locale: Locale) -> f32 {
+        let pill =
+            width_of(&Msg::TabAddLink.text(locale), &theme::bold(11.5)) + 10.0 + 12.0 + 6.0 + 14.0;
+        pill + widest_sort(locale) + 8.0
     }
 
     fn widest_sort(locale: Locale) -> f32 {

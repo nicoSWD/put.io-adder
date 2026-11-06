@@ -384,6 +384,11 @@ pub struct DeviceCode {
 pub enum UploadOutcome {
     Transfer(Box<Transfer>),
     File(File),
+    /// A file sent by the resumable upload, which answers with the new file's number only (and not even
+    /// that when the last part had already been received before the connection broke).
+    Resumable {
+        file_id: Option<i64>,
+    },
 }
 
 /// The fields of a GitHub release the update check needs. Everything but the tag and the page is

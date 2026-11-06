@@ -21,6 +21,7 @@ PUTIO_ADDER_DEMO=files cargo run -p putio-adder     # the Files tab (also files-
 PUTIO_ADDER_DEMO=file-share cargo run -p putio-adder  # the sharing card (also file-share-empty, file-share-denied); the Files views mark two entries as shared
 PUTIO_ADDER_DEMO=friends cargo run -p putio-adder     # the friends card (also friends-empty, friends-denied, friends-confirm)
 PUTIO_ADDER_DEMO=files-uploading cargo run -p putio-adder  # uploads going above the file list, one of them failed (the drop hint needs real files held over the window)
+PUTIO_ADDER_DEMO=add-link cargo run -p putio-adder  # the Add a link card (also add-link-failed)
 PUTIO_ADDER_DEMO=file-rename cargo run -p putio-adder # a Files card (also file-new-folder, file-move, file-delete, file-delete-folder)
 PUTIO_ADDER_DEMO=file-rename cargo run -p putio-adder # a Files card (also file-new-folder, file-move, file-delete, file-delete-folder, file-extract, file-password)
 PUTIO_ADDER_DEMO=feeds cargo run -p putio-adder     # the Feeds tab (also feeds-empty, feeds-loading, feeds-failed, feed-card-menu)

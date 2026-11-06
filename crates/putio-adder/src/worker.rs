@@ -505,7 +505,7 @@ fn upload_torrent<T: Transport>(
             .upload_torrent(&file.name, &file.bytes, parent)
             .map(|outcome| match outcome {
                 UploadOutcome::Transfer(transfer) => Some(transfer.id),
-                UploadOutcome::File(_) => None,
+                UploadOutcome::File(_) | UploadOutcome::Resumable { .. } => None,
             });
     if trash_after
         && result.is_ok()

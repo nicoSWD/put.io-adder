@@ -307,6 +307,7 @@ impl App {
         self.start_demo_files(ctx, view);
         ui::friends_card::demo(self, ctx, view);
         ui::uploads::demo(self, ctx, view);
+        ui::link_card::demo(self, ctx, view);
         let open = match view {
             "details" => Some(6),
             "details-failed" => Some(7),

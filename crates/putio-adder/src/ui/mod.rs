@@ -9,6 +9,7 @@ pub(crate) mod friends_card;
 pub(crate) mod handler;
 pub(crate) mod header;
 pub(crate) mod icons;
+pub(crate) mod link_card;
 pub(crate) mod login;
 pub(crate) mod menu;
 pub(crate) mod prefs;
@@ -72,6 +73,8 @@ pub(crate) struct UiState {
     pub(crate) file_dialog: file_dialogs::FileDialog,
     /// The add / edit feed form and the delete confirmation.
     pub(crate) feed_dialog: feed_form::FeedDialog,
+    /// The *Add a link* card.
+    pub(crate) link_ui: link_card::LinkUi,
     /// The friends card's field and the removal being asked about.
     pub(crate) friends_ui: friends_card::FriendsUi,
     /// Who is ticked in the sharing card.
@@ -95,6 +98,7 @@ impl Default for UiState {
             search_text: String::new(),
             file_dialog: file_dialogs::FileDialog::default(),
             feed_dialog: feed_form::FeedDialog::default(),
+            link_ui: link_card::LinkUi::default(),
             friends_ui: friends_card::FriendsUi::default(),
             share_pick: share_card::Pick::default(),
             folders: prefs::FolderPicker::default(),
@@ -118,6 +122,7 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
     // One palette for the whole frame, whatever the theme resolves to right now.
     theme::select(&ctx);
     uploads::handle_drops(&ctx, app);
+    link_card::handle_paste(&ctx, app);
     egui::CentralPanel::default()
         .frame(
             Frame::new()
@@ -145,6 +150,7 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
     file_dialogs::show(&ctx, app);
     share_card::show(&ctx, app);
     friends_card::show(&ctx, app);
+    link_card::show(&ctx, app);
     details::show(&ctx, app);
     handler::show(&ctx, app);
     uploads::drop_hint(&ctx, app);

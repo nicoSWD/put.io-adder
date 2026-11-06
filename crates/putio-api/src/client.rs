@@ -35,6 +35,69 @@ pub struct FileSearch {
 /// How many search results are asked for: enough to find a file, few enough to answer quickly.
 const SEARCH_RESULTS: &str = "100";
 
+/// Files this long or longer are sent by the resumable upload: one request for a file of many gigabytes
+/// is one connection that has to survive for hours.
+pub const RESUMABLE_FROM: u64 = 1 << 30;
+
+/// How the resumable upload goes about it; tests make it fast.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Tuning {
+    /// How many bytes go in one part.
+    pub(crate) chunk: u64,
+    /// How many failures in a row it puts up with.
+    pub(crate) retries: u32,
+    /// The wait after the first failure, doubled for each one after it.
+    pub(crate) first_wait: std::time::Duration,
+}
+
+impl Default for Tuning {
+    fn default() -> Self {
+        Self {
+            chunk: 64 << 20,
+            retries: 5,
+            first_wait: std::time::Duration::from_secs(2),
+        }
+    }
+}
+
+impl Tuning {
+    /// Wait before trying again, in short steps so that a cancel is not kept waiting.
+    fn wait(&self, failures: u32, stopped: &dyn Fn() -> bool) {
+        let total = self
+            .first_wait
+            .saturating_mul(1u32 << failures.saturating_sub(1).min(6));
+        let step = std::time::Duration::from_millis(200);
+        let mut waited = std::time::Duration::ZERO;
+        while waited < total && !stopped() {
+            let part = step.min(total.saturating_sub(waited));
+            std::thread::sleep(part);
+            waited += part;
+        }
+    }
+}
+
+/// The path of an upload address the server gave, on the upload host: the address may be a path or a full
+/// `https://upload.put.io/…` address, and nothing else is followed (the account's token goes with every
+/// request to it).
+fn tus_path(location: &str) -> Result<String, ApiError> {
+    let location = location.trim();
+    let path = match location.strip_prefix("https://upload.put.io") {
+        Some(rest) => rest,
+        None if location.starts_with('/') => location,
+        None => {
+            return Err(ApiError::Decode(
+                "the upload's address is not on put.io's upload server".into(),
+            ));
+        }
+    };
+    if !path.starts_with('/') || path.chars().any(|c| c.is_control() || c.is_whitespace()) {
+        return Err(ApiError::Decode(
+            "the upload's address is not usable".into(),
+        ));
+    }
+    Ok(path.to_owned())
+}
+
 /// A file to upload into a folder.
 #[derive(Clone)]
 pub struct FileUpload {
@@ -125,6 +188,7 @@ impl<T: Transport> Client<T> {
                 None
             },
             body,
+            headers: Vec::new(),
         }
     }
 
@@ -463,8 +527,13 @@ impl<T: Transport> Client<T> {
     }
 
     /// Upload any file into a folder (`0` is the top level), reading it from disk while it is sent. A file
-    /// that is a torrent starts as a transfer, as on put.io's site.
+    /// that is a torrent starts as a transfer, as on put.io's site. A very large file (see
+    /// [`RESUMABLE_FROM`]) goes by the resumable upload, in parts that are sent again from where the server
+    /// has them when a connection breaks.
     pub fn upload_file(&self, upload: FileUpload) -> Result<UploadOutcome, ApiError> {
+        if upload.len >= RESUMABLE_FROM {
+            return self.upload_resumable(&upload, Tuning::default());
+        }
         let name: String = upload.name.chars().filter(|c| !c.is_control()).collect();
         if name.trim().is_empty() {
             return Err(ApiError::InvalidInput("the file has no name"));
@@ -488,6 +557,8 @@ impl<T: Transport> Client<T> {
                 head: streamed.head,
                 path: upload.path,
                 len: upload.len,
+                offset: 0,
+                count: upload.len,
                 tail: streamed.tail,
                 progress: upload.progress,
                 cancel: upload.cancel,
@@ -496,6 +567,185 @@ impl<T: Transport> Client<T> {
             true,
         );
         self.upload_outcome(&request)
+    }
+
+    /// The resumable upload (the tus protocol, as put.io's own Go client speaks it): ask for an upload
+    /// address with the file's length and name, then send the file in parts, each from the offset the
+    /// server has. When a part fails for a reason that can pass (the network, a busy server) the server is
+    /// asked how much it has, and sending goes on from there, a few times, with a longer wait each time.
+    pub(crate) fn upload_resumable(
+        &self,
+        upload: &FileUpload,
+        tuning: Tuning,
+    ) -> Result<UploadOutcome, ApiError> {
+        let name: String = upload.name.chars().filter(|c| !c.is_control()).collect();
+        if name.trim().is_empty() {
+            return Err(ApiError::InvalidInput("the file has no name"));
+        }
+        if upload.len == 0 {
+            return Err(ApiError::InvalidInput("the file is empty"));
+        }
+        let stopped = || {
+            upload
+                .cancel
+                .as_ref()
+                .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+        };
+        let location = self.tus_create(&name, upload)?;
+        let (mut offset, mut failures) = (0u64, 0u32);
+        let mut file_id = None;
+        while offset < upload.len {
+            if stopped() {
+                return Err(ApiError::Network("cancelled".into()));
+            }
+            let count = tuning.chunk.min(upload.len - offset);
+            match self.tus_send(&location, upload, offset, count) {
+                Ok((reached, id)) => {
+                    failures = 0;
+                    // What the server says it has is what counts, never less than it had before.
+                    offset = reached.clamp(offset, upload.len);
+                    file_id = id.or(file_id);
+                }
+                Err(error) if error.is_transient() && failures < tuning.retries => {
+                    failures += 1;
+                    tuning.wait(failures, &stopped);
+                    // Where did it get to? The part may have arrived whole before the answer was lost.
+                    offset = self.tus_offset(&location, upload.len, offset, &stopped, tuning)?;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(UploadOutcome::Resumable { file_id })
+    }
+
+    /// Ask for a new resumable upload: its address, as a path on the upload host.
+    fn tus_create(&self, name: &str, upload: &FileUpload) -> Result<String, ApiError> {
+        let metadata = [
+            ("name", name.to_owned()),
+            ("parent_id", upload.parent_id.to_string()),
+            // The file is a file, whatever it holds: a torrent is added through the intake instead.
+            ("no-torrent", "true".to_owned()),
+            // Never replace a file that is already there.
+            ("overwrite", "false".to_owned()),
+        ]
+        .iter()
+        .map(|(key, value)| format!("{key} {}", form::base64(value.as_bytes())))
+        .collect::<Vec<_>>()
+        .join(",");
+        let mut request = self.request(
+            Method::Post,
+            Host::UploadTus,
+            "/files/".into(),
+            Body::None,
+            JSON,
+            true,
+        );
+        request.headers = vec![
+            ("Upload-Length", upload.len.to_string()),
+            ("Upload-Metadata", metadata),
+        ];
+        let response = self.send(&request)?;
+        if response.status != 201 {
+            return Err(ApiError::Decode(format!(
+                "creating the upload answered {}, not 201",
+                response.status
+            )));
+        }
+        let location = response
+            .header("location")
+            .ok_or_else(|| ApiError::Decode("creating the upload gave no address for it".into()))?;
+        tus_path(location)
+    }
+
+    /// Send `count` bytes of the file from `offset` as the next part. Returns the offset the server says it
+    /// has now (or the one this part should have reached) and, after the last part, the new file's number.
+    fn tus_send(
+        &self,
+        location: &str,
+        upload: &FileUpload,
+        offset: u64,
+        count: u64,
+    ) -> Result<(u64, Option<i64>), ApiError> {
+        // The progress is of the whole file, not of this part.
+        let progress = upload.progress.clone().map(|report| -> ProgressFn {
+            std::sync::Arc::new(move |sent| report(offset.saturating_add(sent)))
+        });
+        let mut request = self.request(
+            Method::Patch,
+            Host::UploadTus,
+            location.to_owned(),
+            Body::File(FileBody {
+                content_type: "application/offset+octet-stream".into(),
+                head: Vec::new(),
+                path: upload.path.clone(),
+                len: upload.len,
+                offset,
+                count,
+                tail: Vec::new(),
+                progress,
+                cancel: upload.cancel.clone(),
+            }),
+            JSON,
+            true,
+        );
+        request.headers = vec![("Upload-Offset", offset.to_string())];
+        let response = self.send(&request)?;
+        if response.status != 204 {
+            return Err(ApiError::Decode(format!(
+                "sending a part answered {}, not 204",
+                response.status
+            )));
+        }
+        let reached = response
+            .header("upload-offset")
+            .and_then(|value| value.trim().parse::<u64>().ok())
+            .unwrap_or_else(|| offset.saturating_add(count));
+        let file_id = response
+            .header("putio-file-id")
+            .and_then(|value| value.trim().parse::<i64>().ok());
+        Ok((reached, file_id))
+    }
+
+    /// How much of the file the server has, after a failure. Asks again (with the waits) when asking fails
+    /// too, a few times; anything that cannot pass ends the upload.
+    fn tus_offset(
+        &self,
+        location: &str,
+        len: u64,
+        before: u64,
+        stopped: &dyn Fn() -> bool,
+        tuning: Tuning,
+    ) -> Result<u64, ApiError> {
+        let mut failures = 0u32;
+        loop {
+            if stopped() {
+                return Err(ApiError::Network("cancelled".into()));
+            }
+            let request = self.request(
+                Method::Head,
+                Host::UploadTus,
+                location.to_owned(),
+                Body::None,
+                JSON,
+                true,
+            );
+            match self.send(&request) {
+                Ok(response) => {
+                    let offset = response
+                        .header("upload-offset")
+                        .and_then(|value| value.trim().parse::<u64>().ok())
+                        .ok_or_else(|| {
+                            ApiError::Decode("the upload's state came without an offset".into())
+                        })?;
+                    return Ok(offset.clamp(before.min(len), len));
+                }
+                Err(error) if error.is_transient() && failures < tuning.retries => {
+                    failures += 1;
+                    tuning.wait(failures, stopped);
+                }
+                Err(error) => return Err(error),
+            }
+        }
     }
 
     /// List a folder (`0` is the root), following pagination cursors. `only` filters by type.
@@ -998,6 +1248,277 @@ mod tests {
         // A torrent comes back as a transfer.
         let outcome = c.upload_file(an_upload(5, "a.torrent")).unwrap();
         assert!(matches!(outcome, UploadOutcome::Transfer(t) if t.id == 3));
+    }
+
+    fn quick(chunk: u64, retries: u32) -> Tuning {
+        Tuning {
+            chunk,
+            retries,
+            first_wait: std::time::Duration::ZERO,
+        }
+    }
+
+    fn created(fake: &FakeTransport) {
+        fake.push_response(201, &[("Location", "/files/abc123")], "");
+    }
+
+    fn patched(fake: &FakeTransport, reached: u64, file_id: Option<&str>) {
+        let reached = reached.to_string();
+        let mut headers = vec![("Upload-Offset", reached.as_str())];
+        if let Some(id) = file_id {
+            headers.push(("Putio-File-Id", id));
+        }
+        fake.push_response(204, &headers, "");
+    }
+
+    fn patch_range(request: &Request) -> (u64, u64) {
+        assert_eq!(request.describe(), "PATCH /files/abc123");
+        let Body::File(body) = &request.body else {
+            panic!("a part is a file body")
+        };
+        assert_eq!(body.content_type, "application/offset+octet-stream");
+        assert!(body.head.is_empty() && body.tail.is_empty());
+        let header = request
+            .headers
+            .iter()
+            .find(|(name, _)| *name == "Upload-Offset")
+            .map(|(_, value)| value.parse::<u64>().unwrap());
+        assert_eq!(
+            header,
+            Some(body.offset),
+            "the header says where the part starts"
+        );
+        (body.offset, body.count)
+    }
+
+    #[test]
+    fn a_big_file_is_created_with_its_length_and_metadata_and_sent_in_parts() {
+        let fake = FakeTransport::new();
+        created(&fake);
+        patched(&fake, 100, None);
+        patched(&fake, 200, None);
+        patched(&fake, 250, Some("77"));
+        let outcome = client(&fake)
+            .upload_resumable(&an_upload(250, "Big Ö.mkv"), quick(100, 2))
+            .unwrap();
+        assert_eq!(outcome, UploadOutcome::Resumable { file_id: Some(77) });
+        let requests = fake.requests();
+        let create = &requests[0];
+        assert_eq!(
+            (create.describe().as_str(), create.host),
+            ("POST /files/", Host::UploadTus)
+        );
+        assert_eq!(create.body, Body::None);
+        let header = |name: &str| {
+            create
+                .headers
+                .iter()
+                .find(|(n, _)| *n == name)
+                .map(|(_, v)| v.clone())
+                .unwrap()
+        };
+        assert_eq!(header("Upload-Length"), "250");
+        let metadata = header("Upload-Metadata");
+        let pairs: std::collections::BTreeMap<_, _> = metadata
+            .split(',')
+            .map(|pair| pair.split_once(' ').unwrap())
+            .collect();
+        assert_eq!(pairs["name"], form::base64("Big Ö.mkv".as_bytes()));
+        assert_eq!(pairs["parent_id"], form::base64(b"7"));
+        assert_eq!(pairs["no-torrent"], form::base64(b"true"));
+        assert_eq!(pairs["overwrite"], form::base64(b"false"));
+        assert_eq!(
+            requests[1..].iter().map(patch_range).collect::<Vec<_>>(),
+            [(0, 100), (100, 100), (200, 50)]
+        );
+        assert!(requests[1..].iter().all(|r| r.host == Host::UploadTus));
+    }
+
+    #[test]
+    fn a_part_that_fails_is_sent_again_from_where_the_server_says_it_has_it() {
+        let fake = FakeTransport::new();
+        created(&fake);
+        patched(&fake, 100, None);
+        fake.push_error(TransportError::Network("connection reset".into()));
+        // The server got 40 bytes of the second part before the connection broke.
+        fake.push_response(200, &[("Upload-Offset", "140")], "");
+        patched(&fake, 240, None);
+        patched(&fake, 250, Some("9"));
+        let outcome = client(&fake)
+            .upload_resumable(&an_upload(250, "a.bin"), quick(100, 3))
+            .unwrap();
+        assert_eq!(outcome, UploadOutcome::Resumable { file_id: Some(9) });
+        let requests = fake.requests();
+        assert_eq!(requests[3].describe(), "HEAD /files/abc123");
+        assert_eq!(requests[3].body, Body::None);
+        assert_eq!(
+            [&requests[1], &requests[2], &requests[4], &requests[5]]
+                .into_iter()
+                .map(patch_range)
+                .collect::<Vec<_>>(),
+            [(0, 100), (100, 100), (140, 100), (240, 10)]
+        );
+    }
+
+    #[test]
+    fn a_part_that_arrived_whole_before_the_answer_was_lost_is_not_sent_twice() {
+        let fake = FakeTransport::new();
+        created(&fake);
+        fake.push_error(TransportError::Network("timed out".into()));
+        fake.push_response(200, &[("Upload-Offset", "100")], "");
+        let outcome = client(&fake)
+            .upload_resumable(&an_upload(100, "a.bin"), quick(100, 3))
+            .unwrap();
+        // Done, but put.io could not say which file: only the last part's answer carries that.
+        assert_eq!(outcome, UploadOutcome::Resumable { file_id: None });
+        assert_eq!(fake.requests().len(), 3);
+    }
+
+    #[test]
+    fn what_cannot_pass_ends_the_upload_at_once_and_what_can_is_given_up_on_after_a_few_tries() {
+        // A refusal, an expired token and a part the server did not take are not retried.
+        for (status, body) in [(402, "{}"), (401, "{}"), (400, r#"{"error_message":"no"}"#)] {
+            let fake = FakeTransport::new();
+            created(&fake);
+            fake.push_json(status, body);
+            let error = client(&fake)
+                .upload_resumable(&an_upload(100, "a.bin"), quick(100, 5))
+                .unwrap_err();
+            assert!(
+                matches!(&error, ApiError::Unauthorized | ApiError::Api(_)),
+                "{status}: {error:?}"
+            );
+            assert_eq!(fake.requests().len(), 2, "{status}: tried again");
+        }
+        // The network keeps failing: three failures in a row are put up with, the fourth is the answer.
+        let fake = FakeTransport::new();
+        created(&fake);
+        for _ in 0..4 {
+            fake.push_error(TransportError::Network("down".into()));
+            fake.push_response(200, &[("Upload-Offset", "0")], "");
+        }
+        let error = client(&fake)
+            .upload_resumable(&an_upload(100, "a.bin"), quick(100, 3))
+            .unwrap_err();
+        assert!(matches!(error, ApiError::Network(_)), "{error:?}");
+        assert_eq!(
+            fake.requests()
+                .iter()
+                .filter(|r| r.describe().starts_with("PATCH"))
+                .count(),
+            4
+        );
+        // The server not keeping the upload any more (a 404 on the offset) is an answer too.
+        let fake = FakeTransport::new();
+        created(&fake);
+        fake.push_error(TransportError::Network("down".into()));
+        fake.push_json(404, r#"{"error_message":"gone"}"#);
+        assert!(matches!(
+            client(&fake).upload_resumable(&an_upload(100, "a.bin"), quick(100, 3)),
+            Err(ApiError::Api(f)) if f.status == 404
+        ));
+    }
+
+    #[test]
+    fn a_cancel_stops_it_between_parts_and_before_the_next_wait() {
+        let fake = FakeTransport::new();
+        created(&fake);
+        patched(&fake, 100, None);
+        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let flag = std::sync::Arc::clone(&cancel);
+        let mut upload = an_upload(300, "a.bin");
+        upload.cancel = Some(cancel);
+        // The flag goes up while the first part is answered; the second part is never sent.
+        upload.progress = Some(std::sync::Arc::new(move |_| {
+            flag.store(true, std::sync::atomic::Ordering::Relaxed);
+        }));
+        let error = client(&fake)
+            .upload_resumable(&upload, quick(100, 3))
+            .unwrap_err();
+        assert!(matches!(error, ApiError::Network(_)), "{error:?}");
+        // The fake does not call the progress callback, so raise the flag by hand for a second check.
+        let fake = FakeTransport::new();
+        created(&fake);
+        let raised = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let mut upload = an_upload(300, "a.bin");
+        upload.cancel = Some(raised);
+        assert!(
+            client(&fake)
+                .upload_resumable(&upload, quick(100, 3))
+                .is_err()
+        );
+        assert_eq!(
+            fake.requests().len(),
+            1,
+            "created, then stopped before any part"
+        );
+    }
+
+    #[test]
+    fn only_a_very_big_file_goes_by_the_resumable_upload_and_a_nameless_or_empty_one_not_at_all() {
+        let fake = FakeTransport::new();
+        fake.push_json(200, r#"{"status":"OK","file":{"id":9,"name":"a"}}"#);
+        let _ = client(&fake).upload_file(an_upload(RESUMABLE_FROM - 1, "a.bin"));
+        assert_eq!(
+            fake.last_request().unwrap().describe(),
+            "POST /files/upload"
+        );
+        let fake = FakeTransport::new();
+        created(&fake);
+        // Stopped as soon as it is created (a long wait for answers the fake does not have would only
+        // slow the test down): it chose the resumable way.
+        let mut big = an_upload(RESUMABLE_FROM, "a.bin");
+        big.cancel = Some(std::sync::Arc::new(std::sync::atomic::AtomicBool::new(
+            true,
+        )));
+        let _ = client(&fake).upload_file(big);
+        assert_eq!(fake.requests()[0].describe(), "POST /files/");
+        let fake = FakeTransport::new();
+        let c = client(&fake);
+        assert!(matches!(
+            c.upload_resumable(&an_upload(0, "a"), quick(100, 1)),
+            Err(ApiError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            c.upload_resumable(&an_upload(5, " \u{7}"), quick(100, 1)),
+            Err(ApiError::InvalidInput(_))
+        ));
+        assert_eq!(fake.requests().len(), 0);
+    }
+
+    #[test]
+    fn an_upload_address_is_followed_only_on_the_upload_server() {
+        assert_eq!(tus_path("/files/abc").unwrap(), "/files/abc");
+        assert_eq!(
+            tus_path("https://upload.put.io/files/abc?x=1").unwrap(),
+            "/files/abc?x=1"
+        );
+        for bad in [
+            "http://upload.put.io/files/abc",
+            "https://evil.example/files/abc",
+            "https://upload.put.io.evil.example/files/abc",
+            "https://upload.put.io",
+            "files/abc",
+            "",
+            "/files/a b",
+            "/files/a\nb",
+        ] {
+            assert!(tus_path(bad).is_err(), "{bad:?} was accepted");
+        }
+    }
+
+    #[test]
+    fn creating_an_upload_needs_a_201_and_an_address() {
+        let fake = FakeTransport::new();
+        fake.push_response(200, &[("Location", "/files/x")], "");
+        fake.push_response(201, &[], "");
+        let c = client(&fake);
+        for _ in 0..2 {
+            assert!(matches!(
+                c.upload_resumable(&an_upload(10, "a"), quick(10, 1)),
+                Err(ApiError::Decode(_))
+            ));
+        }
     }
 
     #[test]

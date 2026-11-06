@@ -6,6 +6,10 @@ use crate::token::Token;
 pub enum Method {
     Get,
     Post,
+    /// Asks for what the server has of a resumable upload.
+    Head,
+    /// Sends the next part of a resumable upload.
+    Patch,
 }
 
 /// Which server a request goes to. Requests name a host from this closed set instead of carrying a
@@ -16,6 +20,9 @@ pub enum Host {
     Api,
     /// `https://upload.put.io/v2`
     Upload,
+    /// `https://upload.put.io`: the resumable (tus) upload endpoint, `/files/`, and the upload addresses it
+    /// hands out.
+    UploadTus,
     /// `https://api.github.com` (update check)
     GitHub,
 }
@@ -48,6 +55,10 @@ pub struct FileBody {
     /// How long the file was when the request was made. A file that is not that long when it is read
     /// (it changed meanwhile) is an error, not a short upload.
     pub len: u64,
+    /// Where in the file the bytes sent start, and how many there are: all of it (`0` and `len`) for a
+    /// plain upload, one part of it for a resumable one.
+    pub offset: u64,
+    pub count: u64,
     pub tail: Vec<u8>,
     /// Told how far the sending has got, now and then.
     pub progress: Option<ProgressFn>,
@@ -62,6 +73,7 @@ impl std::fmt::Debug for FileBody {
             .field("head", &self.head.len())
             .field("path", &self.path)
             .field("len", &self.len)
+            .field("range", &(self.offset, self.count))
             .field("tail", &self.tail.len())
             .finish_non_exhaustive()
     }
@@ -74,6 +86,7 @@ impl PartialEq for FileBody {
             && self.head == other.head
             && self.path == other.path
             && self.len == other.len
+            && (self.offset, self.count) == (other.offset, other.count)
             && self.tail == other.tail
     }
 }
@@ -91,6 +104,9 @@ pub struct Request {
     /// Sent as `Authorization: Bearer …` and nowhere else.
     pub bearer: Option<Token>,
     pub body: Body,
+    /// More headers, for the calls that need them (the resumable upload's). Names are fixed by the client;
+    /// values are numbers or base64, never text from outside.
+    pub headers: Vec<(&'static str, String)>,
 }
 
 #[derive(Debug, Clone)]

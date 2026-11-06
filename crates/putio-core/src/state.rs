@@ -31,6 +31,7 @@ mod extract;
 mod feeds;
 mod files;
 mod friends;
+mod links;
 mod refresh;
 mod shares;
 mod uploads;
@@ -40,6 +41,7 @@ pub use extract::{PasswordAsk, Unpacking};
 pub use feeds::{FeedList, FeedSave};
 pub use files::{Crumb, FileAction, FilesView, Search};
 pub use friends::{FriendAction, FriendsView};
+pub use links::LinkAdd;
 pub use shares::{Fetch, Problem, ShareAction, SharedFiles, SharingView};
 pub use uploads::{Dropped, DroppedKind, MAX_PER_DROP, Upload, UploadFailure};
 
@@ -111,6 +113,7 @@ pub enum Auth {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Op {
     AddMagnet,
+    AddLink,
     UploadTorrent,
     Cancel,
     Retry,
@@ -413,6 +416,10 @@ pub enum Event {
     UploadCancelRequested(OpId),
     /// The row of an upload that failed was put away.
     UploadDismissed(OpId),
+    /// Add a transfer from this pasted link (answered with `AddFinished`).
+    AddLinkRequested(String),
+    /// The *Add a link* card was closed or its message put away.
+    AddLinkDismissed,
     /// The friends card was opened / closed.
     FriendsCardOpened,
     FriendsCardClosed,
@@ -699,6 +706,8 @@ pub struct State {
     pub files: FilesView,
     /// The transfer whose details panel is open.
     pub detail: Option<TransferDetail>,
+    /// Where adding a link from the *Add a link* card has got to.
+    pub link_add: LinkAdd,
     /// Files being uploaded or waiting for their turn, in the order they were dropped.
     pub uploads: Vec<Upload>,
     /// The open friends card.
@@ -766,6 +775,7 @@ impl State {
             feeds: FeedList::default(),
             files: FilesView::default(),
             detail: None,
+            link_add: LinkAdd::default(),
             uploads: Vec::new(),
             friends_card: None,
             sharing: None,
@@ -1286,6 +1296,8 @@ pub fn update(state: &mut State, now: Millis, event: Event) -> Vec<Effect> {
         Event::FileDeleteFinished { op, id, result } => {
             files::delete_finished(state, now, (op, id), result, &mut fx);
         }
+        Event::AddLinkRequested(raw) => links::requested(state, &raw, &mut fx),
+        Event::AddLinkDismissed => links::dismissed(state),
         Event::FilesDropped(items) => uploads::dropped(state, now, items, &mut fx),
         Event::UploadProgress { op, sent } => uploads::progress(state, op, sent),
         Event::UploadFinished { op, result } => uploads::finished(state, now, op, result),
@@ -1515,6 +1527,7 @@ fn sign_out(state: &mut State, fx: &mut Vec<Effect>) {
     shares::reset(state);
     extract::reset(state);
     friends::reset(state);
+    links::reset(state);
     uploads::reset(state, fx);
     // What was running for this account has no one to report to. (An update is not tied to the account.)
     state.ops.retain(|_, kind| *kind == Op::Update);
@@ -1834,6 +1847,10 @@ fn add_finished(
     fx: &mut Vec<Effect>,
 ) {
     let kind = state.ops.get(&op).copied();
+    if kind == Some(Op::AddLink) {
+        links::finished(state, now, op, result, fx);
+        return;
+    }
     if !matches!(kind, Some(Op::AddMagnet | Op::UploadTorrent)) {
         return;
     }
