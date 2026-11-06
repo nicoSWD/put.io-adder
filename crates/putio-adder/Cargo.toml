@@ -24,7 +24,7 @@ egui-wgpu = { version = "0.36.2", default-features = false }
 wgpu = { version = "30.0.1", features = ["metal"] }
 # eframe's default `winit/default`: winit with its default features.
 winit = "0.30.13"
-egui_extras = { version = "0.36.2", default-features = false, features = ["image"] }
+egui_extras = { version = "0.37.0", default-features = false, features = ["image"] }
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 putio-api = { path = "../putio-api" }
 putio-core = { path = "../putio-core" }
