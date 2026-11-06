@@ -2969,7 +2969,7 @@ dependencies = [
 
 [[package]]
 name = "putio-adder"
-version = "4.0.1"
+version = "4.0.2"
 dependencies = [
  "eframe",
  "egui-wgpu",
@@ -2985,7 +2985,7 @@ dependencies = [
 
 [[package]]
 name = "putio-api"
-version = "4.0.1"
+version = "4.0.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -2996,7 +2996,7 @@ dependencies = [
 
 [[package]]
 name = "putio-core"
-version = "4.0.1"
+version = "4.0.2"
 dependencies = [
  "proptest",
  "putio-api",
@@ -3008,7 +3008,7 @@ dependencies = [
 
 [[package]]
 name = "putio-platform"
-version = "4.0.1"
+version = "4.0.2"
 dependencies = [
  "apple-native-keyring-store",
  "block2 0.6.2",
