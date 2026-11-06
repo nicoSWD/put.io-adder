@@ -363,12 +363,12 @@ fn draw_card(ui: &mut egui::Ui, transfer: &Transfer, selected: bool, locale: Loc
     };
     widgets::describe(
         &body,
-        egui::WidgetType::Button,
+        egui::Role::Button,
         &format!("{name}, {}", format::detail(transfer, locale)),
     );
     widgets::describe(
         &more,
-        egui::WidgetType::Button,
+        egui::Role::Button,
         &format!("{}: {name}", Msg::A11yTransferActions.text(locale)),
     );
     widgets::focus_ring(ui, &body, rect, CornerRadius::same(10));

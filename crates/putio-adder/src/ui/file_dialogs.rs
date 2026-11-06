@@ -9,6 +9,7 @@ use eframe::egui::{self, Align, Id, Key, Layout, RichText, Ui};
 use putio_api::File;
 use putio_core::files::{MAX_NAME_CHARS, display_name, is_folder};
 use putio_core::i18n::Msg;
+use putio_core::secret::Secret;
 use putio_core::state::{Event, FileAction};
 
 use super::prefs::{self, FolderPage};
@@ -27,6 +28,20 @@ pub(crate) struct FileDialog {
     naming: Option<Naming>,
     moving: Option<Moving>,
     deleting: Option<Deleting>,
+    /// What is being typed in the password card.
+    password: Typed,
+    /// The archive the password card has taken the keyboard for.
+    password_focused_for: Option<i64>,
+}
+
+/// A password being typed. It never shows in debug output.
+#[derive(Default)]
+struct Typed(String);
+
+impl std::fmt::Debug for Typed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Typed(…)")
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -165,6 +180,7 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
     naming(ctx, app);
     moving(ctx, app);
     deleting(ctx, app);
+    password(ctx, app);
 }
 
 // ---- naming -----------------------------------------------------------------------------------
@@ -186,7 +202,7 @@ fn naming(ctx: &egui::Context, app: &mut App) {
     let (frame, backdrop) = widgets::dialog_frame();
     let mut submit = false;
     let mut close = false;
-    let response = egui::Modal::new(Id::new("file-name"))
+    let response = egui::Modal::new(Id::unique("file-name"))
         .backdrop_color(backdrop)
         .frame(frame)
         .show(ctx, |ui| {
@@ -298,7 +314,7 @@ fn moving(ctx: &egui::Context, app: &mut App) {
     let workers = app.workers();
     let (frame, backdrop) = widgets::dialog_frame();
     let mut chosen = None;
-    let response = egui::Modal::new(Id::new("file-move"))
+    let response = egui::Modal::new(Id::unique("file-move"))
         .backdrop_color(backdrop)
         .frame(frame)
         .show(ctx, |ui| {
@@ -334,6 +350,82 @@ fn moving(ctx: &egui::Context, app: &mut App) {
     app.ui.file_dialog.moving = Some(card);
 }
 
+// ---- a password for an archive --------------------------------------------------------------------
+
+fn password(ctx: &egui::Context, app: &mut App) {
+    let Some(ask) = app.state.extract_ask().cloned() else {
+        app.ui.file_dialog.password = Typed::default();
+        app.ui.file_dialog.password_focused_for = None;
+        return;
+    };
+    let locale = app.state.locale;
+    let take_focus = app.ui.file_dialog.password_focused_for != Some(ask.file_id);
+    app.ui.file_dialog.password_focused_for = Some(ask.file_id);
+    let (frame, backdrop) = widgets::dialog_frame();
+    let mut submit = false;
+    let mut close = false;
+    let typed = &mut app.ui.file_dialog.password;
+    let response = egui::Modal::new(Id::unique("file-password"))
+        .backdrop_color(backdrop)
+        .frame(frame)
+        .show(ctx, |ui| {
+            ui.set_width(NAME_WIDTH);
+            close = prefs::header(ui, &Msg::ExtractPasswordTitle.text(locale), false, locale).1;
+            ui.add(
+                egui::Label::new(
+                    RichText::new(
+                        Msg::ExtractPasswordBody {
+                            name: ask.name.clone(),
+                        }
+                        .text(locale),
+                    )
+                    .font(theme::text(12.0))
+                    .color(theme::pal().muted),
+                )
+                .wrap(),
+            );
+            ui.add_space(10.0);
+            let label = ui
+                .add(egui::Label::new(
+                    RichText::new(Msg::FilesPasswordLabel.text(locale)).font(theme::bold(12.5)),
+                ))
+                .id;
+            ui.add_space(4.0);
+            let field = widgets::password_field(ui, &mut typed.0, Some(label), 512);
+            if take_focus {
+                field.request_focus();
+            }
+            submit |= field.lost_focus() && ui.input(|input| input.key_pressed(Key::Enter));
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    let confirm = Msg::FileExtractConfirm.text(locale);
+                    if widgets::text_button(ui, &confirm, true).clicked() {
+                        submit = true;
+                    }
+                    if widgets::text_button(ui, &Msg::PrefsCancel.text(locale), false).clicked() {
+                        close = true;
+                    }
+                });
+            });
+        });
+    // A click on the backdrop does not count: a half-typed password is not worth losing to a stray click.
+    let escape = response.should_close() && !response.backdrop_response.clicked();
+    if close || escape {
+        app.ui.file_dialog.password = Typed::default();
+        app.dispatch(ctx, Event::FileExtractPasswordDismissed);
+    } else if submit && !app.ui.file_dialog.password.0.is_empty() {
+        let secret = Secret::new(std::mem::take(&mut app.ui.file_dialog.password.0));
+        app.dispatch(
+            ctx,
+            Event::FileExtractRequested {
+                id: ask.file_id,
+                password: Some(secret),
+            },
+        );
+    }
+}
+
 // ---- the question before deleting ---------------------------------------------------------------
 
 fn deleting(ctx: &egui::Context, app: &mut App) {
@@ -344,7 +436,7 @@ fn deleting(ctx: &egui::Context, app: &mut App) {
     let (frame, backdrop) = widgets::dialog_frame();
     let mut confirmed = false;
     let mut cancelled = false;
-    let response = egui::Modal::new(Id::new("file-delete"))
+    let response = egui::Modal::new(Id::unique("file-delete"))
         .backdrop_color(backdrop)
         .frame(frame)
         .show(ctx, |ui| {
@@ -464,6 +556,54 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn the_password_card_fits_in_every_language_and_never_prints_the_password() {
+        for locale in [Locale::En, Locale::De, Locale::Es] {
+            let needed = std::cell::Cell::new(0.0);
+            let boxes = text_boxes(|ui| {
+                ui.set_width(NAME_WIDTH);
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(
+                            Msg::ExtractPasswordBody {
+                                name: "An archive with a very long name that keeps going and going.rar".into(),
+                            }
+                            .text(locale),
+                        )
+                        .font(theme::text(12.0)),
+                    )
+                    .wrap(),
+                );
+                let a = widgets::text_button(ui, &Msg::PrefsCancel.text(locale), false)
+                    .rect
+                    .width();
+                let b = widgets::text_button(ui, &Msg::FileExtractConfirm.text(locale), true)
+                    .rect
+                    .width();
+                needed.set(a + b + ui.spacing().item_spacing.x);
+            });
+            assert!(
+                needed.get() <= NAME_WIDTH,
+                "{locale:?}: needs {}",
+                needed.get()
+            );
+            for text in &boxes {
+                assert!(
+                    text.full.right() <= NAME_WIDTH + 0.5,
+                    "{locale:?}: {:?}",
+                    text.text
+                );
+            }
+        }
+        let typed = Typed("hunter2".into());
+        assert!(!format!("{typed:?}").contains("hunter2"));
+        let dialog = FileDialog {
+            password: Typed("hunter2".into()),
+            ..FileDialog::default()
+        };
+        assert!(!format!("{dialog:?}").contains("hunter2"), "{dialog:?}");
     }
 
     #[test]
