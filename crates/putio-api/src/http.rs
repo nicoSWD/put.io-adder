@@ -11,6 +11,9 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 /// Uploads of a few MiB over a slow link need longer than API calls.
 const UPLOAD_TIMEOUT: Duration = Duration::from_secs(120);
+/// The whole of a file upload: files are big and links are slow, so this is long; it only ends an upload
+/// that never finishes.
+const FILE_UPLOAD_TIMEOUT: Duration = Duration::from_hours(12);
 
 /// Base URLs for each [`Host`].
 #[derive(Debug, Clone)]
@@ -45,6 +48,7 @@ impl Bases {
 pub struct UreqTransport {
     agent: ureq::Agent,
     upload_agent: ureq::Agent,
+    file_agent: ureq::Agent,
     bases: Bases,
 }
 
@@ -68,6 +72,7 @@ impl UreqTransport {
         Self {
             agent: agent(REQUEST_TIMEOUT, user_agent, true),
             upload_agent: agent(UPLOAD_TIMEOUT, user_agent, true),
+            file_agent: agent(FILE_UPLOAD_TIMEOUT, user_agent, true),
             bases: Bases::production(),
         }
     }
@@ -79,6 +84,7 @@ impl UreqTransport {
         Self {
             agent: agent(Duration::from_secs(5), "putio-adder-test", false),
             upload_agent: agent(Duration::from_secs(5), "putio-adder-test", false),
+            file_agent: agent(Duration::from_secs(5), "putio-adder-test", false),
             bases: Bases {
                 api: base.clone(),
                 upload: base.clone(),
@@ -107,13 +113,125 @@ fn with_headers<B>(
     }
 }
 
+/// The body of a file upload as one stream: the head, the file's bytes, the tail. Reads the file as it is
+/// sent, tells how far it has got, and stops when asked to.
+struct FileReader {
+    head: std::io::Cursor<Vec<u8>>,
+    file: std::fs::File,
+    file_left: u64,
+    tail: std::io::Cursor<Vec<u8>>,
+    sent: u64,
+    reported: u64,
+    progress: Option<crate::transport::ProgressFn>,
+    cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    /// Why reading stopped, when it was the file's doing: the send then fails with an io error that
+    /// says nothing of the cause, and this is what to tell instead.
+    failure: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+}
+
+/// How many bytes of the file go by between two reports of progress.
+const REPORT_EVERY: u64 = 256 * 1024;
+
+impl FileReader {
+    /// Open the file and check it is what the request said: a regular file of the length it had.
+    /// Returns the reader and the length of the whole body.
+    fn open(body: &crate::transport::FileBody) -> Result<(Self, u64), TransportError> {
+        let refuse = TransportError::File;
+        let file = std::fs::File::open(&body.path)
+            .map_err(|error| refuse(format!("cannot read the file: {error}")))?;
+        let meta = file
+            .metadata()
+            .map_err(|error| refuse(format!("cannot read the file: {error}")))?;
+        if !meta.is_file() {
+            return Err(refuse("not a regular file".into()));
+        }
+        if meta.len() != body.len {
+            return Err(refuse(
+                "the file changed while it was being prepared".into(),
+            ));
+        }
+        let total = body.head.len() as u64 + body.len + body.tail.len() as u64;
+        Ok((
+            Self {
+                head: std::io::Cursor::new(body.head.clone()),
+                file,
+                file_left: body.len,
+                tail: std::io::Cursor::new(body.tail.clone()),
+                sent: 0,
+                reported: 0,
+                progress: body.progress.clone(),
+                cancel: body.cancel.clone(),
+                failure: std::sync::Arc::default(),
+            },
+            total,
+        ))
+    }
+}
+
+impl FileReader {
+    /// Remember why reading stopped, and make the io error that stops the send.
+    fn fail(&self, kind: std::io::ErrorKind, why: String) -> std::io::Error {
+        if let Ok(mut slot) = self.failure.lock() {
+            *slot = Some(why.clone());
+        }
+        std::io::Error::new(kind, why)
+    }
+}
+
+impl std::io::Read for FileReader {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        use std::sync::atomic::Ordering;
+        if self
+            .cancel
+            .as_ref()
+            .is_some_and(|flag| flag.load(Ordering::Relaxed))
+        {
+            // Not `Interrupted`: readers retry that.
+            return Err(std::io::Error::other("cancelled"));
+        }
+        let from_head = self.head.read(buf)?;
+        if from_head > 0 {
+            return Ok(from_head);
+        }
+        if self.file_left > 0 {
+            let want =
+                usize::try_from(self.file_left).map_or(buf.len(), |left| left.min(buf.len()));
+            let Some(window) = buf.get_mut(..want) else {
+                return Ok(0);
+            };
+            let n = match self.file.read(window) {
+                Ok(0) => {
+                    return Err(self.fail(
+                        std::io::ErrorKind::UnexpectedEof,
+                        "the file got shorter while it was being sent".into(),
+                    ));
+                }
+                Ok(n) => n,
+                Err(error) => {
+                    return Err(self.fail(error.kind(), format!("cannot read the file: {error}")));
+                }
+            };
+            self.file_left -= n as u64;
+            self.sent += n as u64;
+            if let Some(progress) = &self.progress
+                && (self.file_left == 0 || self.sent - self.reported >= REPORT_EVERY)
+            {
+                self.reported = self.sent;
+                progress(self.sent);
+            }
+            return Ok(n);
+        }
+        self.tail.read(buf)
+    }
+}
+
 impl Transport for UreqTransport {
     fn execute(&self, request: &Request) -> Result<Response, TransportError> {
         let url = self.bases.url(request.host, &request.path);
-        let agent = if request.host == Host::Upload {
-            &self.upload_agent
-        } else {
-            &self.agent
+        let agent = match (&request.body, request.host) {
+            (Body::File(_), _) => &self.file_agent,
+            (_, Host::Upload) => &self.upload_agent,
+            _ => &self.agent,
         };
 
         let authorization = request
@@ -142,6 +260,23 @@ impl Transport for UreqTransport {
             ) => with_headers(agent.post(&url), accept, authorization)
                 .header("Content-Type", content_type)
                 .send(bytes.as_slice()),
+            (Method::Post, Body::File(file)) => {
+                let (reader, total) = FileReader::open(file)?;
+                let failure = std::sync::Arc::clone(&reader.failure);
+                let sent = with_headers(agent.post(&url), accept, authorization)
+                    .header("Content-Type", &file.content_type)
+                    .header("Content-Length", total.to_string())
+                    .send(ureq::SendBody::from_owned_reader(reader));
+                // A send that failed because the file could not be read is a file problem, not a network
+                // one.
+                let why = failure.lock().ok().and_then(|slot| slot.clone());
+                if sent.is_err()
+                    && let Some(why) = why
+                {
+                    return Err(TransportError::File(why));
+                }
+                sent
+            }
         };
 
         let mut response = result.map_err(|error| map_error(&error))?;
@@ -201,6 +336,209 @@ mod tests {
             stream.write_all(&raw_response).unwrap();
         });
         (port, rx)
+    }
+
+    /// Answers one request after reading all of its body; returns the headers and the body it received.
+    fn serve_upload() -> (u16, mpsc::Receiver<(String, Vec<u8>)>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut received = Vec::new();
+            let mut buf = [0u8; 8192];
+            let split = loop {
+                let n = stream.read(&mut buf).unwrap();
+                received.extend_from_slice(&buf[..n]);
+                if let Some(at) = received.windows(4).position(|w| w == b"\r\n\r\n") {
+                    break at + 4;
+                }
+                assert!(n > 0, "the request ended before its headers did");
+            };
+            let headers = String::from_utf8_lossy(&received[..split]).into_owned();
+            let length: usize = headers
+                .lines()
+                .find_map(|l| {
+                    l.to_ascii_lowercase()
+                        .strip_prefix("content-length: ")
+                        .map(str::to_owned)
+                })
+                .expect("a length-delimited body, not a chunked one")
+                .trim()
+                .parse()
+                .unwrap();
+            let mut body = received[split..].to_vec();
+            while body.len() < length {
+                let n = stream.read(&mut buf).unwrap();
+                assert!(n > 0, "the body ended early");
+                body.extend_from_slice(&buf[..n]);
+            }
+            tx.send((headers, body)).unwrap();
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}")
+                .unwrap();
+        });
+        (port, rx)
+    }
+
+    /// A file of `bytes` in the temp folder that is removed when dropped.
+    struct TempFile(std::path::PathBuf);
+
+    impl TempFile {
+        fn new(name: &str, bytes: &[u8]) -> Self {
+            let path =
+                std::env::temp_dir().join(format!("putio-api-{}-{name}", std::process::id()));
+            std::fs::write(&path, bytes).unwrap();
+            Self(path)
+        }
+    }
+
+    impl Drop for TempFile {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    fn upload_of(file: &TempFile, len: u64) -> Request {
+        let (head, tail) = (b"HEAD:".to_vec(), b":TAIL".to_vec());
+        Request {
+            method: Method::Post,
+            host: Host::Upload,
+            path: "/files/upload".into(),
+            accept: "application/json",
+            bearer: Some(Token::new("sekrit").unwrap()),
+            body: Body::File(crate::transport::FileBody {
+                content_type: "multipart/form-data; boundary=x".into(),
+                head,
+                path: file.0.clone(),
+                len,
+                tail,
+                progress: None,
+                cancel: None,
+            }),
+        }
+    }
+
+    #[test]
+    fn a_file_is_streamed_between_its_head_and_tail_with_a_length_and_progress() {
+        let data: Vec<u8> = (0..700_000u32).map(|i| (i % 251) as u8).collect();
+        let file = TempFile::new("stream.bin", &data);
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut request = upload_of(&file, data.len() as u64);
+        if let Body::File(body) = &mut request.body {
+            let seen = seen.clone();
+            body.progress = Some(std::sync::Arc::new(move |sent| {
+                seen.lock().unwrap().push(sent);
+            }));
+        }
+        let (port, rx) = serve_upload();
+        let response = UreqTransport::for_local_tests(port)
+            .execute(&request)
+            .unwrap();
+        assert_eq!(response.status, 200);
+        let (headers, body) = rx.recv().unwrap();
+        let headers = headers.to_ascii_lowercase();
+        assert!(
+            headers.contains("content-type: multipart/form-data; boundary=x"),
+            "{headers}"
+        );
+        assert!(
+            headers.contains(&format!("content-length: {}", data.len() + 10)),
+            "{headers}"
+        );
+        assert!(!headers.contains("transfer-encoding"), "{headers}");
+        assert_eq!(&body[..5], b"HEAD:");
+        assert_eq!(&body[5..5 + data.len()], data.as_slice());
+        assert_eq!(&body[5 + data.len()..], b":TAIL");
+        // Progress only goes up and ends at the file's length.
+        let seen = seen.lock().unwrap();
+        assert!(seen.windows(2).all(|w| w[0] < w[1]), "{seen:?}");
+        assert_eq!(seen.last().copied(), Some(data.len() as u64));
+        assert!(seen.len() >= 2, "reported along the way: {seen:?}");
+    }
+
+    #[test]
+    fn a_file_that_changed_or_is_not_a_file_is_not_sent() {
+        let file = TempFile::new("changed.bin", b"12345");
+        // The request said the file was longer than it is now.
+        let error = UreqTransport::for_local_tests(1)
+            .execute(&upload_of(&file, 9))
+            .unwrap_err();
+        assert!(
+            matches!(&error, TransportError::File(why) if why.contains("changed")),
+            "{error:?}"
+        );
+        // A folder, and a file that is not there.
+        let folder = TempFile(std::env::temp_dir());
+        let error = UreqTransport::for_local_tests(1)
+            .execute(&upload_of(&folder, 0))
+            .unwrap_err();
+        assert!(matches!(error, TransportError::File(_)), "{error:?}");
+        let gone = TempFile(std::env::temp_dir().join("putio-api-no-such-file"));
+        assert!(
+            UreqTransport::for_local_tests(1)
+                .execute(&upload_of(&gone, 0))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn a_file_that_gets_shorter_while_it_is_sent_is_a_file_error_not_a_network_one() {
+        let data = vec![1u8; 2_000_000];
+        let file = TempFile::new("shrinks.bin", &data);
+        let mut request = upload_of(&file, data.len() as u64);
+        if let Body::File(body) = &mut request.body {
+            let path = file.0.clone();
+            // As soon as some of it has gone out, the file is cut short.
+            body.progress = Some(std::sync::Arc::new(move |_| {
+                let _ = std::fs::OpenOptions::new()
+                    .write(true)
+                    .open(&path)
+                    .and_then(|f| f.set_len(10));
+            }));
+        }
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buf = vec![0u8; 65536];
+            while stream.read(&mut buf).is_ok_and(|n| n > 0) {}
+        });
+        let error = UreqTransport::for_local_tests(port)
+            .execute(&request)
+            .unwrap_err();
+        assert!(
+            matches!(&error, TransportError::File(why) if why.contains("shorter")),
+            "{error:?}"
+        );
+    }
+
+    #[test]
+    fn a_cancelled_upload_stops_and_fails() {
+        let data = vec![7u8; 3_000_000];
+        let file = TempFile::new("cancel.bin", &data);
+        let mut request = upload_of(&file, data.len() as u64);
+        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        if let Body::File(body) = &mut request.body {
+            body.cancel = Some(cancel.clone());
+            let flag = cancel.clone();
+            // Cancel as soon as anything of the file has gone out.
+            body.progress = Some(std::sync::Arc::new(move |_| {
+                flag.store(true, std::sync::atomic::Ordering::Relaxed);
+            }));
+        }
+        // A server that reads whatever comes and never answers in full.
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buf = vec![0u8; 65536];
+            while stream.read(&mut buf).is_ok_and(|n| n > 0) {}
+        });
+        let error = UreqTransport::for_local_tests(port)
+            .execute(&request)
+            .unwrap_err();
+        assert!(matches!(error, TransportError::Network(_)), "{error:?}");
     }
 
     fn get(path: &str) -> Request {

@@ -195,6 +195,29 @@ pub enum Msg {
     ShareNoFriends,
     ShareConfirm,
     ShareNotAllowed,
+    UploadSkipped {
+        count: usize,
+    },
+    UploadDone {
+        name: String,
+    },
+    UploadCancelled {
+        name: String,
+    },
+    UploadFileFailed {
+        name: String,
+        reason: String,
+    },
+    UploadDropHere {
+        folder: String,
+    },
+    UploadWaiting,
+    UploadsMore {
+        count: usize,
+    },
+    A11yUploadCancel {
+        name: String,
+    },
     MenuFriends,
     FriendsTitle,
     FriendsAddTitle,
@@ -1804,6 +1827,64 @@ impl Msg {
                 "Amigo eliminado."
             )
             .into(),
+            Self::UploadSkipped { count } => {
+                let one = *count == 1;
+                tr!(
+                    l,
+                    if one {
+                        "1 item was not uploaded: folders and empty files cannot be.".to_owned()
+                    } else {
+                        format!("{count} items were not uploaded: folders and empty files cannot be.")
+                    },
+                    if one {
+                        "1 Element wurde nicht hochgeladen: Ordner und leere Dateien gehen nicht.".to_owned()
+                    } else {
+                        format!("{count} Elemente wurden nicht hochgeladen: Ordner und leere Dateien gehen nicht.")
+                    },
+                    if one {
+                        "1 elemento no se subió: no se pueden subir carpetas ni archivos vacíos.".to_owned()
+                    } else {
+                        format!("{count} elementos no se subieron: no se pueden subir carpetas ni archivos vacíos.")
+                    }
+                )
+            }
+            Self::UploadDone { name } => tr!(
+                l,
+                format!("Uploaded {name}"),
+                format!("{name} hochgeladen"),
+                format!("{name} subido")
+            ),
+            Self::UploadCancelled { name } => tr!(
+                l,
+                format!("Upload of {name} cancelled"),
+                format!("Hochladen von {name} abgebrochen"),
+                format!("Subida de {name} cancelada")
+            ),
+            Self::UploadFileFailed { name, reason } => tr!(
+                l,
+                format!("Could not upload {name}: {reason}"),
+                format!("{name} konnte nicht hochgeladen werden: {reason}"),
+                format!("No se pudo subir {name}: {reason}")
+            ),
+            Self::UploadDropHere { folder } => tr!(
+                l,
+                format!("Drop to upload to {folder}"),
+                format!("Zum Hochladen nach {folder} ablegen"),
+                format!("Suelta para subir a {folder}")
+            ),
+            Self::UploadWaiting => tr!(l, "Waiting", "Wartet", "En espera").into(),
+            Self::UploadsMore { count } => tr!(
+                l,
+                format!("and {count} more"),
+                format!("und {count} weitere"),
+                format!("y {count} más")
+            ),
+            Self::A11yUploadCancel { name } => tr!(
+                l,
+                format!("Cancel upload of {name}"),
+                format!("Hochladen von {name} abbrechen"),
+                format!("Cancelar la subida de {name}")
+            ),
             Self::ShareConfirm => tr!(l, "Share", "Teilen", "Compartir").into(),
             Self::ShareNotAllowed => tr!(
                 l,
@@ -2240,6 +2321,60 @@ mod tests {
                 texts[0] != texts[1] && texts[0] != texts[2],
                 "{msg:?}: {texts:?}"
             );
+        }
+    }
+
+    #[test]
+    fn the_messages_of_uploads_are_written_in_every_language() {
+        let all = [
+            Msg::UploadSkipped { count: 1 },
+            Msg::UploadSkipped { count: 7 },
+            Msg::UploadDone {
+                name: "Spring".into(),
+            },
+            Msg::UploadCancelled {
+                name: "Spring".into(),
+            },
+            Msg::UploadFileFailed {
+                name: "Spring".into(),
+                reason: "Summer".into(),
+            },
+            Msg::UploadDropHere {
+                folder: "Spring".into(),
+            },
+            Msg::UploadWaiting,
+            Msg::UploadsMore { count: 7 },
+            Msg::A11yUploadCancel {
+                name: "Spring".into(),
+            },
+        ];
+        for msg in all {
+            let texts = [Locale::En, Locale::De, Locale::Es].map(|l| msg.text(l));
+            for text in &texts {
+                assert!(!text.trim().is_empty(), "{msg:?}");
+                assert_eq!(text, text.trim(), "{msg:?}");
+                assert!(!text.contains(['{', '}']), "{msg:?}: {text}");
+            }
+            assert!(
+                texts[0] != texts[1] && texts[0] != texts[2],
+                "{msg:?}: {texts:?}"
+            );
+            match &msg {
+                Msg::UploadSkipped { count } => {
+                    assert!(
+                        texts.iter().all(|t| t.contains(&count.to_string())),
+                        "{texts:?}"
+                    );
+                }
+                Msg::UploadDone { .. }
+                | Msg::UploadCancelled { .. }
+                | Msg::UploadFileFailed { .. }
+                | Msg::UploadDropHere { .. }
+                | Msg::A11yUploadCancel { .. } => {
+                    assert!(texts.iter().all(|t| t.contains("Spring")), "{texts:?}");
+                }
+                _ => {}
+            }
         }
     }
 

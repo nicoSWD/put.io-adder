@@ -20,6 +20,7 @@ pub(crate) mod tabs;
 pub(crate) mod test_support;
 pub(crate) mod theme;
 pub(crate) mod update;
+pub(crate) mod uploads;
 pub(crate) mod widgets;
 
 use eframe::egui::{self, Frame, Margin};
@@ -113,6 +114,7 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
     let ctx = ui.ctx().clone();
     // One palette for the whole frame, whatever the theme resolves to right now.
     theme::select(&ctx);
+    uploads::handle_drops(&ctx, app);
     egui::CentralPanel::default()
         .frame(
             Frame::new()
@@ -142,4 +144,5 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {
     friends_card::show(&ctx, app);
     details::show(&ctx, app);
     handler::show(&ctx, app);
+    uploads::drop_hint(&ctx, app);
 }

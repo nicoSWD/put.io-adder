@@ -44,6 +44,10 @@ pub(crate) fn show(ui: &mut Ui, app: &mut App) {
     let ctx = ui.ctx().clone();
     toolbar(ui, app, &ctx);
     ui.add_space(4.0);
+    let uploads = app.state.uploads.clone();
+    if let Some(op) = super::uploads::strip(ui, &uploads, app.state.locale) {
+        app.dispatch(&ctx, Event::UploadCancelRequested(op));
+    }
     let rows = rows_to_show(app);
     let Some(rows) = rows else {
         state_message(ui, app);
@@ -451,7 +455,7 @@ fn count_f32(count: usize) -> f32 {
     f32::from(u16::try_from(count).unwrap_or(u16::MAX))
 }
 
-fn crumb_name(trail: &[Crumb], index: usize, locale: Locale) -> String {
+pub(crate) fn crumb_name(trail: &[Crumb], index: usize, locale: Locale) -> String {
     match trail.get(index) {
         Some(crumb) if index > 0 && !crumb.name.trim().is_empty() => crumb.name.clone(),
         Some(_) if index > 0 => "…".to_owned(),

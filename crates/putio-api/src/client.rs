@@ -13,7 +13,7 @@ use crate::models::{
 };
 use crate::token::Token;
 use crate::torrent;
-use crate::transport::{Body, Host, Method, Request, Response, Transport};
+use crate::transport::{Body, FileBody, Host, Method, ProgressFn, Request, Response, Transport};
 
 const JSON: &str = "application/json";
 const GITHUB_JSON: &str = "application/vnd.github+json";
@@ -34,6 +34,34 @@ pub struct FileSearch {
 
 /// How many search results are asked for: enough to find a file, few enough to answer quickly.
 const SEARCH_RESULTS: &str = "100";
+
+/// A file to upload into a folder.
+#[derive(Clone)]
+pub struct FileUpload {
+    /// Where the file is on disk; it is read while it is sent.
+    pub path: std::path::PathBuf,
+    /// The name it gets on put.io.
+    pub name: String,
+    /// How long it is now. A file of another length when it is read is an error, not a short upload.
+    pub len: u64,
+    /// The folder it goes into (`0` is the top level).
+    pub parent_id: i64,
+    /// Told how many bytes of the file have been sent, now and then.
+    pub progress: Option<ProgressFn>,
+    /// Set to stop the upload.
+    pub cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+}
+
+impl std::fmt::Debug for FileUpload {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FileUpload")
+            .field("path", &self.path)
+            .field("name", &self.name)
+            .field("len", &self.len)
+            .field("parent_id", &self.parent_id)
+            .finish_non_exhaustive()
+    }
+}
 
 /// One page of a file listing.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -373,13 +401,6 @@ impl<T: Transport> Client<T> {
         bytes: &[u8],
         parent_id: Option<i64>,
     ) -> Result<UploadOutcome, ApiError> {
-        #[derive(serde::Deserialize)]
-        struct Reply {
-            #[serde(default)]
-            transfer: Option<Transfer>,
-            #[serde(default)]
-            file: Option<File>,
-        }
         torrent::validate(bytes).map_err(|e| {
             ApiError::InvalidInput(match e {
                 torrent::InvalidTorrent::Empty => "torrent file is empty",
@@ -419,7 +440,19 @@ impl<T: Transport> Client<T> {
             true,
         );
 
-        let reply: Reply = self.json(&request)?;
+        self.upload_outcome(&request)
+    }
+
+    /// Send an upload request and say what put.io made of it.
+    fn upload_outcome(&self, request: &Request) -> Result<UploadOutcome, ApiError> {
+        #[derive(serde::Deserialize)]
+        struct Reply {
+            #[serde(default)]
+            transfer: Option<Transfer>,
+            #[serde(default)]
+            file: Option<File>,
+        }
+        let reply: Reply = self.json(request)?;
         match (reply.transfer, reply.file) {
             (Some(transfer), _) => Ok(UploadOutcome::Transfer(Box::new(transfer))),
             (None, Some(file)) => Ok(UploadOutcome::File(file)),
@@ -427,6 +460,42 @@ impl<T: Transport> Client<T> {
                 "upload reply has neither `transfer` nor `file`".into(),
             )),
         }
+    }
+
+    /// Upload any file into a folder (`0` is the top level), reading it from disk while it is sent. A file
+    /// that is a torrent starts as a transfer, as on put.io's site.
+    pub fn upload_file(&self, upload: FileUpload) -> Result<UploadOutcome, ApiError> {
+        let name: String = upload.name.chars().filter(|c| !c.is_control()).collect();
+        if name.trim().is_empty() {
+            return Err(ApiError::InvalidInput("the file has no name"));
+        }
+        if upload.len == 0 {
+            return Err(ApiError::InvalidInput("the file is empty"));
+        }
+        let parent = upload.parent_id.to_string();
+        let streamed = form::streamed(
+            &[("filename", &name), ("parent_id", &parent)],
+            "file",
+            &name,
+            "application/octet-stream",
+        );
+        let request = self.request(
+            Method::Post,
+            Host::Upload,
+            "/files/upload".into(),
+            Body::File(FileBody {
+                content_type: streamed.content_type,
+                head: streamed.head,
+                path: upload.path,
+                len: upload.len,
+                tail: streamed.tail,
+                progress: upload.progress,
+                cancel: upload.cancel,
+            }),
+            JSON,
+            true,
+        );
+        self.upload_outcome(&request)
     }
 
     /// List a folder (`0` is the root), following pagination cursors. `only` filters by type.
@@ -841,6 +910,71 @@ mod tests {
             ));
         }
         assert_eq!(fake.requests().len(), sent);
+    }
+
+    fn an_upload(len: u64, name: &str) -> FileUpload {
+        FileUpload {
+            path: "/tmp/x".into(),
+            name: name.into(),
+            len,
+            parent_id: 7,
+            progress: None,
+            cancel: None,
+        }
+    }
+
+    #[test]
+    fn any_file_is_uploaded_from_disk_into_a_folder_and_put_io_says_what_it_made_of_it() {
+        let fake = FakeTransport::new();
+        fake.push_json(200, r#"{"status":"OK","file":{"id":9,"name":"a.mkv"}}"#);
+        fake.push_json(
+            200,
+            r#"{"status":"OK","transfer":{"id":3,"name":"t","status":"IN_QUEUE"}}"#,
+        );
+        let c = client(&fake);
+        let outcome = c.upload_file(an_upload(12, "a\u{7}.mkv")).unwrap();
+        assert!(matches!(outcome, UploadOutcome::File(f) if f.id == 9));
+        let request = fake.last_request().unwrap();
+        assert_eq!(
+            (request.host, request.path.as_str()),
+            (Host::Upload, "/files/upload")
+        );
+        let Body::File(body) = request.body else {
+            panic!("expected a file body")
+        };
+        assert_eq!((body.len, body.path.to_str()), (12, Some("/tmp/x")));
+        assert!(
+            body.content_type
+                .starts_with("multipart/form-data; boundary=")
+        );
+        let head = String::from_utf8(body.head).unwrap();
+        // The name, without anything that is not text, and the folder, are in the head; the bytes are not.
+        assert!(
+            head.contains("name=\"filename\"\r\n\r\na.mkv\r\n"),
+            "{head}"
+        );
+        assert!(head.contains("name=\"parent_id\"\r\n\r\n7\r\n"), "{head}");
+        assert!(head.contains("name=\"file\"; filename=\"a.mkv\""), "{head}");
+        assert!(head.ends_with("\r\n\r\n"));
+        assert!(String::from_utf8(body.tail).unwrap().ends_with("--\r\n"));
+        // A torrent comes back as a transfer.
+        let outcome = c.upload_file(an_upload(5, "a.torrent")).unwrap();
+        assert!(matches!(outcome, UploadOutcome::Transfer(t) if t.id == 3));
+    }
+
+    #[test]
+    fn nothing_is_sent_for_an_empty_file_or_a_file_without_a_name() {
+        let fake = FakeTransport::new();
+        let c = client(&fake);
+        assert!(matches!(
+            c.upload_file(an_upload(0, "a")),
+            Err(ApiError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            c.upload_file(an_upload(3, " \u{7}")),
+            Err(ApiError::InvalidInput(_))
+        ));
+        assert_eq!(fake.requests().len(), 0);
     }
 
     #[test]
