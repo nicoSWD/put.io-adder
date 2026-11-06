@@ -8,7 +8,8 @@ use serde_json::Value;
 use crate::error::{ApiError, ApiFailure, retry_delay};
 use crate::form::{self, Part};
 use crate::models::{
-    Account, DeviceCode, File, FileType, Release, Transfer, UploadOutcome, ZipStatus,
+    Account, DeviceCode, File, FileType, Release, RssFeed, RssFeedSettings, Transfer,
+    UploadOutcome, ZipStatus,
 };
 use crate::token::Token;
 use crate::torrent;
@@ -274,6 +275,72 @@ impl<T: Transport> Client<T> {
         self.ack(&self.post_form("/transfers/clean", &[("transfer_ids", &joined)]))
     }
 
+    // ---- rss ------------------------------------------------------------------------------
+
+    /// The RSS feeds put.io watches for the account.
+    pub fn rss_feeds(&self) -> Result<Vec<RssFeed>, ApiError> {
+        #[derive(serde::Deserialize)]
+        struct Reply {
+            #[serde(default)]
+            feeds: Vec<RssFeed>,
+        }
+        Ok(self.json::<Reply>(&self.get("/rss/list".into()))?.feeds)
+    }
+
+    /// Start watching a feed. put.io checks the address and answers with an error when it is not a feed it
+    /// can read, so a bad address comes back as an [`ApiError::Api`] with a message for the user.
+    pub fn create_rss_feed(&self, feed: &RssFeedSettings) -> Result<(), ApiError> {
+        let parent = feed.parent_dir_id.to_string();
+        let mut pairs = rss_fields(feed, &parent)?;
+        pairs.push((
+            "dont_process_whole_feed",
+            if feed.skip_existing { "true" } else { "false" },
+        ));
+        // The create form takes the checkbox the way a browser sends it: present (`on`) or absent.
+        if feed.delete_old_files {
+            pairs.push(("delete_old_files", "on"));
+        }
+        self.ack(&self.post_form("/rss/create", &pairs))
+    }
+
+    /// Change a feed's address, destination, filters or housekeeping.
+    pub fn update_rss_feed(&self, id: i64, feed: &RssFeedSettings) -> Result<(), ApiError> {
+        let parent = feed.parent_dir_id.to_string();
+        let mut pairs = rss_fields(feed, &parent)?;
+        pairs.push((
+            "delete_old_files",
+            if feed.delete_old_files {
+                "true"
+            } else {
+                "false"
+            },
+        ));
+        self.ack(&self.post_form(&format!("/rss/{id}"), &pairs))
+    }
+
+    /// Stop (or start again) checking a feed for new items.
+    pub fn set_rss_feed_paused(&self, id: i64, paused: bool) -> Result<(), ApiError> {
+        let action = if paused { "pause" } else { "resume" };
+        self.ack(&self.rss_action(&format!("/rss/{id}/{action}")))
+    }
+
+    /// Stop watching a feed. What it already brought in stays in the account.
+    pub fn delete_rss_feed(&self, id: i64) -> Result<(), ApiError> {
+        self.ack(&self.rss_action(&format!("/rss/{id}/delete")))
+    }
+
+    /// The feed endpoints that take no parameters: a `POST` with an empty body.
+    fn rss_action(&self, path: &str) -> Request {
+        self.request(
+            Method::Post,
+            Host::Api,
+            path.to_owned(),
+            Body::None,
+            JSON,
+            true,
+        )
+    }
+
     // ---- files ----------------------------------------------------------------------------
 
     /// Upload a `.torrent`. `filename` is only a label; `parent_id` is the destination folder.
@@ -434,6 +501,27 @@ impl<T: Transport> Client<T> {
         }
         Ok(release)
     }
+}
+
+/// The fields both `rss/create` and `rss/{id}` take. A feed needs an address and a title (put.io refuses
+/// both when empty), so that is checked here, before anything is sent.
+fn rss_fields<'a>(
+    feed: &'a RssFeedSettings,
+    parent: &'a str,
+) -> Result<Vec<(&'static str, &'a str)>, ApiError> {
+    if feed.url.trim().is_empty() {
+        return Err(ApiError::InvalidInput("feed address is empty"));
+    }
+    if feed.title.trim().is_empty() {
+        return Err(ApiError::InvalidInput("feed title is empty"));
+    }
+    Ok(vec![
+        ("title", feed.title.as_str()),
+        ("rss_source_url", feed.url.as_str()),
+        ("parent_dir_id", parent),
+        ("keyword", feed.keyword.as_str()),
+        ("unwanted_keywords", feed.unwanted_keywords.as_str()),
+    ])
 }
 
 fn failure_from(status: u16, body: &[u8]) -> ApiFailure {
@@ -615,6 +703,183 @@ mod tests {
         assert_eq!(
             c.retry_transfer(1).unwrap_err().error_type(),
             Some("NotFound")
+        );
+    }
+
+    fn feed() -> RssFeedSettings {
+        RssFeedSettings {
+            title: "Spring & Co".into(),
+            url: "https://example.invalid/feed.xml?a=1&b=2".into(),
+            parent_dir_id: 42,
+            delete_old_files: false,
+            keyword: "1080p, 2160p".into(),
+            unwanted_keywords: String::new(),
+            skip_existing: false,
+        }
+    }
+
+    #[test]
+    fn the_feed_list_is_read_with_everything_put_io_sends() {
+        let fake = FakeTransport::new();
+        fake.push_json(200, include_str!("../tests/fixtures/rss_list.json"));
+        let feeds = client(&fake).rss_feeds().unwrap();
+        assert_eq!(fake.last_request().unwrap().describe(), "GET /rss/list");
+        assert_eq!(feeds.len(), 2);
+        let first = &feeds[0];
+        assert_eq!(first.id, 5);
+        assert_eq!(first.title, "Example releases");
+        assert_eq!(first.rss_source_url, "https://example.invalid/releases.xml");
+        assert_eq!(first.parent_dir_id, Some(123));
+        assert_eq!(first.keyword.as_deref(), Some("1080p, 2160p"));
+        assert_eq!(first.unwanted_keywords.as_deref(), Some("CAM, HDTS"));
+        assert!(!first.paused && !first.delete_old_files);
+        assert_eq!(first.last_fetch.as_deref(), Some("2024-05-03T08:30:00"));
+        assert_eq!(first.last_error, None);
+        let second = &feeds[1];
+        assert!(second.paused && second.delete_old_files);
+        assert_eq!(second.keyword, None);
+        assert_eq!(second.last_error.as_deref(), Some("FEED_CANNOT_FETCHED"));
+    }
+
+    #[test]
+    fn an_odd_value_in_a_feed_never_loses_the_list() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            200,
+            r#"{"feeds":[
+                {"id":1,"title":null,"rss_source_url":7,"parent_dir_id":"x","paused":"yes","keyword":["a"],"brand_new":{}},
+                {"id":2,"title":"fine"}
+            ]}"#,
+        );
+        let feeds = client(&fake).rss_feeds().unwrap();
+        assert_eq!(feeds.len(), 2);
+        assert_eq!(feeds[0].title, "");
+        assert_eq!(feeds[0].rss_source_url, "");
+        assert_eq!(feeds[0].parent_dir_id, None);
+        assert!(!feeds[0].paused);
+        assert_eq!(feeds[0].keyword, None);
+        assert_eq!(feeds[1].title, "fine");
+        // No feeds at all is an empty list, not an error.
+        fake.push_json(200, r#"{"status":"OK"}"#);
+        assert_eq!(client(&fake).rss_feeds().unwrap(), []);
+    }
+
+    #[test]
+    fn creating_a_feed_sends_its_fields_encoded() {
+        let fake = FakeTransport::new();
+        fake.push_json(200, r#"{"status":"OK","feed":{"id":9}}"#);
+        client(&fake).create_rss_feed(&feed()).unwrap();
+        let request = fake.last_request().unwrap();
+        assert_eq!(request.describe(), "POST /rss/create");
+        assert_eq!(
+            request.body,
+            Body::Form(
+                "title=Spring%20%26%20Co&rss_source_url=https%3A%2F%2Fexample.invalid%2Ffeed.xml%3Fa%3D1%26b%3D2\
+                 &parent_dir_id=42&keyword=1080p%2C%202160p&unwanted_keywords=\
+                 &dont_process_whole_feed=false"
+                    .into()
+            )
+        );
+        // The checkbox is sent the way a browser sends it, and only when it is on.
+        let mut more = feed();
+        more.delete_old_files = true;
+        more.skip_existing = true;
+        fake.push_json(200, r#"{"status":"OK"}"#);
+        client(&fake).create_rss_feed(&more).unwrap();
+        let Body::Form(body) = fake.last_request().unwrap().body else {
+            panic!("a form");
+        };
+        assert!(
+            body.ends_with("&dont_process_whole_feed=true&delete_old_files=on"),
+            "{body}"
+        );
+    }
+
+    #[test]
+    fn updating_a_feed_names_it_and_says_yes_or_no_for_the_housekeeping() {
+        let fake = FakeTransport::new();
+        fake.push_json(200, r#"{"status":"OK"}"#);
+        client(&fake).update_rss_feed(5, &feed()).unwrap();
+        let request = fake.last_request().unwrap();
+        assert_eq!(request.describe(), "POST /rss/5");
+        let Body::Form(body) = request.body else {
+            panic!("a form");
+        };
+        assert!(body.ends_with("&delete_old_files=false"), "{body}");
+        assert!(!body.contains("dont_process_whole_feed"), "{body}");
+        let mut on = feed();
+        on.delete_old_files = true;
+        fake.push_json(200, r#"{"status":"OK"}"#);
+        client(&fake).update_rss_feed(5, &on).unwrap();
+        let Body::Form(body) = fake.last_request().unwrap().body else {
+            panic!("a form");
+        };
+        assert!(body.ends_with("&delete_old_files=true"), "{body}");
+    }
+
+    #[test]
+    fn a_feed_without_an_address_or_a_title_is_refused_before_anything_is_sent() {
+        let fake = FakeTransport::new();
+        let c = client(&fake);
+        let mut no_url = feed();
+        no_url.url = "  ".into();
+        assert_eq!(
+            c.create_rss_feed(&no_url).unwrap_err(),
+            ApiError::InvalidInput("feed address is empty")
+        );
+        let mut no_title = feed();
+        no_title.title.clear();
+        assert_eq!(
+            c.update_rss_feed(5, &no_title).unwrap_err(),
+            ApiError::InvalidInput("feed title is empty")
+        );
+        assert_eq!(fake.requests().len(), 0);
+    }
+
+    #[test]
+    fn pause_resume_and_delete_are_posts_without_a_body() {
+        let fake = FakeTransport::new();
+        let c = client(&fake);
+        for _ in 0..3 {
+            fake.push_json(200, r#"{"status":"OK"}"#);
+        }
+        c.set_rss_feed_paused(5, true).unwrap();
+        c.set_rss_feed_paused(5, false).unwrap();
+        c.delete_rss_feed(5).unwrap();
+        let requests = fake.requests();
+        let sent: Vec<String> = requests.iter().map(Request::describe).collect();
+        assert_eq!(
+            sent,
+            [
+                "POST /rss/5/pause",
+                "POST /rss/5/resume",
+                "POST /rss/5/delete"
+            ]
+        );
+        assert!(requests.iter().all(|r| r.body == Body::None));
+    }
+
+    #[test]
+    fn put_io_refusing_a_feed_comes_back_with_its_reason() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            400,
+            r#"{"status":"ERROR","error_type":"FEED_CANNOT_FETCHED","error_message":"could not fetch"}"#,
+        );
+        let error = client(&fake).create_rss_feed(&feed()).unwrap_err();
+        assert_eq!(error.error_type(), Some("FEED_CANNOT_FETCHED"));
+        // An error inside a 200 is an error too.
+        fake.push_json(
+            200,
+            r#"{"status":"ERROR","error_type":"URL_NOT_VALID","error_message":"bad url"}"#,
+        );
+        let error = client(&fake).update_rss_feed(5, &feed()).unwrap_err();
+        assert_eq!(error.error_type(), Some("URL_NOT_VALID"));
+        // A rejected token is its own error.
+        fake.push_json(401, r#"{"error_type":"invalid_scope"}"#);
+        assert_eq!(
+            client(&fake).delete_rss_feed(5).unwrap_err(),
+            ApiError::Unauthorized
         );
     }
 

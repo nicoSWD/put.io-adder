@@ -29,8 +29,8 @@ pub use error::{ApiError, ApiFailure};
 #[cfg(feature = "http")]
 pub use http::UreqTransport;
 pub use models::{
-    Account, DeviceCode, Disk, File, FileType, Release, ReleaseAsset, ReleaseAuthor, Transfer,
-    TransferKind, TransferStatus, UploadOutcome, ZipState, ZipStatus,
+    Account, DeviceCode, Disk, File, FileType, Release, ReleaseAsset, ReleaseAuthor, RssFeed,
+    RssFeedSettings, Transfer, TransferKind, TransferStatus, UploadOutcome, ZipState, ZipStatus,
 };
 pub use token::Token;
 pub use transport::{Body, Host, Method, Request, Response, Transport, TransportError};
