@@ -14,6 +14,7 @@ pub mod format;
 pub mod handler;
 pub mod i18n;
 pub mod intake;
+pub mod link;
 pub mod magnet;
 pub mod secret;
 pub mod settings;

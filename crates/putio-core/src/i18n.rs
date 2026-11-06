@@ -235,6 +235,14 @@ pub enum Msg {
         folder: String,
     },
     UploadWaiting,
+    LinkAddTitle,
+    LinkAddHint,
+    LinkFieldHint,
+    LinkAddButton,
+    TabAddLink,
+    LinkErrEmpty,
+    LinkErrNotALink,
+    LinkErrTooLong,
     /// put.io answered 402 (payment required): the account is full or its plan has run out.
     PaymentRequired,
     UploadNoSpace {
@@ -1923,6 +1931,44 @@ impl Msg {
                 format!("Suelta para subir a {folder}")
             ),
             Self::UploadWaiting => tr!(l, "Waiting", "Wartet", "En espera").into(),
+            Self::LinkAddTitle => tr!(l, "Add a link", "Link hinzufügen", "Añadir un enlace").into(),
+            Self::LinkAddHint => tr!(
+                l,
+                "A magnet link, or the address of a file on the web. put.io fetches it for you.",
+                "Ein Magnet-Link oder die Adresse einer Datei im Web. put.io lädt sie für dich.",
+                "Un enlace magnet o la dirección de un archivo en la web. put.io lo descarga por ti."
+            )
+            .into(),
+            Self::LinkFieldHint => tr!(
+                l,
+                "https://… or magnet:?…",
+                "https://… oder magnet:?…",
+                "https://… o magnet:?…"
+            )
+            .into(),
+            Self::LinkAddButton => tr!(l, "Add", "Hinzufügen", "Añadir").into(),
+            Self::TabAddLink => tr!(l, "Add link", "Link", "Enlace").into(),
+            Self::LinkErrEmpty => tr!(
+                l,
+                "Paste a link first.",
+                "Füge zuerst einen Link ein.",
+                "Pega primero un enlace."
+            )
+            .into(),
+            Self::LinkErrNotALink => tr!(
+                l,
+                "That is not a magnet link or a web address (http or https).",
+                "Das ist kein Magnet-Link und keine Webadresse (http oder https).",
+                "Eso no es un enlace magnet ni una dirección web (http o https)."
+            )
+            .into(),
+            Self::LinkErrTooLong => tr!(
+                l,
+                "That link is too long.",
+                "Dieser Link ist zu lang.",
+                "Ese enlace es demasiado largo."
+            )
+            .into(),
             Self::PaymentRequired => tr!(
                 l,
                 "Refused by put.io (402): account full or plan expired.",
@@ -2460,6 +2506,34 @@ mod tests {
                 texts[0] != texts[1] && texts[0] != texts[2],
                 "{msg:?}: {texts:?}"
             );
+        }
+    }
+
+    #[test]
+    fn the_messages_of_adding_a_link_are_written_in_every_language() {
+        let all = [
+            Msg::LinkAddTitle,
+            Msg::LinkAddHint,
+            Msg::LinkFieldHint,
+            Msg::LinkAddButton,
+            Msg::TabAddLink,
+            Msg::LinkErrEmpty,
+            Msg::LinkErrNotALink,
+            Msg::LinkErrTooLong,
+        ];
+        for msg in all {
+            let texts = [Locale::En, Locale::De, Locale::Es].map(|l| msg.text(l));
+            for text in &texts {
+                assert!(!text.trim().is_empty(), "{msg:?}");
+                assert_eq!(text, text.trim(), "{msg:?}");
+            }
+            // The field's hint is mostly an address, which is the same in every language.
+            if msg != Msg::LinkFieldHint {
+                assert!(
+                    texts[0] != texts[1] && texts[0] != texts[2],
+                    "{msg:?}: {texts:?}"
+                );
+            }
         }
     }
 
