@@ -9,3 +9,8 @@ updates:
     directory: /
     schedule: { interval: weekly }
     open-pull-requests-limit: 5
+    groups:
+      # These move together: eframe, egui and egui_extras must share a version, and eframe's renderer
+      # needs the wgpu and winit versions that crates/putio-adder/Cargo.toml names directly.
+      gui:
+        patterns: ["eframe", "egui", "egui-*", "egui_*", "wgpu", "winit"]

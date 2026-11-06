@@ -30,7 +30,7 @@ pub(crate) fn show(ctx: &egui::Context, app: &mut App) {
     let locale = app.state.locale;
     let (frame, backdrop) = widgets::dialog_frame();
     let mut choice = None;
-    let response = egui::Modal::new(egui::Id::new("default-app"))
+    let response = egui::Modal::new(egui::Id::unique("default-app"))
         .backdrop_color(backdrop)
         .frame(frame)
         .show(ctx, |ui| {

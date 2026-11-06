@@ -13,7 +13,8 @@
 //! one account cannot run as another. The answer carries the same number, and the UI throws away an
 //! answer from a session that has ended ([`Workers::accept`]).
 
-use std::path::PathBuf;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -23,6 +24,7 @@ use putio_api::{
     ApiError, Client, FileType, RssFeedSettings, ShareWith, Token, Transport, UploadOutcome,
     UreqTransport,
 };
+use putio_core::secret::Secret;
 use putio_core::state::{Event, OpId, Prepared, StreamFailure};
 use putio_core::update::UpdateAsset;
 use putio_platform::handler;
@@ -54,6 +56,8 @@ pub(crate) enum Job {
         op: OpId,
         path: PathBuf,
         parent: Option<i64>,
+        /// Move the file to the Trash once put.io has taken it.
+        trash_after: bool,
     },
     Cancel {
         op: OpId,
@@ -156,6 +160,12 @@ pub(crate) enum Job {
         op: OpId,
         id: i64,
     },
+    ExtractFile {
+        op: OpId,
+        id: i64,
+        password: Option<Secret>,
+    },
+    ListExtractions,
 }
 
 impl Job {
@@ -373,6 +383,45 @@ fn prepare_update(
     })
 }
 
+/// Upload the `.torrent` at `path`. When `trash_after` is set and put.io confirmed the upload (and only
+/// then), the file is moved to the Trash with `trash`. That can fail or be refused (the file changed, it
+/// is a symlink, ...) without making the finished upload look like a failure: the file just stays.
+fn upload_torrent<T: Transport>(
+    client: &Client<T>,
+    op: OpId,
+    path: &Path,
+    parent: Option<i64>,
+    trash_after: bool,
+    trash: impl FnOnce(&Path) -> io::Result<()>,
+) -> WorkerMsg {
+    let file = match torrent_file::read_torrent(path) {
+        Ok(file) => file,
+        Err(error) => {
+            return WorkerMsg::Core(Event::TorrentUnusable {
+                op,
+                reason: error.to_string(),
+            });
+        }
+    };
+    let result =
+        client
+            .upload_torrent(&file.name, &file.bytes, parent)
+            .map(|outcome| match outcome {
+                UploadOutcome::Transfer(transfer) => Some(transfer.id),
+                UploadOutcome::File(_) => None,
+            });
+    if trash_after
+        && result.is_ok()
+        && let Err(error) = torrent_file::trash_uploaded(path, &file.bytes, trash)
+    {
+        eprintln!(
+            "the uploaded torrent file was left where it is ({}): {error}",
+            path.display()
+        );
+    }
+    WorkerMsg::Core(Event::AddFinished { op, result })
+}
+
 #[allow(clippy::too_many_lines)] // one arm per job reads best as one list
 fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
     match job {
@@ -391,22 +440,19 @@ fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
                 .map(|transfer| Some(transfer.id));
             WorkerMsg::Core(Event::AddFinished { op, result })
         }
-        Job::UploadTorrent { op, path, parent } => match torrent_file::read_torrent(&path) {
-            Err(error) => WorkerMsg::Core(Event::TorrentUnusable {
-                op,
-                reason: error.to_string(),
-            }),
-            Ok(file) => {
-                let result =
-                    client
-                        .upload_torrent(&file.name, &file.bytes, parent)
-                        .map(|outcome| match outcome {
-                            UploadOutcome::Transfer(transfer) => Some(transfer.id),
-                            UploadOutcome::File(_) => None,
-                        });
-                WorkerMsg::Core(Event::AddFinished { op, result })
-            }
-        },
+        Job::UploadTorrent {
+            op,
+            path,
+            parent,
+            trash_after,
+        } => upload_torrent(
+            client,
+            op,
+            &path,
+            parent,
+            trash_after,
+            torrent_file::move_to_trash,
+        ),
         Job::Cancel { op, id } => WorkerMsg::Core(Event::CancelFinished {
             op,
             result: client.cancel_transfers(&[id]),
@@ -507,6 +553,12 @@ fn execute<T: Transport>(client: &Client<T>, job: Job) -> WorkerMsg {
             op,
             result: client.move_files(&[id], to),
         }),
+        Job::ExtractFile { op, id, password } => WorkerMsg::Core(Event::FileExtractStarted {
+            op,
+            id,
+            result: client.extract_files(&[id], password.as_ref().map(Secret::expose)),
+        }),
+        Job::ListExtractions => WorkerMsg::Core(Event::ExtractionsListed(client.extractions())),
         Job::DeleteFile { op, id } => WorkerMsg::Core(Event::FileDeleteFinished {
             op,
             id,
@@ -617,6 +669,128 @@ mod tests {
 
     fn client(fake: &FakeTransport) -> Client<&FakeTransport> {
         Client::with_token(fake, Token::new("SECRETTOKEN123").unwrap())
+    }
+
+    /// A `.torrent` in a folder of its own that is removed afterwards.
+    struct TorrentOnDisk(PathBuf);
+
+    impl TorrentOnDisk {
+        const BYTES: &'static [u8] = b"d8:announce3:url4:infod4:name1:aee";
+
+        fn new(label: &str) -> Self {
+            let dir =
+                std::env::temp_dir().join(format!("putio-worker-{label}-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).unwrap();
+            let path = dir.join("a.torrent");
+            std::fs::write(&path, Self::BYTES).unwrap();
+            Self(path)
+        }
+    }
+
+    impl Drop for TorrentOnDisk {
+        fn drop(&mut self) {
+            if let Some(dir) = self.0.parent() {
+                let _ = std::fs::remove_dir_all(dir);
+            }
+        }
+    }
+
+    /// Run the upload job with a mover that only records what it was asked to trash.
+    fn uploaded(fake: &FakeTransport, file: &Path, trash_after: bool) -> (WorkerMsg, Vec<PathBuf>) {
+        let moved = std::cell::RefCell::new(Vec::new());
+        let msg = upload_torrent(&client(fake), OpId(1), file, None, trash_after, |path| {
+            moved.borrow_mut().push(path.to_path_buf());
+            Ok(())
+        });
+        (msg, moved.into_inner())
+    }
+
+    const TRANSFER_ADDED: &str = r#"{"status":"OK","transfer":{"id":77,"name":"Added","status":"IN_QUEUE","type":"TORRENT"}}"#;
+
+    #[test]
+    fn a_confirmed_upload_moves_the_file_to_the_trash_when_asked_to() {
+        let torrent = TorrentOnDisk::new("trash-on");
+        let fake = FakeTransport::new();
+        fake.push_json(200, TRANSFER_ADDED);
+        let (msg, moved) = uploaded(&fake, &torrent.0, true);
+        assert!(matches!(
+            msg,
+            WorkerMsg::Core(Event::AddFinished {
+                result: Ok(Some(77)),
+                ..
+            })
+        ));
+        assert_eq!(moved, std::slice::from_ref(&torrent.0));
+    }
+
+    #[test]
+    fn the_file_stays_when_the_setting_is_off() {
+        let torrent = TorrentOnDisk::new("trash-off");
+        let fake = FakeTransport::new();
+        fake.push_json(200, TRANSFER_ADDED);
+        let (msg, moved) = uploaded(&fake, &torrent.0, false);
+        assert!(matches!(
+            msg,
+            WorkerMsg::Core(Event::AddFinished { result: Ok(_), .. })
+        ));
+        assert_eq!(moved, Vec::<PathBuf>::new());
+    }
+
+    #[test]
+    fn a_failed_upload_leaves_the_file_where_it_is() {
+        for (status, body) in [
+            (
+                500,
+                r#"{"error_type":"Boom","error_message":"server error"}"#,
+            ),
+            (
+                401,
+                r#"{"error_type":"Unauthorized","error_message":"nope"}"#,
+            ),
+        ] {
+            let torrent = TorrentOnDisk::new("trash-failed");
+            let fake = FakeTransport::new();
+            fake.push_json(status, body);
+            let (msg, moved) = uploaded(&fake, &torrent.0, true);
+            assert!(matches!(
+                msg,
+                WorkerMsg::Core(Event::AddFinished { result: Err(_), .. })
+            ));
+            assert_eq!(moved, Vec::<PathBuf>::new(), "{status}");
+            assert!(torrent.0.exists());
+        }
+    }
+
+    #[test]
+    fn a_file_that_is_not_a_torrent_is_neither_uploaded_nor_moved() {
+        let torrent = TorrentOnDisk::new("trash-unusable");
+        std::fs::write(&torrent.0, b"my holiday photos").unwrap();
+        let fake = FakeTransport::new();
+        let (msg, moved) = uploaded(&fake, &torrent.0, true);
+        assert!(matches!(
+            msg,
+            WorkerMsg::Core(Event::TorrentUnusable { .. })
+        ));
+        assert_eq!(moved, Vec::<PathBuf>::new());
+        assert_eq!(fake.requests().len(), 0, "nothing was sent to put.io");
+    }
+
+    #[test]
+    fn a_trash_that_fails_does_not_make_the_upload_fail() {
+        let torrent = TorrentOnDisk::new("trash-broken");
+        let fake = FakeTransport::new();
+        fake.push_json(200, TRANSFER_ADDED);
+        let msg = upload_torrent(&client(&fake), OpId(1), &torrent.0, None, true, |_| {
+            Err(io::Error::other("no trash here"))
+        });
+        assert!(matches!(
+            msg,
+            WorkerMsg::Core(Event::AddFinished {
+                result: Ok(Some(77)),
+                ..
+            })
+        ));
+        assert!(torrent.0.exists());
     }
 
     #[test]
@@ -855,7 +1029,8 @@ mod tests {
             Job::UploadTorrent {
                 op: OpId(1),
                 path: "x".into(),
-                parent: None
+                parent: None,
+                trash_after: false
             }
             .is_heavy()
         );
@@ -1273,6 +1448,56 @@ mod tests {
         ] {
             assert!(job.is_session_bound(), "{job:?}");
             assert!(!job.is_heavy(), "{job:?}");
+        }
+    }
+
+    #[test]
+    fn an_extraction_is_started_with_the_password_in_the_request_and_not_in_the_debug_output() {
+        let fake = FakeTransport::new();
+        fake.push_json(
+            200,
+            r#"{"extractions":[{"id":3,"name":"a.zip","status":"IN_QUEUE","files":[9]}]}"#,
+        );
+        let job = Job::ExtractFile {
+            op: OpId(2),
+            id: 9,
+            password: Some(Secret::new("hunter2")),
+        };
+        assert!(!format!("{job:?}").contains("hunter2"), "{job:?}");
+        match execute(&client(&fake), job) {
+            WorkerMsg::Core(Event::FileExtractStarted {
+                op: OpId(2),
+                id: 9,
+                result: Ok(list),
+            }) => {
+                assert_eq!(list.len(), 1);
+            }
+            other => panic!("{other:?}"),
+        }
+        let request = fake.last_request().unwrap();
+        assert_eq!(request.describe(), "POST /files/extract");
+        assert_eq!(
+            request.body,
+            putio_api::Body::Form("file_ids=9&password=hunter2".into())
+        );
+        fake.push_json(200, r#"{"extractions":[]}"#);
+        assert!(matches!(
+            execute(&client(&fake), Job::ListExtractions),
+            WorkerMsg::Core(Event::ExtractionsListed(Ok(_)))
+        ));
+        assert_eq!(
+            fake.last_request().unwrap().describe(),
+            "GET /files/extract"
+        );
+        for job in [
+            Job::ListExtractions,
+            Job::ExtractFile {
+                op: OpId(1),
+                id: 1,
+                password: None,
+            },
+        ] {
+            assert!(job.is_session_bound() && !job.is_heavy(), "{job:?}");
         }
     }
 }

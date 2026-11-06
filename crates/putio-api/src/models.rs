@@ -551,3 +551,34 @@ pub struct RssFeedSettings {
     /// Only when creating: ignore the items already in the feed.
     pub skip_existing: bool,
 }
+
+/// Where an archive extraction stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ExtractStatus {
+    InQueue,
+    Extracting,
+    Extracted,
+    /// put.io cannot open the archive without a (right) password.
+    Password,
+    Error,
+    #[default]
+    #[serde(other)]
+    Unknown,
+}
+
+/// A ZIP or RAR being unpacked into its folder on put.io. Text fields are untrusted server text.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+pub struct Extraction {
+    pub id: i64,
+    #[serde(default, deserialize_with = "lenient_default")]
+    pub name: String,
+    #[serde(default, deserialize_with = "lenient_default")]
+    pub status: ExtractStatus,
+    /// Why it failed, when it did.
+    #[serde(default, deserialize_with = "lenient")]
+    pub message: Option<String>,
+    /// The archive files being unpacked (more than one for a multi-part RAR).
+    #[serde(default, deserialize_with = "lenient_default")]
+    pub files: Vec<i64>,
+}

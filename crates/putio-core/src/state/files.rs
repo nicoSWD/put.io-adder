@@ -414,7 +414,7 @@ pub(super) fn delete_finished(
 }
 
 /// After a change: the listing is fetched again, and so is a search that is showing.
-fn refresh_everything(state: &mut State, now: Millis, fx: &mut Vec<Effect>) {
+pub(super) fn refresh_everything(state: &mut State, now: Millis, fx: &mut Vec<Effect>) {
     state.file_refresh.soon(now);
     if let Some(search) = state.files.search.as_mut() {
         search.loading = true;
