@@ -50,7 +50,7 @@ fn top_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2, width: f32) {
         Vec2::splat(32.0),
     );
     let menu = ui
-        .interact(menu_rect, egui::Id::new("menu-button"), Sense::click())
+        .interact(menu_rect, egui::Id::unique("menu-button"), Sense::click())
         .on_hover_cursor(egui::CursorIcon::PointingHand);
     if menu.hovered() {
         ui.painter()
@@ -121,14 +121,14 @@ fn status_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2, width: f32) {
         let center = Pos2::new(strip.left() + PAD + 8.0, strip.center().y);
         let hit = ui.interact(
             Rect::from_center_size(center, Vec2::splat(28.0)),
-            egui::Id::new("toggle"),
+            egui::Id::unique("toggle"),
             Sense::click(),
         );
         let hit = hit
             .on_hover_cursor(egui::CursorIcon::PointingHand)
             .on_hover_text(Msg::TooltipToggleTransfers.text(locale));
         let turn = ctx.animate_bool_with_time(
-            egui::Id::new("chevron"),
+            egui::Id::unique("chevron"),
             app.state.transfers_expanded,
             0.25,
         );
@@ -175,8 +175,8 @@ fn status_row(ui: &mut egui::Ui, app: &mut App, origin: Pos2, width: f32) {
     );
     // Painted text is invisible to a screen reader: name the whole row, whichever way it is drawn.
     let status = app.state.status_text(now);
-    ui.interact(area, egui::Id::new("status-row"), Sense::hover())
-        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &status));
+    ui.interact(area, egui::Id::unique("status-row"), Sense::hover())
+        .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &status));
     if matches!(app.state.status(now), Msg::Summary { .. }) {
         // The standing message is the transfers summary: show it as chips.
         super::summary::show(ui, app, area);
@@ -207,7 +207,7 @@ fn quota_pill(ui: &egui::Ui, app: &App, pill: Rect) {
     {
         let shown = ui
             .ctx()
-            .animate_value_with_time(egui::Id::new("quota"), used, 1.2);
+            .animate_value_with_time(egui::Id::unique("quota"), used, 1.2);
         painter.rect_filled(pill, radius, theme::pal().track);
         let fill = Rect::from_min_size(
             pill.min,
