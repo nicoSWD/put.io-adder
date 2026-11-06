@@ -231,39 +231,6 @@ pub struct Account {
     pub monthly_bandwidth_usage: i64,
     #[serde(default)]
     pub disk: Option<Disk>,
-    /// The account's settings, as `/account/info` carries them (put.io's own SDK reads them from there).
-    #[serde(default, deserialize_with = "lenient")]
-    pub settings: Option<AccountSettings>,
-}
-
-/// The settings of the account that this app reads and changes. Each is `None` when put.io did not send it
-/// (or sent something else), so the app never shows a switch it cannot tell the position of.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
-pub struct AccountSettings {
-    /// The folder transfers are saved in when they are added without one (`0` is the top level).
-    #[serde(default, deserialize_with = "lenient")]
-    pub default_download_folder: Option<i64>,
-    /// Whether deleted files go to put.io's trash (and can be restored) instead of being gone at once.
-    #[serde(default, deserialize_with = "lenient")]
-    pub trash_enabled: Option<bool>,
-}
-
-/// One change to the account's settings.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AccountSettingChange {
-    DefaultDownloadFolder(i64),
-    TrashEnabled(bool),
-}
-
-impl AccountSettingChange {
-    /// The change as the one form field put.io's settings call takes: its name and value.
-    #[must_use]
-    pub fn to_field(self) -> (&'static str, String) {
-        match self {
-            Self::DefaultDownloadFolder(id) => ("default_download_folder", id.to_string()),
-            Self::TrashEnabled(on) => ("trash_enabled", on.to_string()),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]

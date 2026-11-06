@@ -15,7 +15,6 @@ PUTIO_ADDER_DEMO=folders cargo run -p putio-adder   # Preferences on the folder 
 PUTIO_ADDER_DEMO=menu cargo run -p putio-adder      # the "..." menu open (menu-update: with a new version waiting)
 PUTIO_ADDER_DEMO=sort cargo run -p putio-adder      # the sort drop-down open
 PUTIO_ADDER_DEMO=card-menu cargo run -p putio-adder   # a card's "⋯" menu open (also card-menu-seeding, -failed, -done)
-PUTIO_ADDER_DEMO=prefs-setting-failed cargo run -p putio-adder   # Preferences with a refused account setting (the account settings are at the bottom of any prefs view)
 PUTIO_ADDER_DEMO=details cargo run -p putio-adder     # the details panel (also details-downloading, details-failed, details-long)
 PUTIO_ADDER_DEMO=files cargo run -p putio-adder     # the Files tab (also files-empty, files-loading, files-failed, files-search, files-deep, files-long, file-card-menu)
 PUTIO_ADDER_DEMO=file-rename cargo run -p putio-adder # a Files card (also file-new-folder, file-move, file-delete, file-delete-folder)

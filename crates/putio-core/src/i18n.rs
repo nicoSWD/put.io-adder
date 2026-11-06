@@ -329,14 +329,6 @@ pub enum Msg {
     PrefsSaveIn,
     PrefsSaveInHint,
     PrefsAccount,
-    PrefsTrash,
-    PrefsTrashHint,
-    PrefsAccountFolder,
-    PrefsAccountFolderHint,
-    AccountSettingNotAllowed,
-    AccountSettingFailed {
-        reason: String,
-    },
     PrefsSignedInAs {
         name: String,
     },
@@ -997,47 +989,6 @@ impl Msg {
             )
             .into(),
             Self::PrefsAccount => tr!(l, "Account", "Konto", "Cuenta").into(),
-            Self::PrefsTrash => tr!(
-                l,
-                "Keep deleted files in the trash",
-                "Gelöschte Dateien im Papierkorb behalten",
-                "Conservar los archivos eliminados en la papelera"
-            )
-            .into(),
-            Self::PrefsTrashHint => tr!(
-                l,
-                "Applies to your whole put.io account. You can restore files from the trash on put.io.",
-                "Gilt für dein ganzes put.io-Konto. Dateien lassen sich im Papierkorb auf put.io wiederherstellen.",
-                "Se aplica a toda tu cuenta de put.io. Puedes restaurar archivos desde la papelera en put.io."
-            )
-            .into(),
-            Self::PrefsAccountFolder => tr!(
-                l,
-                "Default folder on put.io",
-                "Standardordner auf put.io",
-                "Carpeta predeterminada en put.io"
-            )
-            .into(),
-            Self::PrefsAccountFolderHint => tr!(
-                l,
-                "Where put.io saves transfers added without a folder, also from its website and other apps.",
-                "Wohin put.io Übertragungen ohne Ordner speichert, auch von der Website und anderen Apps.",
-                "Dónde guarda put.io las transferencias sin carpeta, también desde su web y otras apps."
-            )
-            .into(),
-            Self::AccountSettingNotAllowed => tr!(
-                l,
-                "this app is not allowed to change account settings",
-                "diese App darf Kontoeinstellungen nicht ändern",
-                "esta app no puede cambiar los ajustes de la cuenta"
-            )
-            .into(),
-            Self::AccountSettingFailed { reason } => tr!(
-                l,
-                format!("put.io did not accept that: {reason}"),
-                format!("put.io hat das nicht übernommen: {reason}"),
-                format!("put.io no lo aceptó: {reason}")
-            ),
             Self::PrefsSignedInAs { name } => tr!(
                 l,
                 format!("Signed in as {name}"),
@@ -2127,35 +2078,6 @@ mod tests {
                 reason: "Spring".into(),
             },
         ]
-    }
-
-    #[test]
-    fn the_account_settings_are_written_in_every_language() {
-        let all = [
-            Msg::PrefsTrash,
-            Msg::PrefsTrashHint,
-            Msg::PrefsAccountFolder,
-            Msg::PrefsAccountFolderHint,
-            Msg::AccountSettingNotAllowed,
-            Msg::AccountSettingFailed {
-                reason: "Spring".into(),
-            },
-        ];
-        for msg in all {
-            let texts = [Locale::En, Locale::De, Locale::Es].map(|l| msg.text(l));
-            for text in &texts {
-                assert!(!text.trim().is_empty(), "{msg:?}");
-                assert_eq!(text, text.trim(), "{msg:?}");
-                assert!(!text.contains(['{', '}']), "{msg:?}: {text}");
-            }
-            assert!(
-                texts[0] != texts[1] && texts[0] != texts[2],
-                "{msg:?}: {texts:?}"
-            );
-            if matches!(msg, Msg::AccountSettingFailed { .. }) {
-                assert!(texts.iter().all(|t| t.contains("Spring")), "{texts:?}");
-            }
-        }
     }
 
     #[test]

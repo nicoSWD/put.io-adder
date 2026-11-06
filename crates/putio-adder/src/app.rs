@@ -252,13 +252,7 @@ impl App {
         self.state.transfers_expanded = view != "collapsed";
         // The demo drops the update check, so show its finished state instead of a spinner.
         self.state.update = putio_core::update::UpdateStatus::UpToDate;
-        self.ui.prefs_open = matches!(
-            view,
-            "prefs" | "folders" | "prefs-update" | "prefs-setting-failed"
-        );
-        for (folder, name) in crate::demo::folder_names() {
-            self.ui.folder_named(folder, Some(name.to_owned()));
-        }
+        self.ui.prefs_open = matches!(view, "prefs" | "folders" | "prefs-update");
         self.ui.open_once = match view {
             "menu" | "menu-update" => Some(crate::ui::Overlay::Menu),
             "sort" => Some(crate::ui::Overlay::Sort),
@@ -304,9 +298,6 @@ impl App {
         );
         self.start_demo_feeds(ctx, view);
         self.start_demo_files(ctx, view);
-        if view == "prefs-setting-failed" {
-            self.state.account_setting.error = Some("That value is not allowed.".into());
-        }
         let open = match view {
             "details" => Some(6),
             "details-failed" => Some(7),
@@ -315,6 +306,9 @@ impl App {
             _ => None,
         };
         if let Some(id) = open {
+            for (folder, name) in crate::demo::folder_names() {
+                self.ui.folder_named(folder, Some(name.to_owned()));
+            }
             // The feed that added the seeding transfer is known once the Feeds tab has been looked at.
             self.state.feeds = putio_core::state::FeedList {
                 loaded: true,
@@ -531,9 +525,6 @@ impl App {
             }
             Effect::DeleteFeed { op, id } => self.send(Job::DeleteFeed { op, id }),
             Effect::ListFiles { parent } => self.send(Job::ListFiles { parent }),
-            Effect::SaveAccountSetting { op, change } => {
-                self.send(Job::SaveAccountSetting { op, change });
-            }
             Effect::FetchTransfer { id } => self.send(Job::FetchTransfer { id }),
             Effect::SearchFiles { query } => self.send(Job::SearchFiles { query }),
             Effect::RenameFile { op, id, name } => self.send(Job::RenameFile { op, id, name }),

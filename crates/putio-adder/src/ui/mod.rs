@@ -23,12 +23,10 @@ pub(crate) mod widgets;
 use eframe::egui::{self, Frame, Margin};
 use putio_api::ApiError;
 use putio_api::client::FileListing;
-use putio_core::i18n::{Locale, Msg};
 use putio_core::state::Auth;
 use putio_core::transfers::SortKey;
 
 use crate::app::App;
-use crate::worker::Job;
 
 pub(crate) const WIDTH: f32 = 560.0;
 /// Height of the status row.
@@ -101,21 +99,6 @@ impl UiState {
     pub(crate) fn folder_listed(&mut self, parent: i64, result: Result<FileListing, ApiError>) {
         self.folders.listed(parent, result);
     }
-}
-
-/// The name of a put.io folder, for showing: the top level is named at once; any other folder is asked of
-/// put.io the first time (the answer is remembered) and is `None` until it is in, or for good when put.io
-/// could not say.
-pub(crate) fn folder_name(app: &mut App, id: i64, locale: Locale) -> Option<String> {
-    if id == 0 {
-        return Some(Msg::FilesRoot.text(locale));
-    }
-    let known = app.ui.folder_names.get(&id).cloned();
-    if known.is_none() {
-        app.ui.folder_names.insert(id, None);
-        app.send(Job::FolderName { id });
-    }
-    known.flatten()
 }
 
 pub(crate) fn show(ui: &mut egui::Ui, app: &mut App) {

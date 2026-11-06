@@ -8,8 +8,8 @@ use serde_json::Value;
 use crate::error::{ApiError, ApiFailure, retry_delay};
 use crate::form::{self, Part};
 use crate::models::{
-    Account, AccountSettingChange, DeviceCode, File, FileType, Release, RssFeed, RssFeedSettings,
-    Transfer, UploadOutcome, ZipStatus,
+    Account, DeviceCode, File, FileType, Release, RssFeed, RssFeedSettings, Transfer,
+    UploadOutcome, ZipStatus,
 };
 use crate::token::Token;
 use crate::torrent;
@@ -221,13 +221,6 @@ impl<T: Transport> Client<T> {
             info: Account,
         }
         Ok(self.json::<Reply>(&self.get("/account/info".into()))?.info)
-    }
-
-    /// Change one of the account's settings. The reply is only checked for an error: what the account looks
-    /// like afterwards comes with the next `/account/info`.
-    pub fn save_account_setting(&self, change: AccountSettingChange) -> Result<(), ApiError> {
-        let (name, value) = change.to_field();
-        self.ack(&self.post_form("/account/settings", &[(name, &value)]))
     }
 
     pub fn transfers(&self) -> Result<Vec<Transfer>, ApiError> {
@@ -686,67 +679,6 @@ mod tests {
             Some(0.25)
         );
         assert_eq!(fake.requests()[0].describe(), "GET /account/info");
-    }
-
-    #[test]
-    fn the_accounts_settings_are_read_from_its_info_and_an_odd_one_is_dropped() {
-        let fake = FakeTransport::new();
-        fake.push_json(
-            200,
-            r#"{"status":"OK","info":{"user_id":1,"username":"u","settings":{"default_download_folder":7,"trash_enabled":false,"theme":"dark"}}}"#,
-        );
-        fake.push_json(
-            200,
-            r#"{"status":"OK","info":{"user_id":1,"username":"u","settings":{"default_download_folder":"x","trash_enabled":true}}}"#,
-        );
-        fake.push_json(
-            200,
-            r#"{"status":"OK","info":{"user_id":1,"username":"u","settings":"nonsense"}}"#,
-        );
-        fake.push_json(
-            200,
-            r#"{"status":"OK","info":{"user_id":1,"username":"u"}}"#,
-        );
-        let c = client(&fake);
-        let settings = c.account().unwrap().settings.unwrap();
-        assert_eq!(settings.default_download_folder, Some(7));
-        assert_eq!(settings.trash_enabled, Some(false));
-        let settings = c.account().unwrap().settings.unwrap();
-        assert_eq!(settings.default_download_folder, None);
-        assert_eq!(settings.trash_enabled, Some(true));
-        // Nothing here ever makes the account unreadable.
-        assert_eq!(c.account().unwrap().settings, None);
-        assert_eq!(c.account().unwrap().settings, None);
-    }
-
-    #[test]
-    fn one_account_setting_is_sent_as_one_form_field() {
-        let fake = FakeTransport::new();
-        fake.push_json(200, r#"{"status":"OK"}"#);
-        fake.push_json(200, r#"{"status":"OK"}"#);
-        fake.push_json(
-            400,
-            r#"{"status":"ERROR","error_type":"INVALID_VALUE","error_message":"nope"}"#,
-        );
-        let c = client(&fake);
-        c.save_account_setting(AccountSettingChange::TrashEnabled(false))
-            .unwrap();
-        let request = fake.last_request().unwrap();
-        assert_eq!(request.describe(), "POST /account/settings");
-        assert_eq!(request.body, Body::Form("trash_enabled=false".into()));
-        c.save_account_setting(AccountSettingChange::DefaultDownloadFolder(42))
-            .unwrap();
-        assert_eq!(
-            fake.last_request().unwrap().body,
-            Body::Form("default_download_folder=42".into())
-        );
-        // What put.io refuses comes back as its error.
-        let Err(ApiError::Api(failure)) =
-            c.save_account_setting(AccountSettingChange::DefaultDownloadFolder(-1))
-        else {
-            panic!("expected an API error")
-        };
-        assert_eq!(failure.error_type.as_deref(), Some("INVALID_VALUE"));
     }
 
     #[test]
