@@ -31,7 +31,7 @@ back-off, auto-close and status-line expiry are all unit-tested without sleeping
 | Network | https only, closed host allowlist (`Host` enum), no redirects, size and time limits | `putio-api::http` |
 | OS input (magnet, file URL, path) | Validated before it reaches the reducer; bounded; no control chars | `putio-core::magnet`, `intake` |
 | `.torrent` bytes | Size cap + bencode sniff before upload | `putio-api::torrent` |
-| URLs to open | Built in core from numeric ids / constants; the opener re-checks the prefix | `putio-core::state` |
+| URLs to open | Built in core from numeric ids / constants; the opener re-checks them against its allow-list (put.io, the project's GitHub pages, and exactly the *Buy me a coffee* page); a test ties the core's constants to the list | `putio-core::state`, `putio-platform::opener` |
 | Server text shown in the UI | Control characters stripped, length bounded | `putio-core::state::reason` |
 | Player | Signed IP-bound URL from `GET /files/{id}/url`, never the account token | `putio-api::client::file_url` |
 
