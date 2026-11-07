@@ -1,4 +1,4 @@
-# put.io adder
+# Put.io Client for macOS, Windows, & Linux
 
 Click a `magnet:` link or open a `.torrent` file and it lands in your [put.io](https://put.io) queue.
 A small cross-platform app for **macOS, Windows and Linux** (x86-64 and arm64), written in Rust.
